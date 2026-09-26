@@ -24,7 +24,7 @@ To try it without Claude Code, open <http://localhost:4747/?demo> for simulated 
 
 ## Other coding agents
 
-Codex CLI, Cursor, Gemini CLI, GitHub Copilot CLI, Qwen Code, Factory Droid, Goose, Kiro, Windsurf, Cline, OpenCode and Amp can report to the office too, through `adapters/hook.sh`. Setup for each is in [docs/adapters.md](docs/adapters.md). This currently works with the Node bridge (`npm start`), not yet the desktop app.
+Codex CLI, Cursor, Gemini CLI, GitHub Copilot CLI, Qwen Code, Factory Droid, Goose, Kiro, Windsurf, Cline, OpenCode and Amp can report to the office too, through `adapters/hook.sh`. Setup for each is in [docs/adapters.md](docs/adapters.md). Works with both the desktop app and `npm start`.
 
 ## Desktop app (macOS)
 

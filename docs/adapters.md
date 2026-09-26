@@ -1,6 +1,6 @@
 # Other coding agents
 
-Agent Office understands Claude Code's hook events. Other agents send their own hook payloads through one script, `adapters/hook.sh`, and the bridge translates them into the Claude shape (`bridge/adapters.js`). Each session is tagged with the tool it came from, and the office labels it (Codex, Cursor, Gemini CLI, and so on).
+Agent Office understands Claude Code's hook events. Other agents send their own hook payloads through one script, `adapters/hook.sh`, and the bridge translates them into the Claude shape (`bridge/adapters.js` (and its Rust twin `desktop/src-tauri/src/adapters.rs`)). Each session is tagged with the tool it came from, and the office labels it (Codex, Cursor, Gemini CLI, and so on).
 
 ```
 agent's hook ──> adapters/hook.sh <agent> [event] ──> POST /hook (X-Agent-Office-Agent: <agent>)
@@ -9,7 +9,7 @@ agent's hook ──> adapters/hook.sh <agent> [event] ──> POST /hook (X-Agen
 
 Research was checked against each vendor's docs on 2026-09-27. Fields the docs didn't show exactly are marked **unverified** in `bridge/adapters.js`. Test those against a real session before relying on them.
 
-> Status: the Node bridge (`npm start`) supports adapters. The desktop app's Rust server doesn't yet, so it only shows Claude Code for now.
+> Both servers support adapters: the Node bridge (`bridge/adapters.js`) and the desktop app (`desktop/src-tauri/src/adapters.rs`), with matching tests.
 
 ## How rich is each agent?
 
@@ -128,6 +128,5 @@ Aider has no hooks. The closest option is `--notifications-command` (fires when 
 
 ## Next steps
 
-- Port `adapters.js` to the desktop app's Rust server.
 - Test each Tier 1 adapter against a real session and remove the "unverified" notes.
 - Approvals from the office work the same way for Codex, Copilot CLI, Gemini CLI, Cursor and Factory, because their hooks can return allow/deny.

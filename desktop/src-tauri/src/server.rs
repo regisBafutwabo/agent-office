@@ -1,10 +1,11 @@
 // The office server built into the app: receives hook events, serves the 3D office, streams live state,
 // and answers permission requests you allow or deny from the office.
 // Same endpoints as bridge/server.js, so phones and VR headsets can connect to it too.
+use crate::adapters;
 use crate::store::{self, Store};
 use axum::{
     body::Bytes,
-    extract::{ws::{Message, WebSocket, WebSocketUpgrade}, Request, State},
+    extract::{ws::{Message, WebSocket, WebSocketUpgrade}, Query, Request, State},
     http::{header, HeaderMap, StatusCode, Uri},
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -107,11 +108,15 @@ async fn check_origin(State(st): State<AppState>, req: Request, next: Next) -> R
     next.run(req).await
 }
 
-fn ingest(st: &Shared, headers: &HeaderMap, body: &Bytes) -> Result<Option<Value>, StatusCode> {
-    let payload = serde_json::from_slice::<Value>(body).map_err(|_| StatusCode::BAD_REQUEST)?;
-    let header = |name: &str| headers.get(name).and_then(|v| v.to_str().ok());
+/// Other agents (Codex, Cursor, Gemini CLI…) send their own payloads through adapters/hook.sh with the tool's
+/// name in X-Agent-Office-Agent (or ?agent=); translate them to the Claude shape first.
+fn ingest(st: &Shared, headers: &HeaderMap, query: &HashMap<String, String>, body: &Bytes) -> Result<Option<Value>, StatusCode> {
+    let raw = serde_json::from_slice::<Value>(body).map_err(|_| StatusCode::BAD_REQUEST)?;
+    let header = |name: &str| headers.get(name).and_then(|v| v.to_str().ok()).filter(|v| !v.is_empty());
+    let agent = header("x-agent-office-agent").or(query.get("agent").map(String::as_str)).unwrap_or("claude-code").to_lowercase();
+    let Some(payload) = adapters::normalize(&agent, &raw, header("x-agent-office-event")) else { return Ok(None) };
     let mut store = st.store.lock().unwrap();
-    let event = store.ingest(&payload, header("x-agent-office-entrypoint"), header("x-agent-office-project"));
+    let event = store.ingest_from(&payload, header("x-agent-office-entrypoint"), header("x-agent-office-project"), &agent);
     if let Some(e) = &event {
         (st.on_change)(&store, e);
         broadcast(st, json!({ "type": "event", "event": e }));
@@ -119,8 +124,8 @@ fn ingest(st: &Shared, headers: &HeaderMap, body: &Bytes) -> Result<Option<Value
     Ok(event)
 }
 
-async fn hook(State(st): State<AppState>, headers: HeaderMap, body: Bytes) -> StatusCode {
-    match ingest(&st, &headers, &body) {
+async fn hook(State(st): State<AppState>, Query(query): Query<HashMap<String, String>>, headers: HeaderMap, body: Bytes) -> StatusCode {
+    match ingest(&st, &headers, &query, &body) {
         Ok(_) => StatusCode::NO_CONTENT,
         Err(code) => code,
     }
@@ -141,8 +146,8 @@ impl Drop for PendingGuard {
 
 /// PermissionRequest hook: hold the request while someone is watching the office, so they can allow or deny it there.
 /// Returning no content means "no decision": Claude Code then shows its normal permission dialog.
-async fn permission(State(st): State<AppState>, headers: HeaderMap, body: Bytes) -> Response {
-    let event = match ingest(&st, &headers, &body) {
+async fn permission(State(st): State<AppState>, Query(query): Query<HashMap<String, String>>, headers: HeaderMap, body: Bytes) -> Response {
+    let event = match ingest(&st, &headers, &query, &body) {
         Ok(Some(e)) => e,
         Ok(None) => return StatusCode::NO_CONTENT.into_response(),
         Err(code) => return code.into_response(),

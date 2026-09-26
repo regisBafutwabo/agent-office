@@ -101,6 +101,8 @@ pub struct Subagent {
 #[serde(rename_all = "camelCase")]
 pub struct Session {
     pub id: String,
+    /// Which tool the session runs in: claude-code, codex, cursor, gemini…
+    pub agent: String,
     pub cwd: String,
     pub project: String,
     pub entrypoint: String,
@@ -165,7 +167,7 @@ impl Store {
         }
         let event = json!({
             "type": "PermissionResolved", "sessionId": session_id, "at": now_ms(), "agentId": agent_id, "agentType": null, "message": activity,
-            "session": { "id": s.id, "cwd": s.cwd, "project": s.project, "entrypoint": s.entrypoint,
+            "session": { "id": s.id, "agent": s.agent, "cwd": s.cwd, "project": s.project, "entrypoint": s.entrypoint,
                          "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity },
         });
         self.recent.push_back(event.clone());
@@ -177,7 +179,13 @@ impl Store {
 
     /// Returns the normalized event, or None if the payload is unusable or not worth showing.
     /// `project_dir` is CLAUDE_PROJECT_DIR from the hook; it stays put when the session cds into a subfolder.
+    #[cfg(test)]
     pub fn ingest(&mut self, p: &Value, entrypoint: Option<&str>, project_dir: Option<&str>) -> Option<Value> {
+        self.ingest_from(p, entrypoint, project_dir, "claude-code")
+    }
+
+    /// Same as `ingest`, for a payload already translated from another tool by adapters.rs.
+    pub fn ingest_from(&mut self, p: &Value, entrypoint: Option<&str>, project_dir: Option<&str>, agent: &str) -> Option<Value> {
         let kind = str_of(p, "hook_event_name");
         let sid = str_of(p, "session_id");
         if kind.is_empty() || sid.is_empty() {
@@ -191,7 +199,7 @@ impl Store {
                 let cwd = project_dir.filter(|d| !d.is_empty()).unwrap_or(str_of(p, "cwd")).to_string();
                 let project = Path::new(&cwd).file_name().map(|f| f.to_string_lossy().to_string()).filter(|s| !s.is_empty()).unwrap_or_else(|| "session".into());
                 self.sessions.push(Session {
-                    id: sid.into(), cwd, project, entrypoint: entrypoint_label(entrypoint), started_at: now, last_event_at: now,
+                    id: sid.into(), agent: agent.into(), cwd, project, entrypoint: entrypoint_label(entrypoint), started_at: now, last_event_at: now,
                     status: "idle".into(), activity: "Session started".into(),
                     permission_mode: if pm.is_empty() { "default".into() } else { pm.into() }, subagents: vec![], tool: None,
                 });
@@ -321,7 +329,7 @@ impl Store {
             _ => {}
         }
         e.insert("session".into(), json!({
-            "id": s.id, "cwd": s.cwd, "project": s.project, "entrypoint": s.entrypoint,
+            "id": s.id, "agent": s.agent, "cwd": s.cwd, "project": s.project, "entrypoint": s.entrypoint,
             "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity,
         }));
         if remove_session {

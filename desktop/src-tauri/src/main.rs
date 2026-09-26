@@ -3,6 +3,7 @@
 // the server and menu-bar icon keep running.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod adapters;
 mod server;
 mod store;
 
