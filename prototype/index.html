@@ -359,6 +359,15 @@ body.live .speed-top, body.live .demo-only{display:none}
   <div class="toasts" id="toasts"></div>
 </div>
 
+<script>
+// Report page errors and the frame rate to the local server so they show up in its log (no-op on claude.ai).
+(() => {
+  const report = data => { try { if (/^https?:$/.test(location.protocol) && !location.host.endsWith('claude.ai')) navigator.sendBeacon('/api/log', JSON.stringify(data)); } catch (_) {} };
+  addEventListener('error', e => report({ kind: 'error', message: e.message, at: `${e.filename}:${e.lineno}:${e.colno}` }));
+  addEventListener('unhandledrejection', e => report({ kind: 'rejection', message: String(e.reason && e.reason.stack || e.reason) }));
+  addEventListener('load', () => { let frames = 0; const t0 = performance.now(); const count = () => { frames++; if (performance.now() - t0 < 3000) requestAnimationFrame(count); else report({ kind: 'fps', fps: Math.round(frames / 3), webgl: !!document.createElement('canvas').getContext('webgl'), ua: navigator.userAgent }); }; requestAnimationFrame(count); });
+})();
+</script>
 <script src="/vendor/three.min.js"></script>
 <script>window.THREE || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>');</script>
 <script>
@@ -1542,12 +1551,28 @@ function updateAgent(a, dt, sdt) {
     case 'play': r = -1.2 + Math.sin(t * 5.5) * .7; rz = Math.sin(t * 5.5) * .5; l = -.3; bob = Math.abs(Math.sin(t * 5.5)) * .04; break;
     default: bob = Math.sin(t * 2) * .015; l = r = -.06;
   }
+  let headYaw = 0;
+  if (!moving && ['idle', 'think', 'type', 'read'].includes(pose)) {
+    a.fidgetIn = (a.fidgetIn ?? rand(3, 10)) - sdt;
+    if (a.fidgetIn <= 0) { a.fidget = pick(pose === 'type' || pose === 'read' ? ['look', 'sip', 'look'] : ['look', 'stretch', 'sip', 'look']); a.fidgetT = 0; a.fidgetIn = rand(6, 16); }
+  }
+  if (a.fidget) {
+    const dur = { look: 2.6, stretch: 1.9, sip: 1.7 }[a.fidget];
+    a.fidgetT += sdt;
+    if (moving || a.fidgetT >= dur || pose === 'raise') a.fidget = null;
+    else {
+      const w = Math.sin(Math.PI * a.fidgetT / dur);          // eases in and out
+      if (a.fidget === 'look') headYaw = Math.sin(a.fidgetT * 2.4) * .75 * w;
+      if (a.fidget === 'stretch') { l = r = l + (-3.0 - l) * w; bob += .05 * w; tilt += (-.25 - tilt) * w; }
+      if (a.fidget === 'sip') { r += (-2.0 - r) * w; tilt += (-.18 - tilt) * w; }
+    }
+  }
   const sitTarget = !moving && a.spot ? (a.spot.y || 0) : 0;
   a.sitY += (sitTarget - a.sitY) * (1 - Math.exp(-dt * 10));
   const k = 1 - Math.exp(-dt * 12);
   a.arms.l += (l - a.arms.l) * k; a.arms.r += (r - a.arms.r) * k; a.arms.rz += (rz - a.arms.rz) * k;
   a.armL.rotation.x = a.arms.l; a.armR.rotation.x = a.arms.r; a.armR.rotation.z = a.arms.rz;
-  a.tilt += (tilt - a.tilt) * k; a.head.rotation.x = a.tilt;
+  a.tilt += (tilt - a.tilt) * k; a.head.rotation.x = a.tilt; a.head.rotation.y += (headYaw - a.head.rotation.y) * k;
   a.pivot.position.y = bob + a.sitY;
   a.laptop.visible = !moving && a.busy && !!a.spot && !!a.spot.laptop && pose !== 'raise' && pose !== 'read';
   a.ring.material.color.set(STATUS[a.state].hex);
@@ -1857,8 +1882,9 @@ const READ_TOOLS = new Set(['Read', 'Grep', 'Glob']);
 const WEB_TOOLS = new Set(['WebFetch', 'WebSearch']);
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit']);
 const MIN_STAY_MS = FAST ? 4000 : 20000;                           // don't bounce around on every tool call
-const IDLE_BREAK_MS = FAST ? 15000 : 120000;                       // finished for a while: take a break
-const IDLE_GAMES_MS = FAST ? 40000 : 600000;                       // long idle: game corner
+const IDLE_BREAK_MS = FAST ? 8000 : 45000;                         // finished for a while: take a break
+const IDLE_ROAM_MS = FAST ? [10000, 16000] : [50000, 90000];       // then drift between break spots every so often
+const THINK_WANDER_MS = FAST ? 8000 : 30000;                       // a long think: maybe go grab a coffee
 let MODE = params.has('demo') ? 'demo' : 'live';
 const live = { byId: new Map(), connected: false, everConnected: false, demoStarted: false, tickT: 0 };
 
@@ -1891,13 +1917,16 @@ function poseFor(a) {
   return 'idle';
 }
 function applyStatus(a, state, activity) {
+  if (state === 'thinking' && a.state !== 'thinking') a.thinkingSince = performance.now();
+  if (state !== 'thinking') { a.thinkingSince = 0; a.wandered = false; }
   setState(a, state, activity);
   a.busy = state === 'thinking' || state === 'working' || state === 'waiting';
   a.pose = poseFor(a);
-  if (state === 'done' || state === 'idle') { a.idleSince = a.idleSince || performance.now(); a.idleStage = a.idleStage || 0; } else { a.idleSince = 0; a.idleStage = 0; }
+  if (state === 'done' || state === 'idle') a.idleSince = a.idleSince || performance.now(); else { a.idleSince = 0; a.nextRoam = 0; }
 }
 // Go to a spot, but stay put for a minimum time unless it's urgent.
 function place(a, spot, force) {
+  if (a.spot && a.spot === a.wanderSpot) { force = true; a.wanderSpot = null; }
   if (!spot || a.leaving) return;
   if (a.onRoof) { a.nextSpot = spot; if (!a.comingDown) { a.comingDown = true; leaveRoof(a).then(() => { a.comingDown = false; const n = a.nextSpot; a.nextSpot = null; if (n) place(a, n, true); }); } return; }
   if (a.spot === spot || a.dest === spot) { a.nextSpot = null; return; }
@@ -1976,6 +2005,7 @@ function onLiveEvent(e, replay) {
   const s = e.session;
   if (e.type === 'SessionEnd') { const a = live.byId.get(e.sessionId); if (a) { emit(a, 'SessionEnd', e.reason || 'Session ended', e.at); leaveOffice(a); } return; }
   const a = liveMain(s, replay);
+  if (e.type === 'SubagentStop' && e.agentId && !a.subs.has(e.agentId)) return;   // never saw it work: nothing to show
   if (s.entrypoint && s.entrypoint !== 'unknown') a.entrypoint = s.entrypoint;
   a.permissionMode = s.permissionMode;
   const who = e.agentId ? liveSub(a, e.agentId, e.agentType, replay) : a;
@@ -2043,12 +2073,31 @@ function liveTick(dt) {
   }
   live.tickT += dt; if (live.tickT < 1) return; live.tickT = 0;
   const now = performance.now();
-  for (const a of agents) {                                 // breaks for agents that have been done for a while
-    if (!a.live || a.kind !== 'main' || a.exiting || !a.idleSince) continue;
-    const idleFor = now - a.idleSince;
-    if (a.idleStage < 1 && idleFor > IDLE_BREAK_MS) { a.idleStage = 1; if (Math.random() < .35) { goRoof(a); continue; } const sp = chooseIdle(a.floor); if (sp) { place(a, sp, true); setState(a, 'idle', IDLE_ACTIVITY[sp.type]); } }
-    else if (a.idleStage < 2 && idleFor > IDLE_GAMES_MS) { a.idleStage = 2; if (!a.onRoof && Math.random() < .7) { goRoof(a); continue; } if (a.onRoof) continue; const sp = spotOfType(a, ['pingpong', 'beanbag']); if (sp) { place(a, sp, true); setState(a, 'idle', IDLE_ACTIVITY[sp.type]); } }
+  for (const a of agents) {
+    if (!a.live || a.kind !== 'main' || a.exiting || a.comingDown || a.path.length) continue;
+    // finished: take a break, then drift between break spots (lounge, coffee, ping-pong, rooftop)
+    if (a.idleSince) {
+      if (!a.nextRoam) a.nextRoam = a.idleSince + IDLE_BREAK_MS;
+      if (now >= a.nextRoam) { a.nextRoam = now + rand(IDLE_ROAM_MS[0], IDLE_ROAM_MS[1]); roam(a); }
+      continue;
+    }
+    // thinking for a long time at the desk: sometimes stretch the legs with a coffee
+    if (a.state === 'thinking' && a.thinkingSince && !a.wandered && !a.onRoof && now - a.thinkingSince > THINK_WANDER_MS) {
+      a.wandered = true;
+      const sp = Math.random() < .5 ? spotOfType(a, ['coffee']) : null;
+      if (sp) { place(a, sp, true); a.wanderSpot = sp; setState(a, 'thinking', 'Thinking it over with a coffee'); }
+    }
   }
+}
+function roam(a) {
+  if (a.onRoof) {                                           // already upstairs: maybe move to another spot on the terrace
+    const free = ROOF_SPOTS.filter(s => !s.by);
+    if (free.length && Math.random() < .6) { const s = pick(free); roofWalkTo(a, s).then(() => { a.pose = 'idle'; setState(a, 'idle', ROOF_ACTIVITY[s.type]); }); }
+    return;
+  }
+  if (Math.random() < .3) { goRoof(a); return; }
+  const sp = chooseIdle(a.floor);
+  if (sp && sp !== a.spot) { place(a, sp, true); setState(a, 'idle', IDLE_ACTIVITY[sp.type]); }
 }
 
 function connectLive() {

@@ -46,13 +46,15 @@ export class Store {
   }
 
   // Returns the normalized event (or null if the payload is unusable).
-  ingest(p, entrypoint) {
+  // projectDir is CLAUDE_PROJECT_DIR from the hook; it stays put when the session cds into a subfolder.
+  ingest(p, entrypoint, projectDir) {
     const type = p.hook_event_name, sid = p.session_id;
     if (!type || !sid) return null;
     const now = Date.now();
     let s = this.sessions.get(sid);
     if (!s) {
-      s = { id: sid, cwd: p.cwd || '', project: path.basename(p.cwd || '') || 'session', entrypoint: entrypointLabel(entrypoint),
+      const root = projectDir || p.cwd || '';
+      s = { id: sid, cwd: root, project: path.basename(root) || 'session', entrypoint: entrypointLabel(entrypoint),
             startedAt: now, lastEventAt: now, status: 'idle', activity: 'Session started', permissionMode: p.permission_mode || 'default',
             subagents: {}, tool: null };
       this.sessions.set(sid, s);
@@ -62,6 +64,8 @@ export class Store {
     if (entrypoint && entrypoint !== 'unknown') s.entrypoint = entrypointLabel(entrypoint);
 
     const e = { type, sessionId: sid, at: now, agentId: p.agent_id || null, agentType: p.agent_type || null };
+    // Internal helper agents (e.g. the desktop app's prompt suggestions) only report SubagentStop. They never did visible work, so skip them.
+    if (type === 'SubagentStop' && e.agentId && !s.subagents[e.agentId]) return null;
     const sub = e.agentId ? (s.subagents[e.agentId] ||= { id: e.agentId, type: e.agentType || 'subagent', status: 'thinking', activity: 'Starting', startedAt: now }) : null;
     const target = sub || s;
 

@@ -41,11 +41,15 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/hook') {
     try {
       const payload = JSON.parse(await readBody(req));
-      const event = store.ingest(payload, req.headers['x-agent-office-entrypoint']);
+      const event = store.ingest(payload, req.headers['x-agent-office-entrypoint'], req.headers['x-agent-office-project']);
       if (event) broadcast({ type: 'event', event });
       res.writeHead(204); res.end();
     } catch { res.writeHead(400); res.end(); }
     return;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/log') {   // page errors and frame rate, for debugging
+    try { console.error('[office page]', (await readBody(req)).slice(0, 2000)); } catch {}
+    res.writeHead(204); res.end(); return;
   }
   if (req.method !== 'GET') { res.writeHead(405); res.end(); return; }
   if (url.pathname === '/api/state') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(store.snapshot())); return; }

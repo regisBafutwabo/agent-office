@@ -22,6 +22,25 @@ Open a **new** Claude Code session (desktop app or terminal) and send a prompt. 
 
 To try it without Claude Code, open <http://localhost:4747/?demo> for simulated agents.
 
+## Desktop app (macOS)
+
+A 4 MB menu-bar app with the office server built in, so you don't need `npm start` or Node:
+
+- The menu-bar icon shows how many agents need you, and macOS notifies you when one asks for permission.
+- **Open Agent Office** shows the 3D office in a window. Closing the window frees its memory; the server keeps running in the menu bar until you quit.
+- Phones and browsers can still open <http://localhost:4747>.
+
+Build it (needs Rust: `brew install rustup && rustup default stable`):
+
+```bash
+cd desktop
+npm install
+npm run dev      # run it
+npm run build    # Agent Office.app and a .dmg in src-tauri/target/release/bundle/
+```
+
+The app isn't code-signed yet, so other Macs will warn that the developer can't be verified.
+
 ## How it works
 
 ```
@@ -29,6 +48,7 @@ Claude Code (desktop app / terminal)
    │  hooks from the agent-office plugin (plugin/hooks)
    ▼
 bridge/server.js  ── keeps live state of every session and subagent
+  (or the desktop app's built-in Rust server: desktop/src-tauri)
    │  WebSocket
    ▼
 web/index.html    ── the 3D office (Three.js)
@@ -36,7 +56,7 @@ web/index.html    ── the 3D office (Three.js)
 
 - The plugin's hook script posts each event to `http://127.0.0.1:4747/hook`. It gives up after one second and never blocks or changes what Claude Code does.
 - The bridge only listens on `127.0.0.1`, so nothing leaves your machine. Prompts and file names are shown in the office, so treat it like your terminal.
-- Where agents go is decided by placement rules in `web/index.html` (search for "Placement rules"): three or more file reads in a row send an agent to the library, web research goes to the lounge, plan mode goes to the war room, and finished agents take a break after two minutes.
+- Where agents go is decided by placement rules in `web/index.html` (search for "Placement rules"): three or more file reads in a row send an agent to the library, web research goes to the lounge, plan mode goes to the war room, and finished agents take a break after 45 seconds and then drift between the lounge, coffee bar, ping-pong and the rooftop. Agents look around, stretch and sip coffee while they work.
 
 ## Options
 
@@ -58,6 +78,7 @@ claude plugin marketplace remove agent-office
 
 ```bash
 npm test                                  # bridge unit tests
+(cd desktop/src-tauri && cargo test)      # desktop app server tests
 claude --plugin-dir ./plugin              # try the hooks in one session without installing them
 ```
 
@@ -67,4 +88,4 @@ claude --plugin-dir ./plugin              # try the hooks in one session without
 2. Approve or deny permission requests from the office, desktop notifications
 3. Phone and VR over your local network (HTTPS for WebXR)
 4. Give agents tasks from the office (sessions started through the Agent SDK)
-5. Desktop app (Tauri) with a tray icon, and custom 3D model packs
+5. ~~Desktop app (Tauri) with a menu-bar icon~~; custom 3D model packs and code signing next

@@ -46,6 +46,19 @@ test('permission prompts mark the session as waiting and SessionEnd forgets it',
   assert.equal(st.snapshot().sessions.length, 0);
 });
 
+test('skips helper agents that only report SubagentStop', () => {
+  const st = new Store();
+  const e = st.ingest({ ...base, hook_event_name: 'SubagentStop', agent_id: 'helper', last_assistant_message: 'make it public' });
+  assert.equal(e, null);
+  assert.equal(st.snapshot().recent.length, 0);
+});
+
+test('files the session under the project folder, not the current folder', () => {
+  const st = new Store();
+  st.ingest({ ...base, cwd: '/Users/me/code/shop/src/cart', hook_event_name: 'SessionStart' }, 'cli', '/Users/me/code/shop');
+  assert.equal(st.snapshot().sessions[0].project, 'shop');
+});
+
 test('ignores payloads without a session or event name', () => {
   assert.equal(new Store().ingest({ hook_event_name: 'Stop' }), null);
 });

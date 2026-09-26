@@ -4,6 +4,7 @@
 curl -s -m 1 -X POST \
   -H 'Content-Type: application/json' \
   -H "X-Agent-Office-Entrypoint: ${CLAUDE_CODE_ENTRYPOINT:-unknown}" \
+  -H "X-Agent-Office-Project: ${CLAUDE_PROJECT_DIR:-}" \
   --data-binary @- \
   "http://127.0.0.1:${AGENT_OFFICE_PORT:-4747}/hook" >/dev/null 2>&1
 exit 0
