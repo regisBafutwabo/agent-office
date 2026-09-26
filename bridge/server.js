@@ -14,6 +14,12 @@ const THREE_JS = path.join(ROOT, 'node_modules', 'three', 'build', 'three.min.js
 const PORT = Number(process.env.AGENT_OFFICE_PORT || 4747);
 const HOST = process.env.AGENT_OFFICE_HOST || '127.0.0.1';
 const MAX_BODY = 1024 * 1024;
+const APPROVAL_HOLD_MS = 45_000;   // how long a watched office holds a permission request before Claude Code shows its own dialog
+
+// Only this machine's office pages may talk to the bridge. Without this, any website open in a browser
+// could reach localhost and approve commands. Hooks (curl) send no Origin header.
+const ALLOWED_ORIGINS = new Set(['localhost', '127.0.0.1', '[::1]'].map(h => `http://${h}:${PORT}`));
+const originOk = req => !req.headers.origin || ALLOWED_ORIGINS.has(req.headers.origin);
 
 const store = new Store();
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
@@ -36,8 +42,41 @@ function readBody(req) {
   });
 }
 
+// Pending permission requests, keyed by id: { approval, resolve }.
+const pending = new Map();
+let seq = 0;
+const decisionJson = behavior => JSON.stringify({ hookSpecificOutput: { hookEventName: 'PermissionRequest',
+  decision: behavior === 'allow' ? { behavior: 'allow' } : { behavior: 'deny', message: 'Denied from Agent Office' } } });
+
+// PermissionRequest hook: hold the request while someone is watching the office, so they can allow or deny it there.
+async function handlePermission(req, res, url) {
+  let body;
+  try { body = JSON.parse(await readBody(req)); } catch { res.writeHead(400); res.end(); return; }
+  const event = store.ingest(body, req.headers['x-agent-office-entrypoint'], req.headers['x-agent-office-project']);
+  if (event) broadcast({ type: 'event', event });
+  if (!event || watchers() === 0) { res.writeHead(204); res.end(); return; }   // nobody watching: Claude Code asks as usual
+  const id = `a${Date.now().toString(36)}${(++seq).toString(36)}`;
+  const approval = { id, sessionId: event.sessionId, agentId: event.agentId, tool: event.tool, summary: event.summary, expiresAt: Date.now() + APPROVAL_HOLD_MS };
+  const decision = await new Promise(resolve => {
+    const timer = setTimeout(() => resolve('defer'), APPROVAL_HOLD_MS);
+    pending.set(id, { approval, resolve: d => { clearTimeout(timer); resolve(d); } });
+    res.on('close', () => { if (!res.writableEnded) pending.get(id)?.resolve('defer'); });   // the hook gave up or was cancelled
+    broadcast({ type: 'approval', approval });
+  });
+  pending.delete(id);
+  if (decision === 'allow' || decision === 'deny') {
+    const e = store.resolveWaiting(event.sessionId, event.agentId, decision === 'allow' ? 'Allowed from the office' : 'Denied from the office');
+    if (e) broadcast({ type: 'event', event: e });
+  }
+  broadcast({ type: 'approval-resolved', id, decision });
+  if (decision === 'allow' || decision === 'deny') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(decisionJson(decision)); }
+  else { res.writeHead(204); res.end(); }
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  if (!originOk(req)) { res.writeHead(403); res.end(); return; }
+  if (req.method === 'POST' && url.pathname === '/permission') return handlePermission(req, res, url);
 
   if (req.method === 'POST' && url.pathname === '/hook') {
     try {
@@ -55,7 +94,7 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(204); res.end(); return;
   }
   if (req.method !== 'GET') { res.writeHead(405); res.end(); return; }
-  if (url.pathname === '/api/state') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(store.snapshot())); return; }
+  if (url.pathname === '/api/state') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(snapshot())); return; }
   if (url.pathname === '/vendor/three.min.js') return sendFile(res, THREE_JS);
 
   const rel = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, '');
@@ -64,12 +103,22 @@ const server = http.createServer(async (req, res) => {
   sendFile(res, file);
 });
 
-const wss = new WebSocketServer({ server, path: '/ws' });
+const wss = new WebSocketServer({ server, path: '/ws', verifyClient: ({ req }) => originOk(req) });
+const snapshot = () => ({ ...store.snapshot(), approvals: [...pending.values()].map(p => p.approval) });
+// Office pages report whether they're visible; requests are only held while at least one is.
+const watchers = () => [...wss.clients].filter(c => c.readyState === 1 && c.visible).length;
 function broadcast(msg) {
   const data = JSON.stringify(msg);
   for (const c of wss.clients) if (c.readyState === 1) c.send(data);
 }
-wss.on('connection', ws => ws.send(JSON.stringify({ type: 'snapshot', ...store.snapshot() })));
+wss.on('connection', ws => {
+  ws.send(JSON.stringify({ type: 'snapshot', ...snapshot() }));
+  ws.on('message', raw => {
+    let msg; try { msg = JSON.parse(raw); } catch { return; }
+    if (msg.type === 'presence') ws.visible = !!msg.visible;
+    if (msg.type === 'decide' && pending.has(msg.id) && ['allow', 'deny', 'defer'].includes(msg.decision)) pending.get(msg.id).resolve(msg.decision);
+  });
+});
 setInterval(() => store.prune(), 60_000).unref();
 
 server.on('error', err => {

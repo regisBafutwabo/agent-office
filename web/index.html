@@ -116,12 +116,31 @@ button{font:inherit;color:inherit}
 .theme-card[aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--accent);border-color:transparent}
 .theme-card .sw{display:flex;height:34px;border-radius:7px;overflow:hidden;margin-bottom:6px}
 .theme-card .sw i{flex:1}
-.cust-agent{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 10px;align-items:center;padding:8px 6px;border-bottom:1px solid var(--line)}
+.cust-agent-old{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 10px;align-items:center;padding:8px 6px;border-bottom:1px solid var(--line)}
 .cust-agent input[type=text]{width:100%;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:6px 9px;font:500 13px var(--font-b)}
 .cust-agent .proj{grid-column:2;margin-top:-4px}
 .cust-agent .pref{grid-column:1 / -1;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
 .cust-agent select{flex:1;min-width:0;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:5px 8px;font:500 13px var(--font-b)}
-.swatches{grid-column:1 / -1;display:flex;gap:6px;flex-wrap:wrap}
+.swatches{display:flex;gap:6px;flex-wrap:wrap}
+details.cust-agent{border-bottom:1px solid var(--line);padding:4px 2px}
+details.cust-agent summary{display:flex;align-items:center;gap:10px;padding:8px 4px;cursor:pointer;list-style:none;border-radius:10px}
+details.cust-agent summary::-webkit-details-marker{display:none}
+details.cust-agent summary:hover{background:var(--panel-2)}
+details.cust-agent summary::after{content:"Edit";margin-left:auto;font-size:12px;color:var(--muted)}
+details.cust-agent[open] summary::after{content:"Done"}
+.cust-name{display:flex;flex-direction:column;min-width:0}
+.cust-name b{font-weight:600}
+.cust-name .proj{margin:0;grid-column:auto}
+.cust-body{display:flex;flex-direction:column;gap:7px;padding:6px 6px 12px}
+.cust-body .lbl{font:600 10.5px var(--font-b);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+.field{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+.field input,.field select{flex:1;min-width:0;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:6px 9px;font:500 13px var(--font-b)}
+.mini-seg{display:flex;flex-wrap:wrap;gap:3px;padding:3px;border-radius:9px;background:var(--panel-2);border:1px solid var(--line);align-self:flex-start}
+.mini-seg button{border:0;background:transparent;padding:5px 9px;border-radius:6px;font-size:12px;color:var(--muted);cursor:pointer}
+.mini-seg button[aria-pressed="true"]{background:var(--panel);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.acc-chips{display:flex;flex-wrap:wrap;gap:5px}
+.acc-chips button{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--ink)}
+.acc-chips button[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
 .swatches button{width:22px;height:22px;border-radius:7px;border:0;background:var(--c);cursor:pointer}
 .swatches button[aria-pressed="true"]{box-shadow:0 0 0 2px var(--panel),0 0 0 4px var(--ink)}
 .toggles{display:flex;flex-direction:column;gap:2px;padding:0 2px}
@@ -332,6 +351,7 @@ body.live .speed-top, body.live .demo-only{display:none}
       <div class="perm-actions">
         <button class="btn primary" id="d-allow">Allow</button>
         <button class="btn" id="d-deny">Deny</button>
+        <button class="btn ghost" id="d-defer" hidden>Answer in Claude Code</button>
         <small id="d-perm-timer"></small>
       </div>
     </div>
@@ -1358,43 +1378,190 @@ const agents = []; const pickables = [];
 let seq = 0, simTime = 0, speed = 1, toolCalls = 0, uiDirty = true, selected = null, follow = false, showLabels = true, detailDirty = true;
 function createAgent(o) {
   const a = Object.assign({ id: 'a' + (++seq), state:'idle', activity:'Starting up', where:'', log:[], pending:[], path:[], yaw:0, pose:'idle', animT: Math.random() * 10,
-    approval:null, appear:1, leaving:false, spot:null, busy:false, floor:curFloor, labelDirty:true, arms:{ l:0, r:0, rz:0 }, tilt:0, sitY:0, pref:'anywhere' }, o);
-  a.scale = a.kind === 'sub' ? .78 : 1;
+    approval:null, appear:1, leaving:false, spot:null, busy:false, floor:curFloor, labelDirty:true, arms:{ l:0, r:0, rz:0 }, tilt:0, pref:'anywhere' }, o);
+  a.scale = a.kind === 'sub' ? .78 : .9;
   buildAvatar(a); agents.push(a); uiDirty = true; return a;
 }
+/* ---------- characters (from the Character Lab) ---------- */
+// Screen-face robots: the face shows the agent's status, and every part of the look is customizable.
+const BODIES = { round: { label: 'Round', R: .40, h: .78, taper: .72 }, tall: { label: 'Tall', R: .31, h: 1.0, taper: .8 }, compact: { label: 'Compact', R: .46, h: .62, taper: .7 } };
+const FACE_STYLES = { classic: 'Classic', pixel: 'Pixel', anime: 'Big eyes', minimal: 'Minimal' };
+const ACCESSORIES = { headphones: 'Headphones', beanie: 'Beanie', cap: 'Cap', glasses: 'Glasses', antenna: 'Antenna', scarf: 'Scarf', backpack: 'Backpack', mug: 'Mug' };
+const HATS = ['beanie', 'cap'];
+const TRIM_COLORS = ['#15212A', '#F4F1EA', '#FFB400', '#2B59C3', '#E4572E', '#98A4AA'];
+const ACCENT_COLORS = ['#E4572E', '#2B59C3', '#FFB400', '#15212A', '#F4F1EA', '#6CB26B', '#B16AD9', '#FF7EB6'];
+const FACE_COLORS = { thinking: '#C8BFFF', working: '#8BE9F5', waiting: '#FFC867', done: '#98F1B0', idle: '#AEBFC6', error: '#FF9C94' };
+const TOOL_ACCESSORY = { cursor: 'headphones', codex: 'cap', gemini: 'antenna', copilot: 'glasses', factory: 'backpack', qwen: 'beanie',
+  goose: 'scarf', kiro: 'antenna', windsurf: 'headphones', cline: 'glasses', opencode: 'cap', amp: 'antenna' };
+const LEG = .3;                                  // hip height when standing
+const JOINT = M('#2A3035', { roughness: .5 });
+const seedHash = s => { let h = 7; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) | 0; return Math.abs(h); };
+
+// A look that stays the same for a given project, so agents are recognizable between visits.
+function lookFor(seed, color, toolAccessory) {
+  const h = seedHash(seed), keys = Object.keys(ACCESSORIES);
+  const acc = [toolAccessory || keys[(h >> 9) % keys.length]];
+  const extra = keys[(h >> 13) % keys.length];
+  if ((h >> 4) % 3 === 0 && !acc.includes(extra) && !(HATS.includes(extra) && acc.some(a => HATS.includes(a)))) acc.push(extra);
+  return { body: Object.keys(BODIES)[h % 3], face: Object.keys(FACE_STYLES)[(h >> 3) % 4], color,
+    trim: TRIM_COLORS[(h >> 5) % TRIM_COLORS.length], accent: ACCENT_COLORS[(h >> 7) % ACCENT_COLORS.length], accessories: acc, intern: false };
+}
+function randomLook(color) {
+  const keys = Object.keys(ACCESSORIES).sort(() => Math.random() - .5), acc = [];
+  for (const k of keys) { if (acc.length >= 1 + Math.floor(Math.random() * 2)) break; if (HATS.includes(k) && acc.some(a => HATS.includes(a))) continue; acc.push(k); }
+  return { body: pick(Object.keys(BODIES)), face: pick(Object.keys(FACE_STYLES)), color, trim: pick(TRIM_COLORS), accent: pick(ACCENT_COLORS), accessories: acc, intern: false };
+}
+// Subagents look like a smaller "intern" version of their parent.
+const internLook = (parent, color) => ({ ...parent.look, color, intern: true, accessories: parent.look.accessories.filter(a => a !== 'mug' && a !== 'backpack') });
+
+function part(geo, mat, parent, x = 0, y = 0, z = 0, shadow = true) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = shadow; m.receiveShadow = shadow; parent.add(m); return m; }
+function roundedBox(w, h, d, r, bevel = .04) {
+  const s = new THREE.Shape(), x = -w / 2, y = -h / 2;
+  s.moveTo(x + r, y); s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r); s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r); s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y);
+  const g = new THREE.ExtrudeGeometry(s, { depth: d, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 8 });
+  g.center(); return g;
+}
+function bodyRadius(S, t) {                      // rounded bottom, gentle taper, rounded shoulders
+  const bottom = Math.sqrt(Math.max(0, 1 - Math.pow(1 - Math.min(t / .22, 1), 2)));
+  const top = 1 - (1 - S.taper) * Math.pow(Math.max(0, (t - .35) / .65), 1.6);
+  const cap = t > .88 ? Math.sqrt(Math.max(0, 1 - Math.pow((t - .88) / .12, 2))) : 1;
+  return S.R * bottom * top * cap;
+}
+
+// The parts that belong to the agent and survive a change of look: ring, selection ring, name tag, click target.
 function buildAvatar(a) {
-  const g = new THREE.Group(), pivot = new THREE.Group(); g.add(pivot); a.g = g; a.pivot = pivot;
-  a.mBody = M(a.color, { roughness:.55 }); a.mHead = M(mix(a.color, '#ffffff', .62), { roughness:.5 }); a.mArm = M(mix(a.color, '#000000', .12), { roughness:.6 });
-  const puck = new THREE.Mesh(new THREE.CylinderGeometry(.3, .32, .12, 24), mats.puck); puck.position.y = .1; puck.castShadow = true; pivot.add(puck);
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(.24, .32, .78, 24), a.mBody); body.position.y = .56; body.castShadow = true; pivot.add(body);
-  const head = new THREE.Group(); head.position.y = 1.2; pivot.add(head); a.head = head;
-  const skull = new THREE.Mesh(new THREE.SphereGeometry(.26, 24, 18), a.mHead); skull.castShadow = true; head.add(skull);
-  const visor = new THREE.Mesh(new THREE.BoxGeometry(.36, .13, .1), mats.visor); visor.position.set(0, .02, .21); head.add(visor);
-  [-1, 1].forEach(s => { const e = new THREE.Mesh(new THREE.BoxGeometry(.06, .045, .01), mats.eye); e.position.set(s * .08, .025, .262); head.add(e); });
-  a.armL = new THREE.Group(); a.armR = new THREE.Group();
-  [[a.armL, -1], [a.armR, 1]].forEach(([sh, s]) => { sh.position.set(s * .33, .86, 0); pivot.add(sh);
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(.1, .42, .1), a.mArm); arm.position.y = -.2; arm.castShadow = true; sh.add(arm);
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(.07, 12, 10), a.mHead); hand.position.y = -.43; sh.add(hand); });
-  // laptop for working away from the desk
-  a.laptop = new THREE.Group(); a.laptop.position.set(0, .6, .36); pivot.add(a.laptop);
+  const g = new THREE.Group(); a.g = g;
+  a.ring = new THREE.Mesh(new THREE.RingGeometry(.4, .5, 40), new THREE.MeshBasicMaterial({ color: '#888', transparent: true, opacity: .9, depthWrite: false }));
+  a.ring.rotation.x = -Math.PI / 2; a.ring.position.y = .025; g.add(a.ring);
+  a.selRing = new THREE.Mesh(new THREE.RingGeometry(.6, .66, 48), new THREE.MeshBasicMaterial({ color: '#FFFFFF', transparent: true, opacity: .95, depthWrite: false }));
+  a.selRing.rotation.x = -Math.PI / 2; a.selRing.position.y = .026; a.selRing.visible = false; g.add(a.selRing);
+  a.L = canvasTex(512, 128);
+  a.label = new THREE.Sprite(new THREE.SpriteMaterial({ map: a.L.t, depthTest: false, transparent: true }));
+  a.label.scale.set(2.8, .7, 1); a.label.renderOrder = 10; a.label.visible = showLabels; g.add(a.label);
+  const hit = new THREE.Mesh(new THREE.CylinderGeometry(.55, .55, 2.1, 8), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
+  hit.position.y = 1; hit.userData.agentId = a.id; g.add(hit); pickables.push(hit); a.hit = hit;
+  const fc = document.createElement('canvas'); fc.width = 256; fc.height = 200; a.faceCtx = fc.getContext('2d');
+  a.faceTex = new THREE.CanvasTexture(fc); a.faceTex.anisotropy = 4; a.faceT = 1;
+  a.blink = 0; a.blinkIn = rand(1.5, 4); a.pelvisY = LEG; a.legs = { l: 0, r: 0 };
+  if (!a.look) a.look = a.kind === 'sub' && a.parent ? internLook(a.parent, a.color) : lookFor(a.name + (a.cwd || ''), a.color, TOOL_ACCESSORY[a.agentName]);
+  buildRig(a);
+  g.scale.setScalar(a.scale); scene.add(g);
+}
+
+// The body itself, rebuilt whenever the look changes.
+function buildRig(a) {
+  const L = a.look = { ...a.look, color: a.color, accessories: [...(a.look.accessories || [])] };
+  if (a.rig) { a.g.remove(a.rig); a.rig.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+  const S = BODIES[L.body] || BODIES.round, rig = a.rig = new THREE.Group(); a.g.add(rig);
+  if (L.intern) rig.scale.setScalar(.9);
+  const mBody = M(L.color, { roughness: .5 }), mTrim = M(L.trim, { roughness: .45 }), mAcc = M(L.accent, { roughness: .75 });
+  const pelvis = a.pivot = new THREE.Group(); pelvis.position.y = a.pelvisY; rig.add(pelvis);
+  const pts = []; for (let i = 0; i <= 24; i++) { const t = i / 24; pts.push(new THREE.Vector2(Math.max(bodyRadius(S, t), .001), t * S.h)); }
+  part(new THREE.LatheGeometry(pts, 32), mBody, pelvis);
+  // status light on the chest
+  const zc = bodyRadius(S, .55);
+  const badge = part(new THREE.CylinderGeometry(.085, .085, .03, 20), mTrim, pelvis, 0, S.h * .55, zc - .005); badge.rotation.x = Math.PI / 2;
+  a.lightMat = new THREE.MeshBasicMaterial({ color: STATUS[a.state].hex });
+  const light = part(new THREE.CylinderGeometry(.05, .05, .034, 16), a.lightMat, pelvis, 0, S.h * .55, zc + .002, false); light.rotation.x = Math.PI / 2;
+  // legs
+  a.hips = [-1, 1].map(s => { const hip = new THREE.Group(); hip.position.set(s * S.R * .42, .06, 0); pelvis.add(hip);
+    part(new THREE.CylinderGeometry(.075, .068, LEG - .06, 12), JOINT, hip, 0, -(LEG - .06) / 2);
+    const foot = part(new THREE.SphereGeometry(.095, 14, 10), mTrim, hip, 0, -LEG + .07, .04); foot.scale.set(1, .6, 1.45); return hip; });
+  // arms (office code drives armL/armR)
+  const sx = bodyRadius(S, .72) + .045;
+  [a.armL, a.armR] = [-1, 1].map(s => { const sh = new THREE.Group(); sh.position.set(s * sx, S.h * .72, 0); sh.rotation.z = s * .12; pelvis.add(sh);
+    part(new THREE.SphereGeometry(.07, 12, 10), mBody, sh);
+    part(new THREE.CylinderGeometry(.055, .048, .32, 10), mBody, sh, 0, -.17);
+    const hand = new THREE.Group(); hand.position.y = -.36; sh.add(hand); part(new THREE.SphereGeometry(.072, 12, 10), mTrim, hand);
+    sh.userData.hand = hand; return sh; });
+  // neck and screen head
+  part(new THREE.CylinderGeometry(.075, .085, .09, 14), JOINT, pelvis, 0, S.h + .02);
+  const head = a.head = new THREE.Group(); head.position.y = S.h + .07 + .27; pelvis.add(head);
+  part(roundedBox(.56, .44, .3, .13, .05), mBody, head);
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(.54, .42), new THREE.MeshBasicMaterial({ map: a.faceTex })); screen.position.z = .204; head.add(screen);
+  const A = L.accessories;
+  if (!A.includes('headphones')) [-1, 1].forEach(s => { const b = part(new THREE.CylinderGeometry(.05, .05, .05, 14), mTrim, head, s * .34, 0, 0); b.rotation.z = Math.PI / 2; });
+  a.antennaMat = null;
+  if (A.includes('headphones')) { part(new THREE.TorusGeometry(.37, .03, 8, 24, Math.PI), JOINT, head, 0, .02, 0);
+    [-1, 1].forEach(s => { const cup = part(new THREE.CylinderGeometry(.11, .11, .1, 18), mAcc, head, s * .37, .02, 0); cup.rotation.z = Math.PI / 2; }); }
+  if (A.includes('beanie')) { const d = part(new THREE.SphereGeometry(.36, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), mAcc, head, 0, .2, 0); d.scale.set(1, .8, 1.02);
+    part(new THREE.CylinderGeometry(.37, .375, .1, 20), mAcc, head, 0, .22, 0); part(new THREE.SphereGeometry(.075, 10, 8), mTrim, head, 0, .5, 0); }
+  if (A.includes('cap')) { const d = part(new THREE.SphereGeometry(.35, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), mAcc, head, 0, .24, 0); d.scale.set(1, .6, 1.02);
+    const brim = part(new THREE.CylinderGeometry(.24, .24, .03, 20), mAcc, head, 0, .25, .3); brim.scale.set(1.25, 1, 1.4); }
+  if (A.includes('glasses')) { [-1, 1].forEach(s => part(new THREE.TorusGeometry(.085, .016, 8, 18), JOINT, head, s * .125, .03, .232)); part(new THREE.BoxGeometry(.07, .016, .016), JOINT, head, 0, .05, .232); }
+  if (A.includes('antenna') && !A.some(h => HATS.includes(h))) { part(new THREE.CylinderGeometry(.014, .014, .26, 8), JOINT, head, .14, .4, 0);
+    a.antennaMat = new THREE.MeshBasicMaterial({ color: STATUS[a.state].hex }); part(new THREE.SphereGeometry(.05, 12, 8), a.antennaMat, head, .14, .55, 0, false); }
+  if (A.includes('scarf')) { const sc = part(new THREE.TorusGeometry(.16, .06, 8, 20), mAcc, pelvis, 0, S.h + .01, 0); sc.rotation.x = Math.PI / 2;
+    const tail = part(new THREE.BoxGeometry(.1, .26, .05), mAcc, pelvis, .1, S.h - .13, bodyRadius(S, .86) + .06); tail.rotation.z = .15; }
+  if (A.includes('backpack')) part(roundedBox(.34, .34, .1, .08, .03), mAcc, pelvis, 0, S.h * .55, -(bodyRadius(S, .55) + .06));
+  if (A.includes('mug')) { const hand = a.armL.userData.hand; part(new THREE.CylinderGeometry(.05, .045, .11, 14), mats.mug, hand, 0, 0, .08); part(new THREE.TorusGeometry(.03, .01, 6, 10), mats.mug, hand, .055, 0, .08); }
+  if (L.intern) { const ly = part(new THREE.TorusGeometry(.13, .012, 6, 20), mAcc, pelvis, 0, S.h - .02, .02); ly.rotation.x = Math.PI / 2 - .35;
+    part(new THREE.BoxGeometry(.1, .13, .012), mats.mug, pelvis, 0, S.h * .62, bodyRadius(S, .62) + .02);
+    part(new THREE.BoxGeometry(.1, .03, .014), mAcc, pelvis, 0, S.h * .62 + .045, bodyRadius(S, .62) + .021); }
+  // laptop for working away from the desk, held in front
+  a.laptop = new THREE.Group(); a.laptop.position.set(0, S.h * .5, .38); pelvis.add(a.laptop);
   box(.36, .018, .25, mats.steel, 0, 0, 0, a.laptop);
   const lid = new THREE.Group(); lid.position.set(0, .01, -.12); lid.rotation.x = -.3; a.laptop.add(lid);
   box(.36, .23, .012, mats.steel, 0, .115, 0, lid);
-  a.lapScreen = new THREE.MeshBasicMaterial({ color:'#1E262B' });
+  a.lapScreen = new THREE.MeshBasicMaterial({ color: '#1E262B' });
   const ls = new THREE.Mesh(new THREE.PlaneGeometry(.32, .19), a.lapScreen); ls.position.set(0, .115, .007); lid.add(ls);
   a.laptop.visible = false;
-  a.ring = new THREE.Mesh(new THREE.RingGeometry(.4, .5, 40), new THREE.MeshBasicMaterial({ color:'#888', transparent:true, opacity:.9, depthWrite:false }));
-  a.ring.rotation.x = -Math.PI / 2; a.ring.position.y = .025; g.add(a.ring);
-  a.selRing = new THREE.Mesh(new THREE.RingGeometry(.6, .66, 48), new THREE.MeshBasicMaterial({ color:'#FFFFFF', transparent:true, opacity:.95, depthWrite:false }));
-  a.selRing.rotation.x = -Math.PI / 2; a.selRing.position.y = .026; a.selRing.visible = false; g.add(a.selRing);
-  a.beacon = new THREE.Mesh(new THREE.OctahedronGeometry(.15), new THREE.MeshBasicMaterial({ color: STATUS.waiting.hex })); a.beacon.position.y = 1.75; a.beacon.visible = false; pivot.add(a.beacon);
-  a.L = canvasTex(512, 128);
-  a.label = new THREE.Sprite(new THREE.SpriteMaterial({ map: a.L.t, depthTest:false, transparent:true }));
-  a.label.scale.set(2.8, .7, 1); a.label.position.y = 2.3; a.label.renderOrder = 10; a.label.visible = showLabels; g.add(a.label);
-  const hit = new THREE.Mesh(new THREE.CylinderGeometry(.55, .55, 2.1, 8), new THREE.MeshBasicMaterial({ transparent:true, opacity:0, depthWrite:false }));
-  hit.position.y = 1; hit.userData.agentId = a.id; g.add(hit); pickables.push(hit); a.hit = hit;
-  g.scale.setScalar(a.scale); scene.add(g);
+  // the "needs you" marker floats above the head
+  a.beaconY = S.h + .07 + .6 + (A.includes('antenna') || A.includes('beanie') ? .42 : .28);
+  a.beacon = new THREE.Mesh(new THREE.OctahedronGeometry(.13), new THREE.MeshBasicMaterial({ color: STATUS.waiting.hex })); a.beacon.position.y = a.beaconY; a.beacon.visible = false; pelvis.add(a.beacon);
+  a.topY = (LEG + S.h + .07 + .54 + (A.includes('beanie') || A.includes('antenna') ? .2 : .04)) * (L.intern ? .9 : 1);
+  a.label.position.y = a.topY + .5;
+  a.faceT = 1; updateScreen(a);
 }
+
+function hexA(hex, alpha) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${alpha})`; }
+function drawFace(a) {
+  const x = a.faceCtx, W = 256, H = 200, L = a.look, t = a.animT;
+  const st = a.faceErrorUntil > t ? 'error' : a.state, col = FACE_COLORS[st], glow = st === 'error' ? '#E5534B' : STATUS[st].hex;
+  x.fillStyle = '#0C1216'; x.fillRect(0, 0, W, H);
+  const g = x.createRadialGradient(W / 2, H / 2, 30, W / 2, H / 2, 170); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, hexA(glow, st === 'waiting' ? .28 + .14 * Math.sin(t * 6) : .2));
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+  x.fillStyle = 'rgba(255,255,255,.035)'; for (let y = 0; y < H; y += 4) x.fillRect(0, y, W, 1);
+  x.strokeStyle = L.trim; x.lineWidth = 8; rrect(x, 4, 4, W - 8, H - 8, 26); x.stroke();
+  let look = { x: 0, y: 0 }, open = 1;
+  const happy = st === 'done';
+  if (st === 'thinking') look = { x: 12, y: -16 };
+  if (st === 'working') { open = .55; look = { x: Math.sin(t * 1.6) * 12, y: 4 }; }
+  if (st === 'waiting') open = 1.25;
+  if (st === 'idle') { open = .32 + .06 * Math.sin(t * .8); look.y = 6; }
+  if (st === 'error') { open = .85; look = { x: -4, y: 2 }; }
+  if (a.blink > 0 && !happy) open = .08;
+  x.fillStyle = col; x.strokeStyle = col; x.lineCap = 'round'; x.lineJoin = 'round';
+  [[96, 92], [160, 92]].forEach(([ex, ey], i) => {
+    const cx = ex + look.x, cy = ey + look.y;
+    if (happy) { x.lineWidth = L.face === 'minimal' ? 7 : 10; x.beginPath(); x.arc(cx, cy + 8, 18, Math.PI * 1.1, Math.PI * 1.9); x.stroke(); return; }
+    if (L.face === 'pixel') { const rows = Math.max(1, Math.round(6 * open)), px = 8; for (let r = 0; r < rows; r++) for (let q = 0; q < 4; q++) x.fillRect(cx - 16 + q * px, cy - rows * px / 2 + r * px, px - 2, px - 2); }
+    else if (L.face === 'anime') {
+      const ry = Math.max(3, 26 * open);
+      x.beginPath(); x.ellipse(cx, cy, 22, ry, 0, 0, Math.PI * 2); x.fill();
+      if (ry > 8) { x.fillStyle = '#0C1216'; x.beginPath(); x.ellipse(cx + look.x * .15, cy + 3, 11, Math.min(14, ry * .55), 0, 0, Math.PI * 2); x.fill();
+        x.fillStyle = '#FFFFFF'; x.beginPath(); x.arc(cx - 7, cy - 8, 5, 0, 7); x.fill(); x.beginPath(); x.arc(cx + 6, cy + 6, 2.5, 0, 7); x.fill(); x.fillStyle = col; }
+    }
+    else if (L.face === 'minimal') { if (open < .5) { x.lineWidth = 7; x.beginPath(); x.moveTo(cx - 13, cy); x.lineTo(cx + 13, cy); x.stroke(); } else { x.beginPath(); x.arc(cx, cy, 9 * Math.min(1.3, open), 0, 7); x.fill(); } }
+    else { const h = Math.max(5, 46 * open); rrect(x, cx - 15, cy - h / 2, 30, h, Math.min(15, h / 2)); x.fill(); }
+    if (st === 'error' && L.face !== 'minimal') { x.lineWidth = 6; x.beginPath(); const s = i ? -1 : 1; x.moveTo(cx - 16, cy - 30 - s * 5); x.lineTo(cx + 16, cy - 30 + s * 5); x.stroke(); }
+  });
+  x.lineWidth = 6;
+  const mx = 128 + look.x * .4, my = 142;
+  if (happy) { x.beginPath(); x.arc(mx, my - 12, 18, Math.PI * .15, Math.PI * .85); x.stroke(); }
+  else if (st === 'error') { x.beginPath(); x.arc(mx, my + 10, 16, Math.PI * 1.2, Math.PI * 1.8); x.stroke(); }
+  else if (st === 'waiting') { x.beginPath(); x.ellipse(mx, my, 8, 10, 0, 0, 7); x.stroke(); }
+  else if (st === 'thinking') { x.beginPath(); x.moveTo(mx - 6, my); x.lineTo(mx + 10, my - 3); x.stroke(); }
+  else if (st === 'idle') { x.beginPath(); x.moveTo(mx - 8, my); x.lineTo(mx + 8, my); x.stroke(); }
+  if (st === 'thinking') { for (let k = 0; k < 3; k++) { x.globalAlpha = (Math.floor(t * 3) % 3) === k ? 1 : .35; x.beginPath(); x.arc(196 + k * 16, 42, 6, 0, 7); x.fill(); } x.globalAlpha = 1; }
+  if (st === 'waiting') { x.globalAlpha = .7 + .3 * Math.sin(t * 8); x.font = '700 64px "Bricolage Grotesque", sans-serif'; x.textAlign = 'center'; x.fillText('!', 214, 88); x.textAlign = 'left'; x.globalAlpha = 1; }
+  if (st === 'idle') { x.font = '700 22px "IBM Plex Sans", sans-serif'; ['z', 'Z'].forEach((z, k) => { const u = (t * .35 + k * .5) % 1; x.globalAlpha = Math.sin(u * Math.PI); x.fillText(z, 190 + k * 16 + u * 10, 70 - u * 40); }); x.globalAlpha = 1; }
+  if (st === 'error') { x.fillStyle = '#8FD3FF'; x.beginPath(); const sy = 40 + ((t * 30) % 30); x.moveTo(206, sy); x.quadraticCurveTo(216, sy + 16, 206, sy + 20); x.quadraticCurveTo(196, sy + 16, 206, sy); x.fill(); }
+  if (st === 'working') { x.fillStyle = hexA(col, .55); for (let k = 0; k < 3; k++) { const w = 20 + ((k * 37 + Math.floor(t * 4) * 13) % 40); x.fillRect(40, 160 + k * 9, w, 4); } }
+  a.faceTex.needsUpdate = true;
+}
+
 function drawLabel(a) {
   const x = a.L.x; x.clearRect(0, 0, 512, 128);
   x.fillStyle = sceneT.dark ? 'rgba(15,22,26,.86)' : 'rgba(255,255,255,.92)'; rrect(x, 6, 10, 500, 108, 30); x.fill();
@@ -1406,16 +1573,23 @@ function drawLabel(a) {
   a.L.t.needsUpdate = true; a.labelDirty = false;
 }
 const stateColor = a => a.state === 'idle' ? sceneT.screenOff : STATUS[a.state].hex;
-function setState(a, state, activity) { a.state = state; a.activity = activity; a.labelDirty = true; uiDirty = true; detailDirty = true; updateScreen(a); }
+function setAgentLook(a, patch) {
+  a.look = { ...a.look, ...patch }; buildRig(a);
+  agents.filter(s => s.parent === a).forEach(s => { s.look = internLook(a, s.color); buildRig(s); });
+  a.labelDirty = true; renderJSON(); saveAgentPrefs(a);
+}
+function setState(a, state, activity) {
+  if (/failed|Denied/.test(activity || '')) a.faceErrorUntil = a.animT + 4;   // a worried face for a few seconds
+  a.state = state; a.activity = activity; a.labelDirty = true; uiDirty = true; detailDirty = true; updateScreen(a); }
 function updateScreen(a) {
   if (a.gone) return; const c = stateColor(a);
   a.lapScreen.color.set(c);
   if (a.spot && a.spot.screen && !a.path.length && a.floor === curFloor) a.spot.screen.color.set(c);
 }
 function setAgentColor(a, hex) {
-  a.color = hex; a.mBody.color.set(hex); a.mHead.color.set(mix(hex, '#ffffff', .62)); a.mArm.color.set(mix(hex, '#000000', .12));
+  a.color = hex; buildRig(a);
   if (a.home && a.home.owner === a && a.floor === curFloor) a.home.chairMat.color.set(hex);
-  agents.filter(s => s.parent === a).forEach(s => setAgentColor(s, mix(hex, '#ffffff', .35)));
+  agents.filter(s => s.parent === a).forEach(s => { s.look = internLook(a, mix(hex, '#ffffff', .35)); setAgentColor(s, mix(hex, '#ffffff', .35)); });
   a.labelDirty = true; uiDirty = true; detailDirty = true; renderJSON();
 }
 
@@ -1629,24 +1803,34 @@ function updateAgent(a, dt, sdt) {
       if (a.fidget === 'sip') { r += (-2.0 - r) * w; tilt += (-.18 - tilt) * w; }
     }
   }
-  const sitTarget = !moving && a.spot ? (a.spot.y || 0) : 0;
-  a.sitY += (sitTarget - a.sitY) * (1 - Math.exp(-dt * 10));
+  // legs swing when walking and point forward when sitting; the body rests on the seat
+  const seated = !moving && !!a.spot && a.spot.y > 0;
+  let legL = 0, legR = 0;
+  if (moving) { legL = Math.sin(t * 9) * .55; legR = -legL; }
+  else if (seated) legL = legR = -1.45;
+  else if (pose === 'shoot') { const u = a.shootU || 0; if (u > .36 && u < .46) legL = legR = -.35; }
+  a.pelvisY += ((seated ? a.spot.y + .29 : LEG) - a.pelvisY) * (1 - Math.exp(-dt * 10));
   const k = 1 - Math.exp(-dt * 12);
   a.arms.l += (l - a.arms.l) * k; a.arms.r += (r - a.arms.r) * k; a.arms.rz += (rz - a.arms.rz) * k;
-  a.armL.rotation.x = a.arms.l; a.armR.rotation.x = a.arms.r; a.armR.rotation.z = a.arms.rz;
+  a.armL.rotation.x = a.arms.l; a.armR.rotation.x = a.arms.r; a.armR.rotation.z = .12 + a.arms.rz;
+  a.legs.l += (legL - a.legs.l) * k; a.legs.r += (legR - a.legs.r) * k; a.hips[0].rotation.x = a.legs.l; a.hips[1].rotation.x = a.legs.r;
   a.tilt += (tilt - a.tilt) * k; a.head.rotation.x = a.tilt; a.head.rotation.y += (headYaw - a.head.rotation.y) * k;
-  a.pivot.position.y = bob + a.sitY;
+  a.pivot.position.y = a.pelvisY + bob;
   a.laptop.visible = !moving && a.busy && !!a.spot && !!a.spot.laptop && pose !== 'raise' && pose !== 'read';
   a.ring.material.color.set(STATUS[a.state].hex);
   const waiting = a.state === 'waiting';
   a.beacon.visible = waiting;
-  if (waiting) { const p = performance.now(); a.beacon.rotation.y += dt * 2.5; a.beacon.scale.setScalar(1 + Math.sin(p / 180) * .18); a.beacon.position.y = 1.75 + Math.sin(p / 300) * .05;
+  if (waiting) { const p = performance.now(); a.beacon.rotation.y += dt * 2.5; a.beacon.scale.setScalar(1 + Math.sin(p / 180) * .18); a.beacon.position.y = a.beaconY + Math.sin(p / 300) * .05;
     const flash = Math.sin(p / 200) > 0 ? STATUS.waiting.hex : sceneT.screenOff; a.lapScreen.color.set(flash);
     if (a.spot && a.spot.screen && !a.gone && a.floor === curFloor) a.spot.screen.color.set(flash); }
+  a.lightMat.color.set(waiting && Math.sin(performance.now() / 140) < 0 ? '#5A4420' : STATUS[a.state].hex);
+  if (a.antennaMat) a.antennaMat.color.set(STATUS[a.state].hex);
+  a.blinkIn -= dt; if (a.blinkIn <= 0) { a.blink = .13; a.blinkIn = rand(2.2, 5); } a.blink = Math.max(0, a.blink - dt);
+  a.faceT += dt; if (g.visible && a.faceT > 1 / 12) { a.faceT = 0; drawFace(a); }   // 12 fps is plenty for a face and light on phones/VR
   a.selRing.visible = a === selected;
   if (a === selected) a.selRing.material.color.set(sceneT.dark ? '#FFFFFF' : '#15212A');
   a.label.visible = showLabels && (a.onRoof || viewMode !== 'roof');   // on the roof, hide tags of people working below the deck
-  if (a.approval && simTime > a.approval.deadline) a.approval.resolve('auto');
+  if (a.approval && !a.approval.live && simTime > a.approval.deadline) a.approval.resolve('auto');
 }
 
 /* ---------- camera ---------- */
@@ -1808,7 +1992,8 @@ function renderDetail() {
   const pill = $('#d-pill'); pill.className = 'pill s-' + a.state; pill.textContent = STATUS[a.state].label;
   $('#d-activity').textContent = a.activity + (a.pending.length ? ` (${a.pending.length} task${a.pending.length > 1 ? 's' : ''} queued)` : '');
   const perm = $('#d-perm'); perm.hidden = !a.approval;
-  if (a.approval) { $('#d-perm-tool').textContent = a.approval.tool; $('#d-perm-cmd').textContent = a.approval.cmd; }
+  if (a.approval) { $('#d-perm-tool').textContent = a.approval.tool; $('#d-perm-cmd').textContent = a.approval.cmd || a.approval.tool; }
+  $('#d-defer').hidden = !(a.approval && a.approval.live);
   $('#d-log').innerHTML = a.log.map(e => `<li><time>${stamp(e)}</time><code class="hook${e.hook === 'Notification' ? ' warn' : ''}">${e.hook}</code><span class="what" title="${esc(e.detail)}">${esc(e.detail)}</span></li>`).join('');
   const main = a.kind === 'main';
   $('#d-form').hidden = !main || !!a.live; $('#d-spawn').hidden = !main || !!a.live;
@@ -1819,8 +2004,15 @@ function renderDetail() {
                          : 'Watching this session live. Sending tasks from the office comes in a later step.'; }
 }
 $('#d-close').onclick = () => select(null);
-$('#d-allow').onclick = () => { if (selected && selected.approval) selected.approval.resolve('allow'); };
-$('#d-deny').onclick = () => { if (selected && selected.approval) selected.approval.resolve('deny'); };
+// Demo approvals resolve locally; live ones go back to the bridge, which answers Claude Code's permission hook.
+function decide(a, decision) {
+  const ap = a && a.approval; if (!ap) return;
+  if (ap.live) { if (live.ws && live.ws.readyState === 1) live.ws.send(JSON.stringify({ type: 'decide', id: ap.id, decision })); }
+  else ap.resolve(decision === 'defer' ? 'allow' : decision);
+}
+$('#d-allow').onclick = () => decide(selected, 'allow');
+$('#d-deny').onclick = () => decide(selected, 'deny');
+$('#d-defer').onclick = () => decide(selected, 'defer');
 $('#d-form').addEventListener('submit', e => {
   e.preventDefault(); const inp = $('#d-prompt'), text = inp.value.trim(); if (!text || !selected || selected.kind !== 'main') return;
   selected.pending.push(text); inp.value = ''; if (selected.wake) selected.wake();
@@ -1837,45 +2029,72 @@ $('#d-spawn').onclick = async () => {
 
 /* toasts */
 function toast(msg, action, fn) {
+  const actions = Array.isArray(action) ? action : action ? [[action, fn, true]] : [];
   const el = document.createElement('div'); el.className = 'toast glass';
   el.innerHTML = `<span>${esc(msg)}</span>`;
-  if (action) { const b = document.createElement('button'); b.className = 'btn primary'; b.textContent = action; b.onclick = () => { fn(); el.remove(); }; el.appendChild(b); }
+  for (const [label, run, primary] of actions) { const b = document.createElement('button'); b.className = primary ? 'btn primary' : 'btn'; b.textContent = label; b.onclick = () => { run(); el.remove(); }; el.appendChild(b); }
+  if (actions.length) el.dataset.keep = '1';
   const wrap = $('#toasts'); wrap.prepend(el); while (wrap.children.length > 3) wrap.lastChild.remove();
-  setTimeout(() => el.remove(), 6000);
+  setTimeout(() => el.remove(), el.dataset.keep ? 45000 : 6000);   // toasts with buttons stay up as long as a request is held
 }
 
 /* customize */
 function buildCustomize() {
   $('#themes').innerHTML = Object.entries(SCENES).map(([k, T]) => `<button class="theme-card" data-key="${k}" aria-pressed="${k === sceneKey}"><span class="sw"><i style="background:${T.floor}"></i><i style="background:${T.fabric}"></i><i style="background:${T.fabric2}"></i><i style="background:${T.felt1}"></i></span>${T.label}</button>`).join('');
   document.querySelectorAll('.theme-card').forEach(b => b.onclick = () => applyScene(b.dataset.key));
-  const mains = agents.filter(a => a.kind === 'main');
-  $('#cust-agents').innerHTML = mains.map(a => `<div class="cust-agent" data-id="${a.id}">
-      <span class="av" style="--c:${a.color}">${esc(a.name[0])}</span>
-      <input type="text" id="name-${a.id}" value="${esc(a.name)}" aria-label="Name for the ${esc(a.project.key)} agent" maxlength="18">
-      <span class="proj">~/${esc(a.project.key)}</span>
-      <label class="pref">Works at <select id="pref-${a.id}">${Object.entries(PREFS).map(([k, v]) => `<option value="${k}"${k === a.pref ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
-      <div class="swatches">${PALETTE.map(c => `<button style="--c:${c}" data-c="${c}" aria-label="Color ${c}" aria-pressed="${c === a.color}"></button>`).join('')}</div></div>`).join('');
-  document.querySelectorAll('.cust-agent').forEach(el => {
-    const a = agents.find(x => x.id === el.dataset.id);
-    el.querySelector('input').addEventListener('input', e => {
-      a.name = e.target.value.trim() || a.project.agent; a.labelDirty = true; uiDirty = true; detailDirty = true;
-      el.querySelector('.av').textContent = a.name[0]; renderJSON(); saveAgentPrefs(a);
-    });
-    el.querySelector('select').addEventListener('change', e => { a.pref = e.target.value; renderJSON(); toast(`${a.name} will work at: ${PREFS[a.pref].toLowerCase()} (from the next task)`); saveAgentPrefs(a); });
-    el.querySelectorAll('.swatches button').forEach(b => b.onclick = () => {
-      setAgentColor(a, b.dataset.c); el.querySelector('.av').style.setProperty('--c', b.dataset.c); saveAgentPrefs(a);
-      el.querySelectorAll('.swatches button').forEach(x => x.setAttribute('aria-pressed', x === b));
-    });
-  });
+  const mains = agents.filter(a => a.kind === 'main'), box$ = $('#cust-agents');
+  const open = new Set([...box$.querySelectorAll('details[open]')].map(d => d.dataset.id));
+  const seg = (a, key, options) => `<div class="mini-seg">${Object.entries(options).map(([k, v]) => `<button type="button" data-look="${key}" data-v="${k}" aria-pressed="${a.look[key] === k}">${typeof v === 'string' ? v : v.label}</button>`).join('')}</div>`;
+  const sw = (a, key, colors, cur) => `<div class="swatches">${colors.map(c => `<button type="button" style="--c:${c}" data-look="${key}" data-v="${c}" aria-label="${key} ${c}" aria-pressed="${c === cur}"></button>`).join('')}</div>`;
+  box$.innerHTML = mains.map(a => `<details class="cust-agent" data-id="${a.id}"${open.has(a.id) ? ' open' : ''}>
+      <summary><span class="av" style="--c:${a.color}">${esc(a.name[0])}</span><span class="cust-name"><b>${esc(a.name)}</b><span class="proj">~/${esc(a.project.key)} · floor ${floorNum(a.floor)}</span></span></summary>
+      <div class="cust-body">
+        <label class="field">Name <input type="text" id="name-${a.id}" data-field="name" value="${esc(a.name)}" maxlength="18"></label>
+        <label class="field">Works at <select id="pref-${a.id}" data-field="pref">${Object.entries(PREFS).map(([k, v]) => `<option value="${k}"${k === a.pref ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+        <span class="lbl">Body</span>${seg(a, 'body', BODIES)}
+        <span class="lbl">Face</span>${seg(a, 'face', FACE_STYLES)}
+        <span class="lbl">Color</span>${sw(a, 'color', PALETTE, a.color)}
+        <span class="lbl">Trim</span>${sw(a, 'trim', TRIM_COLORS, a.look.trim)}
+        <span class="lbl">Accessory color</span>${sw(a, 'accent', ACCENT_COLORS, a.look.accent)}
+        <span class="lbl">Accessories</span><div class="acc-chips">${Object.entries(ACCESSORIES).map(([k, v]) => `<button type="button" data-look="accessories" data-v="${k}" aria-pressed="${a.look.accessories.includes(k)}">${v}</button>`).join('')}</div>
+        <button type="button" class="btn ghost" data-act="random">Randomize look</button>
+      </div></details>`).join('');
 }
+// One set of listeners for the creator; the list re-renders as agents come and go.
+$('#cust-agents').addEventListener('click', e => {
+  const el = e.target.closest('[data-look],[data-act]'); if (!el) return;
+  const a = agents.find(x => x.id === el.closest('details').dataset.id); if (!a) return;
+  const key = el.dataset.look, v = el.dataset.v;
+  if (el.dataset.act === 'random') { const look = randomLook(a.color); setAgentLook(a, look); }
+  else if (key === 'color') { setAgentColor(a, v); saveAgentPrefs(a); }
+  else if (key === 'accessories') {
+    const A = [...a.look.accessories];
+    if (A.includes(v)) A.splice(A.indexOf(v), 1); else { if (HATS.includes(v)) HATS.forEach(h => A.includes(h) && A.splice(A.indexOf(h), 1)); A.push(v); }
+    setAgentLook(a, { accessories: A });
+  } else setAgentLook(a, { [key]: v });
+  buildCustomize(); uiDirty = true;
+});
+$('#cust-agents').addEventListener('input', e => {
+  if (e.target.dataset.field !== 'name') return;
+  const a = agents.find(x => x.id === e.target.closest('details').dataset.id); if (!a) return;
+  a.name = e.target.value.trim() || a.project.agent; a.labelDirty = true; uiDirty = true; detailDirty = true;
+  const d = e.target.closest('details'); d.querySelector('.av').textContent = a.name[0]; d.querySelector('.cust-name b').textContent = a.name;
+  renderJSON(); saveAgentPrefs(a);
+});
+$('#cust-agents').addEventListener('change', e => {
+  if (e.target.dataset.field !== 'pref') return;
+  const a = agents.find(x => x.id === e.target.closest('details').dataset.id); if (!a) return;
+  a.pref = e.target.value; renderJSON(); saveAgentPrefs(a); toast(`${a.name} will work at: ${PREFS[a.pref].toLowerCase()} (from the next task)`);
+});
 $('#opt-labels').onchange = e => { showLabels = e.target.checked; renderJSON(); };
 $('#opt-grid').onchange = e => grid.visible = e.target.checked;
 $('#opt-follow').onchange = e => { setFollow(e.target.checked); };
 function renderJSON() {
   const mains = agents.filter(a => a.kind === 'main');
   const o = { theme: sceneKey, floors: floors.slice().reverse().map(f => ({ floor: floorNum(f), project: f.key })),
-    agents: mains.map(a => ({ project: a.cwd || '~/Documents/' + a.project.key, name: a.name, color: a.color, floor: floorNum(a.floor), homeDesk: `bench-${a.floor.deskSeats.indexOf(a.home) + 1}`, worksAt: a.pref })),
-    zones: { workbenches: 16, lounge: ['sofa', 'lounge chairs', 'poufs'], cafe: 'counter stools', focusBooths: 2, hotDesk: 4, warRoom: 'Plan subagents', library: 'Explore subagents', gameCorner: ['ping-pong', 'beanbags'] },
+    agents: mains.map(a => ({ project: a.cwd || '~/Documents/' + a.project.key, name: a.name, color: a.color, floor: floorNum(a.floor), homeDesk: `bench-${a.floor.deskSeats.indexOf(a.home) + 1}`, worksAt: a.pref,
+      character: { body: a.look.body, face: a.look.face, trim: a.look.trim, accent: a.look.accent, accessories: a.look.accessories } })),
+    zones: { workbenches: 16, lounge: ['sofa', 'lounge chairs', 'poufs'], cafe: 'counter stools', focusBooths: 2, hotDesk: 4, warRoom: 'Plan subagents', library: 'Explore subagents', gameCorner: ['basketball machines', 'beanbags'] },
     screens: { 'war-room/terminal': 'Bash output', 'war-room/board': 'files being edited' },
     nameTags: showLabels };
   $('#json').textContent = JSON.stringify(o, null, 2);
@@ -1951,7 +2170,7 @@ const live = { byId: new Map(), connected: false, everConnected: false, demoStar
 const hashStr = str => { let h = 0; for (const c of str) h = (h * 31 + c.charCodeAt(0)) | 0; return Math.abs(h); };
 const prefKey = cwd => 'agent-office:agent:' + cwd;
 function loadAgentPrefs(cwd) { try { return JSON.parse(localStorage.getItem(prefKey(cwd))) || {}; } catch (_) { return {}; } }
-function saveAgentPrefs(a) { if (!a.live || !a.cwd) return; try { localStorage.setItem(prefKey(a.cwd), JSON.stringify({ name: a.name, color: a.color, pref: a.pref })); } catch (_) {} }
+function saveAgentPrefs(a) { if (!a.live || !a.cwd) return; try { localStorage.setItem(prefKey(a.cwd), JSON.stringify({ name: a.name, color: a.color, pref: a.pref, look: a.look })); } catch (_) {} }
 
 function setModeLine() {
   const el = $('#mode-line'), mains = agents.filter(a => a.kind === 'main').length;
@@ -2029,7 +2248,7 @@ function liveMain(s, instant) {
   const name = saved.name || (s.project + (same ? ` ${same + 1}` : ''));
   const color = saved.color || PALETTE[hashStr(s.cwd || s.id) % PALETTE.length];
   a = createAgent({ name, kind: 'main', color, home, project: { key: s.project, agent: name }, cwd: s.cwd, sessionId: s.id,
-                    entrypoint: s.entrypoint, agentName: s.agent, pref: saved.pref || 'anywhere', live: true, subs: new Map(), streak: 0, floor });
+                    entrypoint: s.entrypoint, agentName: s.agent, pref: saved.pref || 'anywhere', look: saved.look ? { ...saved.look, intern: false } : undefined, live: true, subs: new Map(), streak: 0, floor });
   if (isNew && !instant) toast(`${s.project} moved into floor ${floorNum(floor)}`, 'Go there', () => goToFloor(floor.i));
   home.by = a.id; if (home.type === 'desk') { home.owner = a; if (floor === curFloor) home.chairMat.color.set(color); }
   a.ws = home;
@@ -2111,6 +2330,8 @@ function onLiveEvent(e, replay) {
     case 'Stop': emit(a, 'Stop', 'Finished responding', e.at); applyStatus(a, 'done', 'Finished'); break;
     case 'SubagentStart': emit(who, 'SubagentStart', `${e.agentType || 'Subagent'} started`, e.at); break;
     case 'SubagentStop': emit(who, 'SubagentStop', e.message || 'Returned its result', e.at); if (!replay) leaveOffice(who); else { removeAgent(who); a.subs.delete(e.agentId); } break;
+    case 'PermissionResolved': emit(who, 'PermissionResolved', e.message, e.at); applyStatus(who, 'thinking', e.message);
+      if (!replay) toast(`${e.message.startsWith('Allowed') ? 'Allowed' : 'Denied'}: ${who.name} ${e.message.startsWith('Allowed') ? 'can go ahead' : 'will find another way'}`); break;
     case 'PreCompact': emit(a, 'PreCompact', 'Compacting the conversation', e.at); applyStatus(a, 'working', 'Compacting context'); place(a, spotOfType(a, ['coffee']) || a.ws, true); break;
   }
   setModeLine();
@@ -2120,6 +2341,7 @@ function onSnapshot(msg) {
   const ids = new Set(msg.sessions.map(s => s.id));
   for (const [id, a] of live.byId) if (!ids.has(id)) leaveOffice(a);
   feedEl.innerHTML = '';
+  agents.forEach(a => { if (a.approval && a.approval.live) a.approval = null; });
   for (const s of msg.sessions) {
     const a = liveMain(s, true);
     applyStatus(a, s.status, s.activity);
@@ -2131,6 +2353,7 @@ function onSnapshot(msg) {
     const detail = e.prompt ? `"${e.prompt}"` : e.message || `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}` || e.type;
     emit(who, e.type, detail, e.at);
   }
+  for (const ap of msg.approvals || []) onApproval(ap, false);   // requests still waiting for an answer
   setModeLine();
 }
 
@@ -2168,15 +2391,34 @@ function roam(a) {
   if (sp && sp !== a.spot) { place(a, sp, true); setState(a, 'idle', IDLE_ACTIVITY[sp.type]); }
 }
 
+// Tell the bridge whether this office is on screen: it only holds permission requests while someone is watching.
+function sendPresence() { if (live.ws && live.ws.readyState === 1) live.ws.send(JSON.stringify({ type: 'presence', visible: document.visibilityState === 'visible' })); }
+document.addEventListener('visibilitychange', sendPresence);
+function approvalOwner(ap) { const a = live.byId.get(ap.sessionId); return a && (ap.agentId ? a.subs.get(ap.agentId) : a); }
+function onApproval(ap, fresh) {
+  const who = approvalOwner(ap); if (!who) return;
+  who.approval = { live: true, id: ap.id, tool: ap.tool || 'a tool', cmd: ap.summary ? `${ap.tool} ${ap.summary}` : ap.tool, expiresAt: ap.expiresAt };
+  applyStatus(who, 'waiting', `Needs permission: ${who.approval.cmd}`);
+  detailDirty = true; uiDirty = true;
+  if (fresh) toast(`${who.name} on floor ${floorNum(who.floor)} wants to run ${who.approval.cmd}`,
+    [['Allow', () => decide(who, 'allow'), true], ['Deny', () => decide(who, 'deny')], ['Show me', () => select(who, true)]]);
+}
+function onApprovalResolved(msg) {
+  for (const a of agents) if (a.approval && a.approval.live && a.approval.id === msg.id) { a.approval = null; detailDirty = true; uiDirty = true;
+    if (msg.decision === 'defer') setState(a, 'waiting', 'Waiting for an answer in Claude Code'); }
+  document.querySelectorAll('.toast').forEach(t => { if (t.textContent.includes('wants to run')) t.remove(); });
+}
 function connectLive() {
   document.body.classList.add('live'); setSpeed(1); setModeLine();
   let ws;
   try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'); }
   catch (_) { startDemo(); return; }
   const fallback = setTimeout(() => { if (!live.everConnected) { try { ws.close(); } catch (_) {} startDemo(); } }, 2500);
-  ws.onopen = () => { live.connected = live.everConnected = true; clearTimeout(fallback); setModeLine(); };
+  live.ws = ws;
+  ws.onopen = () => { live.connected = live.everConnected = true; clearTimeout(fallback); setModeLine(); sendPresence(); };
   ws.onmessage = m => { let msg; try { msg = JSON.parse(m.data); } catch (_) { return; }
-    if (msg.type === 'snapshot') onSnapshot(msg); else if (msg.type === 'event') onLiveEvent(msg.event, false); };
+    if (msg.type === 'snapshot') onSnapshot(msg); else if (msg.type === 'event') onLiveEvent(msg.event, false);
+    else if (msg.type === 'approval') onApproval(msg.approval, true); else if (msg.type === 'approval-resolved') onApprovalResolved(msg); };
   ws.onclose = () => {
     clearTimeout(fallback);
     if (!live.everConnected) { startDemo(); return; }
@@ -2190,10 +2432,18 @@ function startDemo() {
   document.body.classList.remove('live');
   PROJECTS.forEach((p, i) => { if (i === 0) Object.assign(floors[0], { key: p.key, name: p.key, placeholder: false }); else makeFloor(p.key, p.key); });
   // [project, name, desk, colour, works at]: two floors have a pair of sessions working side by side
+  const LOOKS = {
+    Ada: { body: 'round', face: 'classic', trim: '#15212A', accent: '#E4572E', accessories: ['headphones'] },
+    Max: { body: 'compact', face: 'pixel', trim: '#F4F1EA', accent: '#FFB400', accessories: ['glasses', 'backpack'] },
+    Kit: { body: 'tall', face: 'pixel', trim: '#F4F1EA', accent: '#15212A', accessories: ['cap'] },
+    Nova: { body: 'compact', face: 'anime', trim: '#15212A', accent: '#B16AD9', accessories: ['beanie', 'scarf'] },
+    Iris: { body: 'tall', face: 'anime', trim: '#F4F1EA', accent: '#FFB400', accessories: ['antenna', 'backpack'] },
+    Reno: { body: 'round', face: 'minimal', trim: '#15212A', accent: '#F4F1EA', accessories: ['glasses', 'mug'] },
+  };
   [[0, 'Ada', 0, null, 'anywhere'], [0, 'Max', 6, '#A78BFA', 'anywhere'], [1, 'Kit', 9, null, 'anywhere'],
    [2, 'Nova', 0, null, 'lounge'], [2, 'Iris', 15, '#EE6C9F', 'anywhere'], [3, 'Reno', 6, null, 'anywhere']].forEach(([pi, name, seat, color, pref]) => {
     const p = PROJECTS[pi], floor = floors[pi], home = floor.deskSeats[seat];
-    const a = createAgent({ name, kind: 'main', color: color || p.color, home, project: p, pref, floor });
+    const a = createAgent({ name, kind: 'main', color: color || p.color, home, project: p, pref, floor, look: { ...LOOKS[name], intern: false } });
     home.by = a.id; home.owner = a;
     a.spot = home; a.where = 'Own desk'; a.g.position.set(home.x, 0, home.z); a.yaw = a.yawT = yawOf(home.face);
     setState(a, 'idle', 'Session started');
@@ -2241,7 +2491,9 @@ function step(dt) {
   if (!renderer.xr.isPresenting) { keyPan(dt); updateCam(dt); updateShell(); }
   uiT += dt;
   if (uiT > .15) { uiT = 0; if (uiDirty) renderUI(); if (detailDirty) renderDetail(); }
-  if (selected && selected.approval) { const s = Math.max(0, Math.ceil(selected.approval.deadline - simTime)); const tEl = $('#d-perm-timer'); const txt = `Demo auto-approves in ${s}s`; if (tEl.textContent !== txt) tEl.textContent = txt; }
+  if (selected && selected.approval) { const ap = selected.approval, tEl = $('#d-perm-timer');
+    const txt = ap.live ? `Claude Code asks you itself in ${Math.max(0, Math.ceil((ap.expiresAt - Date.now()) / 1000))}s` : `Demo auto-approves in ${Math.max(0, Math.ceil(ap.deadline - simTime))}s`;
+    if (tEl.textContent !== txt) tEl.textContent = txt; }
 }
 renderer.setAnimationLoop(() => {
   const now = performance.now(), dt = Math.min(.05, (now - last) / 1000); last = now;

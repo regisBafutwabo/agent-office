@@ -62,6 +62,22 @@ web/index.html    ── the 3D office (Three.js)
 - The bridge only listens on `127.0.0.1`, so nothing leaves your machine. Prompts and file names are shown in the office, so treat it like your terminal.
 - Where agents go is decided by placement rules in `web/index.html` (search for "Placement rules"): three or more file reads in a row send an agent to the library, web research goes to the lounge, plan mode goes to the war room, and finished agents take a break after 45 seconds and then drift between the lounge, coffee bar, ping-pong and the rooftop. Agents look around, stretch and sip coffee while they work.
 
+## Characters
+
+Agents are small robots with a screen for a face, and the face shows what the agent is doing: eyes looking up with "…" while thinking, focused while working, a big "!" when it needs you, happy ^ ^ when done, sleepy zZ when idle, and a frown when something failed. A light on the chest shows the same status color.
+
+Customize each agent in **Customize → Agents**: body shape, face style, colors, and accessories (headphones, beanie, cap, glasses, antenna, scarf, backpack, mug). Looks are remembered per project. Subagents automatically look like a smaller "intern" version of their parent, and agents from other tools get a default accessory (Cursor wears headphones, Codex a cap, and so on). Try looks side by side in `prototype/character-lab.html`.
+
+## Approving from the office
+
+When an agent needs permission, it raises its hand and its floor pulses amber. If the office is open on your screen, you can answer right there: **Allow**, **Deny**, or **Answer in Claude Code**. You can do this from the agent's card or from the pop-up alert.
+
+- Claude Code runs its permission hook *before* showing its own dialog. So the office only holds a request while at least one office page is visible, and for at most 45 seconds. After that, or if nobody is watching, Claude Code asks you as usual with no delay.
+- Denied requests tell Claude "Denied from Agent Office", so it can try another way.
+- Only pages served by the office itself can connect. Requests from other websites are refused, so a web page can't approve commands on your machine.
+
+This works with Claude Code today. Codex, Copilot CLI, Gemini CLI, Cursor and Factory hooks can also allow or deny, so they can be added the same way.
+
 ## Options
 
 | Setting | Default | What it does |
@@ -89,7 +105,7 @@ claude --plugin-dir ./plugin              # try the hooks in one session without
 ## Roadmap
 
 1. ~~Live sessions from the desktop app and terminal (read-only)~~
-2. Approve or deny permission requests from the office, desktop notifications
+2. ~~Approve or deny permission requests from the office, desktop notifications~~
 3. Phone and VR over your local network (HTTPS for WebXR)
 4. Give agents tasks from the office (sessions started through the Agent SDK)
 5. ~~Desktop app (Tauri) with a menu-bar icon~~; custom 3D model packs and code signing next

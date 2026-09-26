@@ -45,6 +45,17 @@ export class Store {
     for (const [id, s] of this.sessions) if (now - s.lastEventAt > STALE_MS) this.sessions.delete(id);
   }
 
+  // A permission request answered from the office: the session (or subagent) stops waiting.
+  resolveWaiting(sessionId, agentId, activity) {
+    const s = this.sessions.get(sessionId); if (!s) return null;
+    const target = agentId ? s.subagents[agentId] : s; if (!target) return null;
+    target.status = 'thinking'; target.activity = activity;
+    const e = { type: 'PermissionResolved', sessionId, at: Date.now(), agentId: agentId || null, agentType: null, message: activity,
+      session: { id: s.id, agent: s.agent, cwd: s.cwd, project: s.project, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity } };
+    this.recent.push(e); if (this.recent.length > RECENT_MAX) this.recent.shift();
+    return e;
+  }
+
   // Returns the normalized event (or null if the payload is unusable).
   // projectDir is CLAUDE_PROJECT_DIR from the hook; it stays put when the session cds into a subfolder.
   ingest(p, entrypoint, projectDir, agent = 'claude-code') {

@@ -149,6 +149,32 @@ impl Store {
         self.sessions.iter().map(|s| (s.status == "waiting") as usize + s.subagents.iter().filter(|a| a.status == "waiting").count()).sum()
     }
 
+    /// A permission request answered from the office: the session (or subagent) stops waiting.
+    pub fn resolve_waiting(&mut self, session_id: &str, agent_id: Option<&str>, activity: &str) -> Option<Value> {
+        let s = self.sessions.iter_mut().find(|s| s.id == session_id)?;
+        match agent_id {
+            Some(aid) => {
+                let a = s.subagents.iter_mut().find(|a| a.id == aid)?;
+                a.status = "thinking".into();
+                a.activity = activity.into();
+            }
+            None => {
+                s.status = "thinking".into();
+                s.activity = activity.into();
+            }
+        }
+        let event = json!({
+            "type": "PermissionResolved", "sessionId": session_id, "at": now_ms(), "agentId": agent_id, "agentType": null, "message": activity,
+            "session": { "id": s.id, "cwd": s.cwd, "project": s.project, "entrypoint": s.entrypoint,
+                         "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity },
+        });
+        self.recent.push_back(event.clone());
+        if self.recent.len() > RECENT_MAX {
+            self.recent.pop_front();
+        }
+        Some(event)
+    }
+
     /// Returns the normalized event, or None if the payload is unusable or not worth showing.
     /// `project_dir` is CLAUDE_PROJECT_DIR from the hook; it stays put when the session cds into a subfolder.
     pub fn ingest(&mut self, p: &Value, entrypoint: Option<&str>, project_dir: Option<&str>) -> Option<Value> {

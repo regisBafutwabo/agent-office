@@ -71,8 +71,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/send.sh\"",
-            "timeout": 3
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/permission.sh\"",
+            "timeout": 70
           }
         ]
       }
