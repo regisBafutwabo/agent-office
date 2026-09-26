@@ -1,0 +1,16 @@
+{
+  "name": "agent-office",
+  "version": "0.1.0",
+  "description": "A customizable 3D office where your Claude Code agents work, for desktop, mobile and VR.",
+  "type": "module",
+  "bin": { "agent-office": "bridge/server.js" },
+  "scripts": {
+    "start": "node bridge/server.js",
+    "test": "node --test bridge/*.test.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "three": "0.128.0",
+    "ws": "^8.18.0"
+  }
+}

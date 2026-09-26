@@ -1,0 +1,6 @@
+{
+  "name": "agent-office",
+  "version": "0.1.0",
+  "description": "Streams Claude Code session activity to the local Agent Office, a 3D office where your agents work.",
+  "author": { "name": "Regis Bafutwabo" }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "agent-office",
+  "owner": {
+    "name": "Regis Bafutwabo"
+  },
+  "metadata": {
+    "description": "Agent Office: see your Claude Code agents at work in a 3D office."
+  },
+  "plugins": [
+    {
+      "name": "agent-office",
+      "source": "./plugin",
+      "description": "Streams Claude Code session activity to the local Agent Office."
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+# Agent Office
+
+A 3D office where your Claude Code agents work. Every session you run in the **Claude desktop app** or in the **terminal** becomes an agent that rides up in the lift, takes a desk, walks to the library when it researches, raises a hand when it needs your permission, and heads to the lounge when it's done. Subagents show up as smaller teammates.
+
+Works in any browser on your computer. Phone and VR headset support comes next (see the roadmap).
+
+## Quick start
+
+```bash
+npm install
+npm start                # starts the office at http://localhost:4747
+```
+
+Then install the hooks once, so Claude Code reports what it's doing:
+
+```bash
+claude plugin marketplace add "/path/to/agent-office"
+claude plugin install agent-office@agent-office
+```
+
+Open a **new** Claude Code session (desktop app or terminal) and send a prompt. Its agent appears in the office.
+
+To try it without Claude Code, open <http://localhost:4747/?demo> for simulated agents.
+
+## How it works
+
+```
+Claude Code (desktop app / terminal)
+   │  hooks from the agent-office plugin (plugin/hooks)
+   ▼
+bridge/server.js  ── keeps live state of every session and subagent
+   │  WebSocket
+   ▼
+web/index.html    ── the 3D office (Three.js)
+```
+
+- The plugin's hook script posts each event to `http://127.0.0.1:4747/hook`. It gives up after one second and never blocks or changes what Claude Code does.
+- The bridge only listens on `127.0.0.1`, so nothing leaves your machine. Prompts and file names are shown in the office, so treat it like your terminal.
+- Where agents go is decided by placement rules in `web/index.html` (search for "Placement rules"): three or more file reads in a row send an agent to the library, web research goes to the lounge, plan mode goes to the war room, and finished agents take a break after two minutes.
+
+## Options
+
+| Setting | Default | What it does |
+|---|---|---|
+| `AGENT_OFFICE_PORT` | `4747` | Port for the bridge. Set it for Claude Code too if you change it, since the hook script reads it. |
+| `AGENT_OFFICE_HOST` | `127.0.0.1` | Interface the bridge listens on. |
+| `?demo` | | Simulated agents instead of live sessions. |
+| `?fast` | | Shorter idle timers, useful when testing. |
+
+## Uninstall the hooks
+
+```bash
+claude plugin uninstall agent-office@agent-office
+claude plugin marketplace remove agent-office
+```
+
+## Development
+
+```bash
+npm test                                  # bridge unit tests
+claude --plugin-dir ./plugin              # try the hooks in one session without installing them
+```
+
+## Roadmap
+
+1. ~~Live sessions from the desktop app and terminal (read-only)~~
+2. Approve or deny permission requests from the office, desktop notifications
+3. Phone and VR over your local network (HTTPS for WebXR)
+4. Give agents tasks from the office (sessions started through the Agent SDK)
+5. Desktop app (Tauri) with a tray icon, and custom 3D model packs
