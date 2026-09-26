@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Agent Office</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -448,10 +449,10 @@ const SCENES = {
     screenOff:'#252B22', glass:'#D5ECD9', grid:'#8C7A5E' },
 };
 const PLACE = { desk:'Desk', sofa:'Lounge sofa', armchair:'Lounge chair', pouf:'Pouf', stool:'Café counter', hightable:'Hot desk',
-  booth:'Focus booth', meeting:'War room', library:'Library', coffee:'Coffee bar', pingpong:'Ping-pong table', beanbag:'Beanbag' };
+  booth:'Focus booth', meeting:'War room', library:'Library', coffee:'Coffee bar', hoops:'Basketball machine', beanbag:'Beanbag' };
 const LOUNGE_WORK = ['sofa','armchair','hightable','stool','booth'];
 Object.assign(PLACE, { roofsofa:'Sofa', roofchair:'Lounge chair', barstool:'Bar', firepit:'Fire pit', lounger:'Sun lounger', rail:'View' });
-const IDLE_ACTIVITY = { coffee:'Making a flat white', pingpong:'Playing ping-pong', beanbag:'Lounging on a beanbag', pouf:'Chatting in the lounge', sofa:'Relaxing on the sofa' };
+const IDLE_ACTIVITY = { coffee:'Making a flat white', hoops:'Shooting hoops', beanbag:'Lounging on a beanbag', pouf:'Chatting in the lounge', sofa:'Relaxing on the sofa' };
 const PREFS = { anywhere:'Anywhere', desk:'Own desk', lounge:'Lounge first' };
 
 /* ---------- renderer / scene ---------- */
@@ -1056,20 +1057,77 @@ booth(0.1, 2.4, mats.felt1); booth(1.75, 2.4, mats.felt2);
   plantBush(-1.2, 8.2, .9); plantBush(3.0, 8.3, .8); }
 
 /* ---------- zone: game corner ---------- */
-const ball = new THREE.Mesh(new THREE.SphereGeometry(.045, 10, 8), mats.line); ball.visible = false; scene.add(ball);
-{ const g = grp(-7.5, 7.0);
-  box(2.74, .06, 1.52, mats.pingpong, 0, .76, 0, g); box(2.74, .004, .03, mats.line, 0, .792, 0, g, false);
-  box(2.74, .004, .03, mats.line, 0, .792, .745, g, false); box(2.74, .004, .03, mats.line, 0, .792, -.745, g, false);
-  box(.02, .15, 1.62, mats.black, 0, .86, 0, g); [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => box(.05, .73, .05, mats.black, a * 1.2, .365, b * .6, g));
-  block(-7.5, 7.0, 2.74, 1.52);
-  spot('pingpong', -9.3, 7.0, [1, 0]); spot('pingpong', -5.7, 7.0, [-1, 0]);
-  const rg = box(2.2, .015, 3.4, mats.rug2, -12.4, .008, 7.1, scene, false); rg.castShadow = false;
-  [[-12.5, 6.2, mats.beanA], [-12.5, 8.0, mats.beanB]].forEach(([x, z, m]) => { const b = new THREE.Mesh(beanbagGeo(), m); b.position.set(x, .175, z); b.rotation.y = yawOf([1, 0]); b.castShadow = true; b.receiveShadow = true; scene.add(b); block(x, z, .95, .95, .05);
-    spot('beanbag', x + .12, z, [1, 0], { y: .14, from: 'front' }); });
+// Arcade basketball machines: an agent on a break steps up and shoots on its own.
+const HOOP_PERIOD = 1.9;                       // seconds per shot
+const hoops = [];
+const hoopMats = { ball: M('#E8742A', { roughness: .6 }), rim: M('#E4572E', { roughness: .4, metalness: .3 }), board: M('#F7F7F5', { roughness: .3 }),
+  net: new THREE.MeshBasicMaterial({ color: '#F4F4F2', wireframe: true, transparent: true, opacity: .85 }),
+  cage: new THREE.MeshBasicMaterial({ color: '#2B3035', wireframe: true, transparent: true, opacity: .35 }) };
+const rampY = z => 1.125 - (z + .1) * .0998;   // height of a ball resting on the sloped ramp at local z
+function hoopMachine(x, z, body) {
+  const g = grp(x, z, yawOf([1, 0]));          // local +z points into the room, where the player stands
+  box(1.2, .9, 2.3, body, 0, .45, -.1, g);
+  const ramp = box(1.08, .05, 2.2, mats.black, 0, .98, -.1, g); ramp.rotation.x = .1;   // slopes down so balls roll back
+  [-.58, .58].forEach(sx => { box(.04, .22, 2.2, body, sx, 1.1, -.1, g);
+    const cage = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 1.25, 10, 6), hoopMats.cage); cage.position.set(sx, 1.8, -.15); cage.rotation.y = Math.PI / 2; g.add(cage); });
+  [-.52, .52].forEach(sx => box(.07, 2.35, .07, mats.black, sx, 2.2, -1.2, g));
+  box(1.1, .78, .04, hoopMats.board, 0, 2.45, -1.16, g);
+  [[0, 2.44, .36, .025], [0, 2.16, .36, .025]].forEach(([bx, by, w, h]) => box(w, h, .01, hoopMats.rim, bx, by, -1.135, g, false));
+  [-.17, .17].forEach(bx => box(.025, .3, .01, hoopMats.rim, bx, 2.3, -1.135, g, false));
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(.19, .016, 8, 28), hoopMats.rim); rim.position.set(0, 2.12, -.88); rim.rotation.x = Math.PI / 2; g.add(rim);
+  box(.05, .03, .12, hoopMats.rim, 0, 2.12, -1.1, g);
+  const net = new THREE.Mesh(new THREE.CylinderGeometry(.19, .12, .3, 12, 3, true), hoopMats.net); net.position.set(0, 1.96, -.88); g.add(net);
+  box(1.2, .42, .08, mats.bezel, 0, 3.1, -1.2, g);
+  const scoreTex = canvasTex(256, 96);
+  const board = new THREE.Mesh(new THREE.PlaneGeometry(1.08, .38), new THREE.MeshBasicMaterial({ map: scoreTex.t })); board.position.set(0, 3.1, -1.155); g.add(board);
+  box(1.2, .22, .3, body, 0, 3.42, -1.12, g);
+  box(1.2, .12, .12, mats.black, 0, 1.08, 1.06, g);
+  [-.32, .32].forEach(bx => { const b = new THREE.Mesh(new THREE.SphereGeometry(.12, 16, 12), hoopMats.ball); b.position.set(bx, rampY(.8), .8); b.castShadow = true; g.add(b); });
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(.12, 16, 12), hoopMats.ball); ball.castShadow = true; ball.position.set(0, rampY(.85), .85); g.add(ball);
+  block(x - .1, z, 2.3, 1.2, .15);
+  hoops.push({ g, ball, net, scoreTex, t: 0, make: true, side: 1, swish: 0, player: null, floor: null });
+  spot('hoops', x + 1.55, z, [-1, 0]);
+}
+hoopMachine(-12.0, 6.2, M('#C23B32', { roughness: .5 }));
+hoopMachine(-12.0, 7.7, M('#2D5DA8', { roughness: .5 }));
+{ const rg = box(3.0, .015, 2.8, mats.rug2, -6.7, .008, 7.1, scene, false); rg.castShadow = false;
+  [[-7.4, 6.4, mats.beanA], [-6.0, 7.9, mats.beanB]].forEach(([x, z, m]) => { const b = new THREE.Mesh(beanbagGeo(), m); b.position.set(x, .175, z); b.rotation.y = yawOf([-1, 0]); b.castShadow = true; b.receiveShadow = true; scene.add(b); block(x, z, .95, .95, .05);
+    spot('beanbag', x - .12, z, [-1, 0], { y: .14, from: 'front' }); });
   const ac = grp(-3.2, 8.4, Math.PI); box(.8, 1.8, .7, mats.cabinet, 0, .9, 0, ac); box(.66, .5, .02, mats.bezel, 0, 1.35, -.36, ac);
   const as = new THREE.Mesh(new THREE.PlaneGeometry(.6, .44), new THREE.MeshBasicMaterial({ color:'#6C5CE7' })); as.position.set(0, 1.35, -.372); as.rotation.y = Math.PI; ac.add(as);
   box(.7, .08, .3, mats.black, 0, 1.02, -.42, ac); block(-3.2, 8.4, .8, .7, .2);
   plantBig(-13.1, -6.7, 1.0); plantBush(-5.0, 8.4, .8);
+}
+function drawScore(m, score, name) {
+  const x = m.scoreTex.x; x.fillStyle = '#0B0D0F'; x.fillRect(0, 0, 256, 96);
+  x.fillStyle = '#FF3B30'; x.font = '700 18px "IBM Plex Mono", monospace'; x.fillText('SCORE', 14, 28);
+  x.font = '700 60px "IBM Plex Mono", monospace'; x.textAlign = 'right'; x.fillText(String(score).padStart(2, '0'), 244, 78); x.textAlign = 'left';
+  x.fillStyle = '#FFB199'; x.font = '500 17px "IBM Plex Sans", sans-serif'; x.fillText(fitText(x, name || 'insert agent', 128), 14, 80);
+  m.scoreTex.t.needsUpdate = true;
+}
+// One shot every HOOP_PERIOD: pick up, raise, shoot in an arc, swish (or clang off the rim), roll back down the ramp.
+function updateHoops(dt) {
+  const scores = curFloor.hoopScores || (curFloor.hoopScores = hoops.map(() => 0));
+  hoops.forEach((m, i) => {
+    const fs = curFloor.SPOTS.hoops[i];
+    const p = agents.find(a => a.spot === fs && a.floor === curFloor && !a.path.length && !a.onRoof);
+    if (p !== m.player || m.floor !== curFloor) { if (p && p !== m.player) { scores[i] = 0; m.t = 0; } m.player = p; m.floor = curFloor; drawScore(m, scores[i], p && p.name); }
+    const B = m.ball.position;
+    if (!p) { B.set(0, rampY(.85), .85); m.net.scale.y = 1; return; }
+    const prevU = (m.t % HOOP_PERIOD) / HOOP_PERIOD; m.t += dt * speed; const u = (m.t % HOOP_PERIOD) / HOOP_PERIOD;
+    if (u < prevU) { m.make = Math.random() < .7; m.side = Math.random() < .5 ? -1 : 1; }
+    p.shootU = u;
+    const hoopY = 2.12, hoopZ = -.88;
+    if (u < .12) { const k = u / .12; B.set(0, rampY(.9) + (1.45 - rampY(.9)) * k, .9 + .3 * k); }
+    else if (u < .38) { const k = (u - .12) / .26; B.set(0, 1.45 + .32 * k, 1.2 - .05 * k); }
+    else if (u < .68) { const k = (u - .38) / .3, y0 = 1.77, z0 = 1.15; B.set(0, y0 + (hoopY + .03 - y0) * k + 3 * k * (1 - k), z0 + (hoopZ - z0) * k); }
+    else if (u < .8) { const k = (u - .68) / .12;
+      if (m.make) B.set(0, hoopY - (hoopY - rampY(hoopZ)) * k, hoopZ);
+      else { const zz = hoopZ + .35 * k; B.set(m.side * .28 * k, hoopY + .3 * Math.sin(Math.PI * k) - (hoopY - rampY(zz)) * k, zz); } }
+    else { const k = (u - .8) / .2, sx = m.make ? 0 : m.side * .28, sz = m.make ? hoopZ : hoopZ + .35, zz = sz + (.9 - sz) * k; B.set(sx * (1 - k), rampY(zz), zz); }
+    if (prevU < .68 && u >= .68 && m.make) { scores[i]++; drawScore(m, scores[i], p.name); m.swish = 1; }
+    m.swish = Math.max(0, m.swish - dt * 3); m.net.scale.y = 1 + .4 * m.swish;
+  });
 }
 
 /* ---------- floor labels ---------- */
@@ -1408,9 +1466,7 @@ function chooseWorkspot(a) {
   return Math.random() < .5 ? a.home : (away() || a.home);
 }
 function chooseIdle(fl) {
-  const pp = fl.SPOTS.pingpong, oneWaiting = pp.filter(s => s.by).length === 1;
-  if (oneWaiting && Math.random() < .7) return pp.find(s => !s.by);
-  const f = freeSpots(['coffee','pingpong','beanbag','pouf','sofa'], fl); return f.length ? pick(f) : null;
+  const f = freeSpots(['coffee','hoops','beanbag','pouf','sofa'], fl); return f.length ? pick(f) : null;
 }
 
 /* ---------- behaviour ---------- */
@@ -1489,7 +1545,7 @@ async function mainLoop(a) {
     if (Math.random() < .45 && await goRoof(a)) { await Promise.race([wait(rand(14, 26)), new Promise(r => a.wake = r)]); a.wake = null; continue; }
     const idle = chooseIdle(a.floor);
     if (idle) { setState(a, 'done', `Heading to the ${PLACE[idle.type].toLowerCase()}`); await walkTo(a, idle);
-      a.pose = idle.type === 'pingpong' ? 'play' : 'idle'; setState(a, 'idle', IDLE_ACTIVITY[idle.type]); }
+      a.pose = idle.type === 'hoops' ? 'shoot' : 'idle'; setState(a, 'idle', IDLE_ACTIVITY[idle.type]); }
     else setState(a, 'idle', 'Waiting for the next prompt');
     await Promise.race([wait(rand(8, 14)), new Promise(r => a.wake = r)]); a.wake = null;
   }
@@ -1548,6 +1604,12 @@ function updateAgent(a, dt, sdt) {
     case 'think': tilt = Math.sin(t * 1.4) * .12 - .05; r = -2.1; l = -.15; bob = Math.sin(t * 2) * .015; break;
     case 'read': l = r = -.95; tilt = .28; bob = Math.sin(t * 1.5) * .01; break;
     case 'raise': r = -2.95; rz = Math.sin(t * 8) * .35; bob = Math.abs(Math.sin(t * 4)) * .05; tilt = -.1; break;
+    case 'shoot': { const u = a.shootU || 0;                  // synced with the machine's shot cycle
+      if (u < .12) l = r = -.9 - 1.2 * (u / .12);
+      else if (u < .38) { const k = (u - .12) / .26; l = r = -2.1 - .7 * k; bob = .02 * k; }
+      else if (u < .45) { const k = (u - .38) / .07; l = r = -2.8 - .3 * k; bob = .09 * (1 - k); tilt = -.25; }
+      else { const k = (u - .45) / .55; l = r = -3.1 + 2.2 * k; tilt = -.25 * (1 - k); }
+      break; }
     case 'play': r = -1.2 + Math.sin(t * 5.5) * .7; rz = Math.sin(t * 5.5) * .5; l = -.3; bob = Math.abs(Math.sin(t * 5.5)) * .04; break;
     default: bob = Math.sin(t * 2) * .015; l = r = -.06;
   }
@@ -1585,12 +1647,6 @@ function updateAgent(a, dt, sdt) {
   if (a === selected) a.selRing.material.color.set(sceneT.dark ? '#FFFFFF' : '#15212A');
   a.label.visible = showLabels && (a.onRoof || viewMode !== 'roof');   // on the roof, hide tags of people working below the deck
   if (a.approval && simTime > a.approval.deadline) a.approval.resolve('auto');
-}
-function updateBall() {
-  const [p, q] = curFloor.SPOTS.pingpong; const pa = agents.find(a => a.spot === p && a.floor === curFloor && !a.path.length), qa = agents.find(a => a.spot === q && a.floor === curFloor && !a.path.length);
-  ball.visible = !!(pa && qa); if (!ball.visible) return;
-  const T = 1.1, ph = (simTime % (2 * T)) / T, u = ph < 1 ? ph : 2 - ph;
-  ball.position.set(-8.75 + 2.5 * u, .82 + Math.abs(Math.sin(u * Math.PI * 2)) * .32, 7.0 + Math.sin(simTime * 1.3) * .35);
 }
 
 /* ---------- camera ---------- */
@@ -1711,7 +1767,7 @@ function row(a) {
   const act = (a.where ? a.where + ' · ' : '') + a.activity + (a.pending.length ? ` · ${a.pending.length} queued` : '');
   return `<button class="agent-row${sub ? ' sub' : ''}${a === selected ? ' sel' : ''}" data-id="${a.id}">
     <span class="av" style="--c:${a.color}">${esc(a.name[0] || '?')}</span>
-    <span class="who"><span class="nm">${esc(a.name)} <span class="proj">${sub ? 'subagent' : esc(a.project.key)}${a.live && !sub ? ` · <span class="entry">${ENTRY[a.entrypoint] || 'Claude Code'}</span>` : ''}</span></span><span class="act">${esc(act)}</span></span>
+    <span class="who"><span class="nm">${esc(a.name)} <span class="proj">${sub ? 'subagent' : esc(a.project.key)}${a.live && !sub ? ` · <span class="entry">${whereFrom(a)}</span>` : ''}</span></span><span class="act">${esc(act)}</span></span>
     <span class="pill s-${a.state}">${STATUS[a.state].label}</span></button>`;
 }
 function renderUI() {
@@ -1748,7 +1804,7 @@ function renderDetail() {
   const a = selected; if (!a) return; detailDirty = false;
   const av = $('#d-av'); av.style.setProperty('--c', a.color); av.textContent = a.name[0] || '?';
   $('#d-name').textContent = a.name;
-  $('#d-sub').textContent = `Floor ${floorNum(a.floor)} · ` + (a.kind === 'sub' ? `${a.subType} subagent of ${a.parent.name}` : a.live ? `${a.cwd} · ${ENTRY[a.entrypoint] || 'Claude Code'}` : `~/Documents/${a.project.key}`) + (a.where ? ` · ${a.where}` : '');
+  $('#d-sub').textContent = `Floor ${floorNum(a.floor)} · ` + (a.kind === 'sub' ? `${a.subType} subagent of ${a.parent.name}` : a.live ? `${a.cwd} · ${whereFrom(a)}` : `~/Documents/${a.project.key}`) + (a.where ? ` · ${a.where}` : '');
   const pill = $('#d-pill'); pill.className = 'pill s-' + a.state; pill.textContent = STATUS[a.state].label;
   $('#d-activity').textContent = a.activity + (a.pending.length ? ` (${a.pending.length} task${a.pending.length > 1 ? 's' : ''} queued)` : '');
   const perm = $('#d-perm'); perm.hidden = !a.approval;
@@ -1758,7 +1814,8 @@ function renderDetail() {
   $('#d-form').hidden = !main || !!a.live; $('#d-spawn').hidden = !main || !!a.live;
   const note = $('#d-note'); note.hidden = !a.live;
   if (a.live) { const w = a.state === 'waiting'; note.classList.toggle('warn', w);
-    note.textContent = w ? `Answer this in Claude Code (${(ENTRY[(a.parent || a).entrypoint] || 'Claude Code').toLowerCase()}). Approving from the office comes next.`
+    const src = a.parent || a, app = AGENT_NAMES[src.agentName] || `Claude Code (${(ENTRY[src.entrypoint] || 'Claude Code').toLowerCase()})`;
+    note.textContent = w ? `Answer this in ${app}. Approving from the office comes next.`
                          : 'Watching this session live. Sending tasks from the office comes in a later step.'; }
 }
 $('#d-close').onclick = () => select(null);
@@ -1878,6 +1935,9 @@ addEventListener('resize', layout);
 const params = new URLSearchParams(location.search);
 const FAST = params.has('fast');                                   // shorter idle timers, handy when testing
 const ENTRY = { desktop:'Desktop app', terminal:'Terminal', sdk:'SDK', unknown:'Claude Code' };
+const AGENT_NAMES = { codex:'Codex', cursor:'Cursor', gemini:'Gemini CLI', copilot:'Copilot', factory:'Droid', qwen:'Qwen Code',
+  goose:'Goose', kiro:'Kiro', windsurf:'Windsurf', cline:'Cline', opencode:'OpenCode', amp:'Amp' };
+const whereFrom = a => AGENT_NAMES[a.agentName] || ENTRY[a.entrypoint] || 'Claude Code';   // "Terminal", "Desktop app", or the tool's name
 const READ_TOOLS = new Set(['Read', 'Grep', 'Glob']);
 const WEB_TOOLS = new Set(['WebFetch', 'WebSearch']);
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit']);
@@ -1913,7 +1973,7 @@ function poseFor(a) {
   if (a.state === 'waiting') return 'raise';
   if (a.state === 'thinking') return 'think';
   if (a.state === 'working') return a.spot && a.spot.type === 'library' ? 'read' : 'type';
-  if (a.spot && a.spot.type === 'pingpong') return 'play';
+  if (a.spot && a.spot.type === 'hoops') return 'shoot';
   return 'idle';
 }
 function applyStatus(a, state, activity) {
@@ -1922,9 +1982,17 @@ function applyStatus(a, state, activity) {
   setState(a, state, activity);
   a.busy = state === 'thinking' || state === 'working' || state === 'waiting';
   a.pose = poseFor(a);
+  // Busy again while on a break (ping-pong, beanbag, rooftop…): head back to a work spot.
+  if (a.busy && a.live && a.kind === 'main' && onBreak(a)) place(a, workSpot(a), true);
   if (state === 'done' || state === 'idle') a.idleSince = a.idleSince || performance.now(); else { a.idleSince = 0; a.nextRoam = 0; }
 }
 // Go to a spot, but stay put for a minimum time unless it's urgent.
+const BREAK_SPOTS = new Set(['hoops', 'beanbag', 'pouf', 'coffee']);
+function onBreak(a) {
+  if (a.onRoof) return true;
+  const s = a.dest || a.spot;
+  return !!s && BREAK_SPOTS.has(s.type) && s !== a.wanderSpot;
+}
 function place(a, spot, force) {
   if (a.spot && a.spot === a.wanderSpot) { force = true; a.wanderSpot = null; }
   if (!spot || a.leaving) return;
@@ -1961,7 +2029,7 @@ function liveMain(s, instant) {
   const name = saved.name || (s.project + (same ? ` ${same + 1}` : ''));
   const color = saved.color || PALETTE[hashStr(s.cwd || s.id) % PALETTE.length];
   a = createAgent({ name, kind: 'main', color, home, project: { key: s.project, agent: name }, cwd: s.cwd, sessionId: s.id,
-                    entrypoint: s.entrypoint, pref: saved.pref || 'anywhere', live: true, subs: new Map(), streak: 0, floor });
+                    entrypoint: s.entrypoint, agentName: s.agent, pref: saved.pref || 'anywhere', live: true, subs: new Map(), streak: 0, floor });
   if (isNew && !instant) toast(`${s.project} moved into floor ${floorNum(floor)}`, 'Go there', () => goToFloor(floor.i));
   home.by = a.id; if (home.type === 'desk') { home.owner = a; if (floor === curFloor) home.chairMat.color.set(color); }
   a.ws = home;
@@ -2011,7 +2079,7 @@ function onLiveEvent(e, replay) {
   const who = e.agentId ? liveSub(a, e.agentId, e.agentType, replay) : a;
   const label = `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}`;
   switch (e.type) {
-    case 'SessionStart': emit(a, 'SessionStart', `${ENTRY[a.entrypoint] || 'Claude Code'} · ${a.cwd}`, e.at); break;
+    case 'SessionStart': emit(a, 'SessionStart', `${whereFrom(a)} · ${a.cwd}`, e.at); break;
     case 'UserPromptSubmit':
       emit(a, 'UserPromptSubmit', `"${e.prompt || ''}"`, e.at);
       a.ws = chooseWorkspot(a); a.streak = 0;
@@ -2037,7 +2105,7 @@ function onLiveEvent(e, replay) {
       else emit(who, 'PermissionRequest', label, e.at);
       if (perm) {
         applyStatus(who, 'waiting', e.type === 'PermissionRequest' ? `Needs permission: ${label}` : (e.message || 'Needs your permission'));
-        if (!replay) toast(`${a.name} needs your permission in the ${(ENTRY[a.entrypoint] || 'Claude Code').toLowerCase()}`, 'Show me', () => select(who, true));
+        if (!replay) toast(`${a.name} needs your permission in the ${whereFrom(a).toLowerCase()}`, 'Show me', () => select(who, true));
       } else if (e.notificationType === 'idle_prompt') applyStatus(a, 'idle', 'Waiting for your input');
       break; }
     case 'Stop': emit(a, 'Stop', 'Finished responding', e.at); applyStatus(a, 'done', 'Finished'); break;
@@ -2164,7 +2232,7 @@ function step(dt) {
   yOff += (yOffTarget - yOff) * (reduced ? 1 : 1 - Math.exp(-dt * 5)); building.position.y = city.position.y = yOff;
   floorGlow();
   for (const a of agents.slice()) updateAgent(a, dt, sdt);
-  updateBall();
+  updateHoops(dt);
   { let want = 0; for (const a of agents) if (a.floor === curFloor && !a.onRoof && Math.hypot(a.g.position.x - 12.6, a.g.position.z + 1.8) < 1.9) want = 1;
     lift.open += (want - lift.open) * (1 - Math.exp(-dt * 6));
     lift.l.position.z = -1.8 - .275 - lift.open * .5; lift.r.position.z = -1.8 + .275 + lift.open * .5;

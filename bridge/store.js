@@ -47,14 +47,14 @@ export class Store {
 
   // Returns the normalized event (or null if the payload is unusable).
   // projectDir is CLAUDE_PROJECT_DIR from the hook; it stays put when the session cds into a subfolder.
-  ingest(p, entrypoint, projectDir) {
+  ingest(p, entrypoint, projectDir, agent = 'claude-code') {
     const type = p.hook_event_name, sid = p.session_id;
     if (!type || !sid) return null;
     const now = Date.now();
     let s = this.sessions.get(sid);
     if (!s) {
       const root = projectDir || p.cwd || '';
-      s = { id: sid, cwd: root, project: path.basename(root) || 'session', entrypoint: entrypointLabel(entrypoint),
+      s = { id: sid, agent, cwd: root, project: path.basename(root) || 'session', entrypoint: entrypointLabel(entrypoint),
             startedAt: now, lastEventAt: now, status: 'idle', activity: 'Session started', permissionMode: p.permission_mode || 'default',
             subagents: {}, tool: null };
       this.sessions.set(sid, s);
@@ -93,7 +93,7 @@ export class Store {
       case 'SessionEnd': e.reason = p.reason; this.sessions.delete(sid); break;
       default: break;
     }
-    e.session = { id: s.id, cwd: s.cwd, project: s.project, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity };
+    e.session = { id: s.id, agent: s.agent, cwd: s.cwd, project: s.project, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity };
     this.recent.push(e); if (this.recent.length > RECENT_MAX) this.recent.shift();
     return e;
   }

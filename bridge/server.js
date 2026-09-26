@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { Store } from './store.js';
+import { normalize } from './adapters.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = path.join(ROOT, 'web');
@@ -40,8 +41,10 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'POST' && url.pathname === '/hook') {
     try {
-      const payload = JSON.parse(await readBody(req));
-      const event = store.ingest(payload, req.headers['x-agent-office-entrypoint'], req.headers['x-agent-office-project']);
+      // Other agents (Codex, Cursor, Gemini CLI…) send their own payloads through adapters/hook.sh; translate them to the Claude shape.
+      const agent = String(req.headers['x-agent-office-agent'] || url.searchParams.get('agent') || 'claude-code').toLowerCase();
+      const payload = normalize(agent, JSON.parse(await readBody(req)), req.headers['x-agent-office-event']);
+      const event = payload && store.ingest(payload, req.headers['x-agent-office-entrypoint'], req.headers['x-agent-office-project'], agent);
       if (event) broadcast({ type: 'event', event });
       res.writeHead(204); res.end();
     } catch { res.writeHead(400); res.end(); }

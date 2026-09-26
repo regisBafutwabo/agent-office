@@ -125,7 +125,9 @@ async fn asset(uri: Uri) -> Response {
     match Web::get(path) {
         Some(file) => {
             let mime = mime_guess::from_path(path).first_or_octet_stream();
-            ([(header::CONTENT_TYPE, mime.as_ref().to_string()), (header::CACHE_CONTROL, "no-cache".to_string())], file.data.into_owned()).into_response()
+            // say it's UTF-8, or characters like "·" and "…" show up garbled
+            let content_type = if mime.type_() == "text" { format!("{mime}; charset=utf-8") } else { mime.to_string() };
+            ([(header::CONTENT_TYPE, content_type), (header::CACHE_CONTROL, "no-cache".to_string())], file.data.into_owned()).into_response()
         }
         None => (StatusCode::NOT_FOUND, "Not found").into_response(),
     }

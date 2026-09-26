@@ -22,6 +22,10 @@ Open a **new** Claude Code session (desktop app or terminal) and send a prompt. 
 
 To try it without Claude Code, open <http://localhost:4747/?demo> for simulated agents.
 
+## Other coding agents
+
+Codex CLI, Cursor, Gemini CLI, GitHub Copilot CLI, Qwen Code, Factory Droid, Goose, Kiro, Windsurf, Cline, OpenCode and Amp can report to the office too, through `adapters/hook.sh`. Setup for each is in [docs/adapters.md](docs/adapters.md). This currently works with the Node bridge (`npm start`), not yet the desktop app.
+
 ## Desktop app (macOS)
 
 A 4 MB menu-bar app with the office server built in, so you don't need `npm start` or Node:
