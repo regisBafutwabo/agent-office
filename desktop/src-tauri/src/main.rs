@@ -100,6 +100,8 @@ fn maybe_notify(app: &AppHandle, recent: &Mutex<HashMap<String, u64>>, e: &Value
 
 fn main() {
     tauri::Builder::default()
+        // Opening the app again (or a second build of it) just brings the running office forward.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| open_office(app)))
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {

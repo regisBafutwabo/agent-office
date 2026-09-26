@@ -77,24 +77,32 @@ pub fn router(port: u16, on_change: OnChange) -> Router {
         .with_state(state)
 }
 
-/// Serve on 127.0.0.1 (and ::1, so http://localhost works everywhere). If the port is taken,
-/// another office is already running and the app window simply uses that one.
+/// Serve on 127.0.0.1 (and ::1, so http://localhost works everywhere). If the port is taken by another
+/// office (say `npm start`), the window uses that one meanwhile and this server takes over once it stops.
 pub async fn run(port: u16, on_change: OnChange) {
     let app = router(port, on_change);
-    match tokio::net::TcpListener::bind(("127.0.0.1", port)).await {
-        Ok(listener) => {
-            if let Ok(v6) = tokio::net::TcpListener::bind(("::1", port)).await {
-                let app6 = app.clone();
-                tokio::spawn(async move {
-                    let _ = axum::serve(v6, app6).await;
-                });
-            }
-            println!("Agent Office is running at http://localhost:{port}");
-            if let Err(err) = axum::serve(listener, app).await {
-                eprintln!("Agent Office server stopped: {err}");
+    let mut waiting = false;
+    let listener = loop {
+        match tokio::net::TcpListener::bind(("127.0.0.1", port)).await {
+            Ok(listener) => break listener,
+            Err(err) => {
+                if !waiting {
+                    eprintln!("Port {port} is busy ({err}); using the office already running there and taking over when it stops.");
+                    waiting = true;
+                }
+                tokio::time::sleep(Duration::from_secs(3)).await;
             }
         }
-        Err(err) => eprintln!("Port {port} is busy ({err}); using the office that is already running there."),
+    };
+    if let Ok(v6) = tokio::net::TcpListener::bind(("::1", port)).await {
+        let app6 = app.clone();
+        tokio::spawn(async move {
+            let _ = axum::serve(v6, app6).await;
+        });
+    }
+    println!("Agent Office is running at http://localhost:{port}{}", if waiting { " (took over the port)" } else { "" });
+    if let Err(err) = axum::serve(listener, app).await {
+        eprintln!("Agent Office server stopped: {err}");
     }
 }
 
