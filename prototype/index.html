@@ -1229,6 +1229,7 @@ async function leaveRoof(a) {
 }
 const roofAgents = () => agents.filter(a => a.onRoof);
 function goRoofView() {
+  flight = null;
   if (view === 'plan') setView('3d');
   viewMode = 'roof'; goal.phi = .95; goal.theta = .5; goal.radius = defaultRadius() * 1.1; goal.target.x = 0; goal.target.z = 0;
   renderLift();
@@ -1343,6 +1344,7 @@ function refreshFloorVisuals() {
 }
 function goToFloor(i) {
   const f = floors[i]; if (!f) return;
+  flight = null;
   if (f !== curFloor) {
     curFloor = f; yOffTarget = -f.i * FLOOR_H; rebuildTower(); refreshFloorVisuals();
     if (selected && selected.floor !== f) select(null);
@@ -1352,7 +1354,66 @@ function goToFloor(i) {
   renderLift(); uiDirty = true;
 }
 const buildingRadius = () => clamp(defaultRadius() * 1.75 + floors.length * 3.4, 50, 150);
+/* Flying to a floor, like a helicopter: rise out beside the tower (its glass closes over this floor), travel up
+   or down past the other floors, then dive into the new floor, straight to the agent when there is one. Whatever
+   the click asked for (say, opening that agent's card) happens once the camera has arrived. The camera follows a
+   scripted path of eased, overlapping legs instead of chasing a goal, so the whole trip is one continuous move. */
+let flight = null;
+const ease = t => { t = clamp(t, 0, 1); return t < .5 ? 4 * t * t * t : 1 - Math.pow(2 - 2 * t, 3) / 2; };
+const lerpN = (a, b, t) => a + (b - a) * t;
+const HELI_TARGET = new THREE.Vector3(0, .6, 0), FLOOR_TARGET = new THREE.Vector3(0, 0, -.3);
+const camPose = () => ({ theta: cam.theta, phi: cam.phi, radius: cam.radius, target: cam.target.clone() });
+function setCamPose(from, to, e) {
+  cam.theta = lerpN(from.theta, to.theta, e); cam.phi = lerpN(from.phi, to.phi, e); cam.radius = lerpN(from.radius, to.radius, e);
+  cam.target.lerpVectors(from.target, to.target, e);
+}
+function flyToFloor(i, then, agent) {
+  const f = floors[i]; if (!f) return;
+  if (reduced || view !== '3d' || renderer.xr.isPresenting || (f === curFloor && viewMode === 'floor' && !flight)) { goToFloor(i); if (then) then(); return; }
+  const same = f === curFloor, dist = Math.abs(f.i - curFloor.i);
+  const F = flight = { f, then, agent, t: 0, from: camPose(), same, swapped: same, y0: yOff, y1: -f.i * FLOOR_H,
+    heli: { theta: cam.theta + .35, phi: 1.16, radius: Math.max(defaultRadius() * 2.3, 62), target: HELI_TARGET },
+    rise: same ? 0 : .9, travel: same ? 0 : clamp(.7 + dist * .16, .8, 1.8), dive: 1.1 };
+  F.travelAt = F.rise * .7;                                         // the glass is closed by then
+  F.diveAt = F.travelAt + F.travel * .8;                            // start diving as the tower slows down
+  F.end = F.diveAt + F.dive;
+  if (same) yOffTarget = F.y1;
+  if (selected && selected.floor !== f) select(null);
+  viewMode = 'flying'; renderLift();
+}
+// Where the dive ends: close to the agent (tracking them if they walk), or the floor's usual view.
+function diveGoal(F) {
+  if (F.agent && F.agent.floor === F.f && !F.agent.gone) { const p = worldPos(F.agent); return { theta: .36, phi: .9, radius: 14, target: new THREE.Vector3(p.x, 0, p.z) }; }
+  return { theta: .36, phi: .9, radius: defaultRadius(), target: FLOOR_TARGET };
+}
+// Run `then` once the camera has settled on where it's heading (used for the roof).
+function land(then) { flight = { landing: true, t: 0, then }; }
+function stepFlight(dt) {
+  const F = flight; if (!F) return;
+  F.t += dt;
+  if (F.landing) {
+    const settled = Math.abs(cam.radius - goal.radius) < .25 && Math.abs(cam.phi - goal.phi) < .02 && cam.target.distanceTo(goal.target) < .15;
+    if (settled || F.t > 1.2) { flight = null; if (F.then) F.then(); }
+    return;
+  }
+  if (F.rise && F.t < F.diveAt) setCamPose(F.from, F.heli, ease(F.t / F.rise));                 // 1. rise out beside the tower
+  if (!F.swapped && F.t >= F.travelAt) {                                                          // 2. behind the glass, switch floors…
+    F.swapped = true; F.y0 = yOff; curFloor = F.f; rebuildTower(); refreshFloorVisuals(); renderLift(); uiDirty = true;
+  }
+  if (!F.same && F.t >= F.travelAt) { const u = smooth((F.t - F.travelAt) / F.travel); yOff = yOffTarget = lerpN(F.y0, F.y1, u); }  // …and travel
+  if (F.t >= F.diveAt) {                                                                           // 3. dive in, toward the agent
+    if (!F.diveFrom) F.diveFrom = camPose();
+    setCamPose(F.diveFrom, diveGoal(F), ease((F.t - F.diveAt) / F.dive));
+  }
+  goal.theta = cam.theta; goal.phi = cam.phi; goal.radius = cam.radius; goal.target.copy(cam.target);   // no catch-up once we land
+  if (F.t >= F.end) {
+    flight = null; yOff = yOffTarget = F.y1; viewMode = 'floor'; renderLift(); uiDirty = true;
+    if (F.then) F.then();
+  }
+}
+
 function goBuilding() {
+  flight = null;
   if (view === 'plan') setView('3d');
   viewMode = 'building'; goal.phi = 1.2; goal.theta = .55; goal.radius = buildingRadius(); goal.target.x = 0; goal.target.z = 0;
   renderLift();
@@ -1949,6 +2010,7 @@ function applyCam() {
   camera.lookAt(cam.target);
 }
 function updateCam(dt) {
+  if (flight && !flight.landing) { applyCam(); return; }            // the flight drives the camera itself
   if (viewMode === 'building') goal.target.y = yOff + (floors.length - 1) * FLOOR_H / 2 + 1.7;
   else if (viewMode === 'roof') goal.target.y = yOff + (floors.length - 1) * FLOOR_H + ROOF_Y;
   else goal.target.y = 0;
@@ -1997,7 +2059,7 @@ canvas.addEventListener('pointermove', e => {
 });
 function endPtr(e) {
   if (ptrs.size === 1 && moved < 6 && e.type === 'pointerup') { const a = agentAt(e.clientX, e.clientY);
-    if (a) select(a, true); else { const f = floorAt(e.clientX, e.clientY); if (f && (f !== curFloor || viewMode === 'building')) goToFloor(f.i); else select(null); } }
+    if (a) select(a, true); else { const f = floorAt(e.clientX, e.clientY); if (f && (f !== curFloor || viewMode === 'building')) flyToFloor(f.i); else select(null); } }
   ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null;
 }
 canvas.addEventListener('pointerup', endPtr); canvas.addEventListener('pointercancel', endPtr);
@@ -2039,9 +2101,9 @@ const rosterEl = $('#roster');
 // pointerdown so a click still lands when the list re-renders mid-press; click covers keyboard
 const rosterPick = e => { const op = e.target.closest('[data-open]');
   if (op) { if (e.type === 'click') openHost(agents.find(a => a.id === op.dataset.open)); return; }   // the ↗ on a row: jump to the chat, don't select
-  const fr = e.target.closest('.floor-row'); if (fr) { goToFloor(+fr.dataset.floor); return; }
+  const fr = e.target.closest('.floor-row'); if (fr) { if (e.type === 'click') flyToFloor(+fr.dataset.floor); return; }
   const b = e.target.closest('.agent-row'); if (b) select(agents.find(a => a.id === b.dataset.id), true); };
-const liftPick = e => { const b = e.target.closest('.lift-btn'); if (!b) return; if (b.dataset.floor === 'building') goBuilding(); else if (b.dataset.floor === 'roof') goRoofView(); else goToFloor(+b.dataset.floor); };
+const liftPick = e => { const b = e.target.closest('.lift-btn'); if (!b) return; if (b.dataset.floor === 'building') goBuilding(); else if (b.dataset.floor === 'roof') goRoofView(); else flyToFloor(+b.dataset.floor); };
 $('#lift-list').addEventListener('click', liftPick);
 rosterEl.addEventListener('pointerdown', rosterPick); rosterEl.addEventListener('click', rosterPick);
 const OPEN_ICON = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M6 3h7v7M13 3 5.5 10.5M11 13H3V5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -2074,10 +2136,16 @@ function renderUI() {
 /* detail card */
 const detail = $('#detail');
 function select(a, focus) {
-  if (a && a.onRoof) { if (viewMode !== 'roof') goRoofView(); }
-  else if (a && a.floor && a.floor !== curFloor) goToFloor(a.floor.i);
+  if (flight && a && focus) { flight.then = () => select(a, true); return; }   // mid-flight: open the card after landing
+  if (a && a.onRoof) { if (viewMode !== 'roof') { goRoofView(); if (focus && !reduced && view === '3d') { land(() => select(a, true)); return; } } }
+  else if (a && a.floor && (a.floor !== curFloor || (focus && viewMode !== 'floor'))) {
+    if (focus) { flyToFloor(a.floor.i, () => select(a, true), a); return; }   // fly to the agent; the card opens once the camera arrives
+    goToFloor(a.floor.i);
+  }
   if (a && !a.onRoof && focus && viewMode !== 'floor') { viewMode = 'floor'; renderLift(); }
-  selected = a || null; detail.hidden = !selected; uiDirty = true; detailDirty = true;
+  selected = a || null; uiDirty = true; detailDirty = true;
+  if (selected) renderDetail();                                     // fill the card before showing it, so it never flashes the previous agent
+  detail.hidden = !selected;
   if (selected) {
     $('#d-prompt').placeholder = selected.kind === 'sub' ? '' : `Give ${selected.name} a task`;
     if (focus) { const p = worldPos(selected); goal.target.x = p.x; goal.target.z = p.z; if (view === '3d') goal.radius = Math.min(goal.radius, 15); }
@@ -2367,7 +2435,7 @@ function liveMain(s, instant) {
   const color = saved.color || PALETTE[hashStr(s.cwd || s.id) % PALETTE.length];
   a = createAgent({ name, kind: 'main', color, home, project: { key: s.project, agent: name }, cwd: s.cwd, sessionId: s.id,
                     entrypoint: s.entrypoint, agentName: s.agent, hostApp: s.app, hostTerm: s.term, hostChat: s.chat, pref: saved.pref || 'anywhere', look: saved.look ? { ...saved.look, intern: false } : undefined, live: true, subs: new Map(), streak: 0, floor });
-  if (isNew && !instant) toast(`${s.project} moved into floor ${floorNum(floor)}`, 'Go there', () => goToFloor(floor.i));
+  if (isNew && !instant) toast(`${s.project} moved into floor ${floorNum(floor)}`, 'Go there', () => flyToFloor(floor.i));
   home.by = a.id; if (home.type === 'desk') { home.owner = a; if (floor === curFloor) home.chairMat.color.set(color); }
   a.ws = home;
   if (instant) { a.spot = home; a.where = 'Own desk'; a.g.position.set(home.x, 0, home.z); a.yaw = a.yawT = yawOf(home.face); a.arrivedAt = 0; }
@@ -2634,6 +2702,7 @@ function step(dt) {
   if (Math.abs(vo.x - vo.tx) > .3 || Math.abs(vo.y - vo.ty) > .3) { const k = 1 - Math.exp(-dt * 9); vo.x += (vo.tx - vo.x) * k; vo.y += (vo.ty - vo.y) * k; applyViewOffset(); }
   const sdt = dt * speed; simTime += sdt; tickTimers();
   if (MODE === 'live') liveTick(dt);
+  stepFlight(dt);
   yOff += (yOffTarget - yOff) * (reduced ? 1 : 1 - Math.exp(-dt * 5)); building.position.y = city.position.y = yOff;
   floorGlow();
   for (const a of agents.slice()) updateAgent(a, dt, sdt);
