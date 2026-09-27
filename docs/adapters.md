@@ -7,6 +7,8 @@ agent's hook ──> adapters/hook.sh <agent> [event] ──> POST /hook (X-Agen
                                                          └─> bridge/adapters.js normalize() ──> store ──> office
 ```
 
+> **Codex and Cursor:** the desktop app sets these up for you. Click **Connect Codex** or **Connect Cursor** in the menu bar (**Connect agents**) or in the office's **Customize** tab. The snippets below are for the other tools, or for doing it by hand.
+
 Research was checked against each vendor's docs on 2026-09-27. Fields the docs didn't show exactly are marked **unverified** in `bridge/adapters.js`. Test those against a real session before relying on them.
 
 > Both servers support adapters: the Node bridge (`bridge/adapters.js`) and the desktop app (`desktop/src-tauri/src/adapters.rs`), with matching tests.

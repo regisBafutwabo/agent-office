@@ -6,7 +6,9 @@ Works in any browser on your computer. Phone and VR headset support comes next (
 
 ## Quick start
 
-Full step-by-step setup, including the desktop app and troubleshooting, is in **[INSTALL.md](INSTALL.md)**. The short version:
+**On a Mac:** download the app from the [latest release](https://github.com/regisBafutwabo/agent-office/releases/latest), open it, and click **Connect Claude Code**. That's it.
+
+Full setup, including building from source and troubleshooting, is in **[INSTALL.md](INSTALL.md)**. From source, the short version is:
 
 ```bash
 git clone https://github.com/regisBafutwabo/agent-office.git
@@ -28,13 +30,14 @@ To try it without Claude Code, open <http://localhost:4747/?demo> for simulated 
 
 ## Other coding agents
 
-Codex CLI, Cursor, Gemini CLI, GitHub Copilot CLI, Qwen Code, Factory Droid, Goose, Kiro, Windsurf, Cline, OpenCode and Amp can report to the office too, through `adapters/hook.sh`. Setup for each is in [docs/adapters.md](docs/adapters.md). Works with both the desktop app and `npm start`.
+Codex CLI, Cursor, Gemini CLI, GitHub Copilot CLI, Qwen Code, Factory Droid, Goose, Kiro, Windsurf, Cline, OpenCode and Amp can report to the office too, through `adapters/hook.sh`. The desktop app connects Codex and Cursor in one click (**Connect agents** in the menu bar or in Customize). Setup for the others is in [docs/adapters.md](docs/adapters.md). Works with both the desktop app and `npm start`.
 
 ## Desktop app (macOS)
 
 A 4 MB menu-bar app with the office server built in, so you don't need `npm start` or Node:
 
 - The menu-bar icon shows how many agents need you, and macOS notifies you when one asks for permission.
+- **Connect agents** installs the Claude Code plugin and adds Codex or Cursor hooks in one click, so you don't need this repo. Newer app versions update the plugin by themselves.
 - **Open Agent Office** shows the 3D office in a window. Closing the window frees its memory; the server keeps running in the menu bar until you quit.
 - Phones and browsers can still open <http://localhost:4747>.
 

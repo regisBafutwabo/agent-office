@@ -1,6 +1,6 @@
 [package]
 name = "agent-office"
-version = "0.1.0"
+version = "0.2.0"
 description = "Agent Office: see your Claude Code agents at work in a 3D office"
 edition = "2021"
 
@@ -15,7 +15,7 @@ tauri-plugin-single-instance = "2"
 axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1", features = ["net", "sync", "macros", "rt-multi-thread", "time"] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
 rust-embed = "8"
 mime_guess = "2"
 

@@ -6,13 +6,14 @@
 mod adapters;
 mod focus;
 mod server;
+mod setup;
 mod store;
 
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::{
-    menu::{Menu, MenuItem, PredefinedMenuItem},
+    menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent, Wry,
 };
@@ -77,6 +78,23 @@ fn update_tray(app: &AppHandle, status: &MenuItem<Wry>, store: &store::Store) {
     }
 }
 
+/// "Connect agents" menu: one line per tool, clickable until it's connected.
+fn connect_label(tool: setup::Tool, status: setup::Status) -> (String, bool) {
+    match status {
+        setup::Status::Connected => (format!("{} ✓ connected", tool.name()), false),
+        setup::Status::NotConnected => (format!("Connect {}", tool.name()), true),
+        setup::Status::NotInstalled => (format!("{} (not installed)", tool.name()), false),
+    }
+}
+
+fn refresh_connect_menu(items: &[MenuItem<Wry>]) {
+    for (item, tool) in items.iter().zip(setup::Tool::ALL) {
+        let (text, enabled) = connect_label(tool, setup::status(tool));
+        let _ = item.set_text(text);
+        let _ = item.set_enabled(enabled);
+    }
+}
+
 /// Native notification when an agent needs permission (once per session per 10 seconds, since
 /// Claude Code reports the same prompt as both PermissionRequest and Notification).
 fn maybe_notify(app: &AppHandle, recent: &Mutex<HashMap<String, u64>>, e: &Value) {
@@ -113,7 +131,21 @@ fn main() {
             let open = MenuItem::with_id(app, "open", "Open Agent Office", true, None::<&str>)?;
             let browser = MenuItem::with_id(app, "browser", "Open in browser", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Agent Office", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&status, &PredefinedMenuItem::separator(app)?, &open, &browser, &PredefinedMenuItem::separator(app)?, &quit])?;
+            let connect_items = setup::Tool::ALL.iter()
+                .map(|t| MenuItem::with_id(app, format!("connect:{}", t.id()), t.name(), false, None::<&str>))
+                .collect::<Result<Vec<_>, _>>()?;
+            let connect_refs: Vec<&dyn tauri::menu::IsMenuItem<Wry>> = connect_items.iter().map(|i| i as &dyn tauri::menu::IsMenuItem<Wry>).collect();
+            let connect = Submenu::with_items(app, "Connect agents", true, &connect_refs)?;
+            let menu = Menu::with_items(app, &[&status, &PredefinedMenuItem::separator(app)?, &open, &browser, &connect, &PredefinedMenuItem::separator(app)?, &quit])?;
+            // Checking Claude Code can ask the login shell where it lives, so do it off the main thread.
+            let (items, app_handle) = (connect_items.clone(), app.handle().clone());
+            std::thread::spawn(move || {
+                if let Some(message) = setup::update_plugin_if_newer() {
+                    let _ = app_handle.notification().builder().title("Agent Office").body(message).show();
+                }
+                refresh_connect_menu(&items);
+            });
+            let menu_items = connect_items.clone();
 
             TrayIconBuilder::with_id(TRAY_ID)
                 .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?)
@@ -121,8 +153,20 @@ fn main() {
                 .tooltip("Agent Office")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| match event.id.as_ref() {
+                .on_menu_event(move |app, event| match event.id.as_ref() {
                     "open" => open_office(app),
+                    id if id.starts_with("connect:") => {
+                        let Some(tool) = setup::Tool::from_id(&id["connect:".len()..]) else { return };
+                        let (app, items) = (app.clone(), menu_items.clone());
+                        std::thread::spawn(move || {
+                            let (title, body) = match setup::connect(tool) {
+                                Ok(m) => (format!("{} connected", tool.name()), m),
+                                Err(m) => (format!("Couldn't connect {}", tool.name()), m),
+                            };
+                            let _ = app.notification().builder().title(title).body(body).show();
+                            refresh_connect_menu(&items);
+                        });
+                    }
                     "browser" => {
                         let _ = app.opener().open_url(office_url(), None::<&str>);
                     }
@@ -139,6 +183,11 @@ fn main() {
             let handle = app.handle().clone();
             let notified = Mutex::new(HashMap::new());
             let on_change: server::OnChange = Box::new(move |store, event| {
+                if event["type"] == "SetupChanged" {
+                    let items = connect_items.clone();
+                    std::thread::spawn(move || refresh_connect_menu(&items));
+                    return;
+                }
                 update_tray(&handle, &status, store);
                 maybe_notify(&handle, &notified, event);
             });

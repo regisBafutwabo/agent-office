@@ -3,6 +3,7 @@
 // Same endpoints as bridge/server.js, so phones and VR headsets can connect to it too.
 use crate::adapters;
 use crate::focus;
+use crate::setup;
 use crate::store::{self, Origin, Store};
 use axum::{
     body::Bytes,
@@ -72,6 +73,8 @@ pub fn router(port: u16, on_change: OnChange) -> Router {
         .route("/api/state", get(state_json))
         .route("/api/log", post(client_log))
         .route("/api/app-icon/{file}", get(app_icon))
+        .route("/api/setup", get(setup_status))
+        .route("/api/setup/{tool}", post(setup_connect))
         .route("/ws", get(ws))
         .route("/vendor/three.min.js", get(three))
         .fallback(get(asset))
@@ -206,6 +209,27 @@ async fn app_icon(Path(file): Path<String>) -> Response {
     match tokio::task::spawn_blocking(move || focus::app_icon(&bundle)).await.ok().flatten() {
         Some(png) => ([(header::CONTENT_TYPE, "image/png"), (header::CACHE_CONTROL, "max-age=86400")], png).into_response(),
         None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// Which coding tools report to the office, for the office's "Connect agents" buttons.
+async fn setup_status() -> Json<Value> {
+    Json(tokio::task::spawn_blocking(setup::status_json).await.unwrap_or_else(|_| json!({ "tools": [] })))
+}
+
+/// One click from the office: install the Claude Code plugin, or add hooks to Codex or Cursor.
+/// Only office pages can call this (check_origin), and it only ever runs the fixed setup for a known tool.
+async fn setup_connect(State(st): State<AppState>, Path(tool): Path<String>) -> Response {
+    let Some(tool) = setup::Tool::from_id(&tool) else { return StatusCode::NOT_FOUND.into_response() };
+    let result = tokio::task::spawn_blocking(move || setup::connect(tool)).await.unwrap_or_else(|_| Err("Setup stopped unexpectedly".into()));
+    {
+        let store = st.store.lock().unwrap();
+        (st.on_change)(&store, &json!({ "type": "SetupChanged" }));
+    }
+    broadcast(&st, json!({ "type": "setup" }));
+    match result {
+        Ok(message) => Json(json!({ "ok": true, "message": message })).into_response(),
+        Err(message) => (StatusCode::UNPROCESSABLE_ENTITY, Json(json!({ "ok": false, "message": message }))).into_response(),
     }
 }
 

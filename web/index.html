@@ -83,6 +83,13 @@ button{font:inherit;color:inherit}
 .legend span{display:inline-flex;align-items:center;gap:5px}
 .legend i{width:8px;height:8px;border-radius:50%;background:var(--c)}
 .roster{display:flex;flex-direction:column;gap:2px}
+.setup-card{margin:8px 4px;padding:14px;border:1px dashed var(--line);border-radius:12px;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:10px}
+.setup-card b{color:var(--ink);font-size:14px}
+.setup-card .btns{display:flex;flex-wrap:wrap;gap:6px}
+.connect-list{display:flex;flex-direction:column;gap:6px}
+.connect-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;font-size:13px}
+.connect-row .state{font-size:12px;color:var(--muted)}
+.connect-row .state.ok{color:var(--s-done)}
 .agent-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;width:100%;text-align:left;border:1px solid transparent;background:transparent;border-radius:11px;padding:8px 9px;cursor:pointer;position:relative}
 .agent-row:hover{background:var(--panel-2)}
 .agent-row.sel{background:var(--panel-2);border-color:var(--line)}
@@ -323,6 +330,7 @@ body.live .speed-top, body.live .demo-only{display:none}
         <span style="--c:var(--s-idle)"><i></i>Idle</span>
       </div>
       <div class="roster" id="roster"></div>
+      <div class="setup-card" id="setup-card" hidden></div>
     </div>
     <div class="tabpane" id="tab-feed" hidden><ul class="feed" id="feed"></ul></div>
     <div class="tabpane cust" id="tab-custom" hidden>
@@ -330,6 +338,8 @@ body.live .speed-top, body.live .demo-only{display:none}
       <div class="themes" id="themes"></div>
       <h3>Agents</h3>
       <div id="cust-agents"></div>
+      <h3 id="connect-title" hidden>Connect agents</h3>
+      <div class="connect-list" id="connect-list" hidden></div>
       <h3>Display</h3>
       <div class="toggles">
         <label><input type="checkbox" id="opt-labels" checked> Show name tags</label>
@@ -2015,7 +2025,7 @@ function renderUI() {
     return `<button class="floor-row${f === curFloor ? ' on' : ''}" data-floor="${f.i}">${floorBadge(f, w)}<b>${esc(f.name)}</b>${w ? '<em>needs you</em>' : ''}</button>`
       + ms.map(m => row(m) + agents.filter(s => s.parent === m).map(row).join('')).join('');
   }).join('');
-  if (html !== rosterEl._html) { rosterEl.innerHTML = html; rosterEl._html = html; }
+  if (html !== rosterEl._html) { rosterEl.innerHTML = html; rosterEl._html = html; renderSetup(); }
   const subs = agents.length - mains.length, waiting = agents.filter(a => a.state === 'waiting').length;
   const lounging = agents.filter(a => a.busy && a.spot && a.spot.laptop).length;
   $('#stats').innerHTML = `<span><b>${mains.length}</b> sessions</span><span><b>${subs}</b> subagent${subs === 1 ? '' : 's'}</span><span><b>${lounging}</b> on laptops</span><span class="${waiting ? 'warn' : ''}"><b>${waiting}</b> need${waiting === 1 ? 's' : ''} you</span>`;
@@ -2485,6 +2495,35 @@ function onApprovalResolved(msg) {
     if (msg.decision === 'defer') setState(a, 'waiting', 'Waiting for an answer in Claude Code'); }
   document.querySelectorAll('.toast').forEach(t => { if (t.textContent.includes('wants to run')) t.remove(); });
 }
+/* Connect agents: the desktop app can install the Claude Code plugin and add Codex / Cursor hooks in one click
+   (GET /api/setup, POST /api/setup/<tool>). The Node bridge doesn't offer this, so the buttons stay hidden there. */
+const setup = { tools: null, busy: null };
+async function loadSetup() {
+  try { const r = await fetch('/api/setup'); setup.tools = r.ok ? (await r.json()).tools : null; } catch (_) { setup.tools = null; }
+  renderSetup();
+}
+async function connectTool(id) {
+  if (setup.busy) return; setup.busy = id; renderSetup();
+  try { const r = await fetch('/api/setup/' + encodeURIComponent(id), { method: 'POST' }); toast((await r.json()).message); }
+  catch (_) { toast('Couldn’t reach the office server'); }
+  setup.busy = null; loadSetup();
+}
+function renderSetup() {
+  const tools = MODE === 'live' && setup.tools || [], todo = tools.filter(t => t.status === 'not-connected');
+  const btn = (t, primary) => `<button class="btn${primary ? ' primary' : ''}" data-connect="${t.id}"${setup.busy ? ' disabled' : ''}>${setup.busy === t.id ? 'Connecting…' : 'Connect ' + esc(t.name)}</button>`;
+  const list = $('#connect-list'); list.hidden = $('#connect-title').hidden = !tools.length;
+  list.innerHTML = tools.map(t => `<div class="connect-row"><span>${esc(t.name)}</span>${t.status === 'connected' ? '<span class="state ok">✓ Connected</span>'
+    : t.status === 'not-installed' ? '<span class="state">Not installed</span>' : btn(t, true)}</div>`).join('');
+  // With no agents yet, the Agents tab says what to do next.
+  const card = $('#setup-card'), empty = MODE === 'live' && !agents.some(a => a.kind === 'main');
+  card.hidden = !empty;
+  if (empty) card.innerHTML = todo.length
+    ? `<b>Connect your coding agents</b><span>Agent Office adds a small hook that reports what each session is doing. Nothing leaves your Mac.</span><div class="btns">${todo.map((t, i) => btn(t, i === 0)).join('')}</div>`
+    : `<b>No agents yet</b><span>Start a new ${tools.some(t => t.id === 'claude-code' && t.status === 'connected') ? 'Claude Code ' : ''}session and send a prompt. Its agent rides up in the lift.</span>`;
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-connect]'); if (b) connectTool(b.dataset.connect); });
+addEventListener('focus', () => { if (live.connected) loadSetup(); });
+
 function connectLive() {
   document.body.classList.add('live'); setSpeed(1); setModeLine();
   let ws;
@@ -2492,10 +2531,11 @@ function connectLive() {
   catch (_) { startDemo(); return; }
   const fallback = setTimeout(() => { if (!live.everConnected) { try { ws.close(); } catch (_) {} startDemo(); } }, 2500);
   live.ws = ws;
-  ws.onopen = () => { live.connected = live.everConnected = true; clearTimeout(fallback); setModeLine(); sendPresence(); };
+  ws.onopen = () => { live.connected = live.everConnected = true; clearTimeout(fallback); setModeLine(); sendPresence(); loadSetup(); };
   ws.onmessage = m => { let msg; try { msg = JSON.parse(m.data); } catch (_) { return; }
     if (msg.type === 'snapshot') onSnapshot(msg); else if (msg.type === 'event') onLiveEvent(msg.event, false);
     else if (msg.type === 'focus-result') toast(msg.message);
+    else if (msg.type === 'setup') loadSetup();
     else if (msg.type === 'approval') onApproval(msg.approval, true); else if (msg.type === 'approval-resolved') onApprovalResolved(msg); };
   ws.onclose = () => {
     clearTimeout(fallback);
