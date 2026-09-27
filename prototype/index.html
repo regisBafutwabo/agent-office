@@ -1413,8 +1413,44 @@ const extraPlants = new THREE.Group(); scene.add(extraPlants);
 [[-2.0, 4.6], [5.4, 0.3], [-13.1, 2.2], [3.6, -3.8], [6.0, -3.6], [13.3, -5.2], [-2.3, -5.2], [5.6, 2.2]].forEach(([x, z], i) => (i % 2 ? plantBush : plantBig)(x, z, .75, extraPlants));
 let sceneKey = 'loft';
 let sceneT = SCENES[sceneKey];
+/* Auto theme: follows the viewer's clock. Night until 5, dawn to daylight by 8, daylight until 17, then
+   golden hour and night by 20. Between keyframes the two scenes blend, and by day the sun crosses the sky. */
+const AUTO_KEYS = [[0, 'night'], [5, 'night'], [6.5, 'golden'], [8, 'loft'], [17, 'loft'], [18.5, 'golden'], [20, 'night'], [24, 'night']];
+const SUN_POS = new THREE.Vector3(10, 20, 12), MOON_POS = new THREE.Vector3(-8, 22, 14);
+function blendScene(A, B, t) {
+  const o = {};
+  for (const k in A) { const a = A[k], b = B[k];
+    o[k] = typeof a === 'number' ? a + (b - a) * t : /^#[0-9a-f]{6}$/i.test(a) ? mix(a, b, t) : t < .5 ? a : b; }
+  return o;
+}
+function clockHours() {                                             // ?time=18:45 previews the office at that hour
+  const m = /^(\d{1,2}):(\d{2})$/.exec(new URLSearchParams(location.search).get('time') || '');
+  if (m) return (+m[1] % 24) + Math.min(59, +m[2]) / 60;
+  const d = new Date(); return d.getHours() + d.getMinutes() / 60;
+}
+function autoScene(h) {
+  let i = 0; while (h >= AUTO_KEYS[i + 1][0]) i++;
+  const [h0, k0] = AUTO_KEYS[i], [h1, k1] = AUTO_KEYS[i + 1];
+  const u = k0 === k1 ? 0 : (h - h0) / (h1 - h0), t = u * u * (3 - 2 * u);   // eased, so dawn and dusk feel gradual
+  const night = k0 === 'night' && k1 === 'night' ? 1 : k1 === 'night' ? t : k0 === 'night' ? 1 - t : 0;
+  return { T: Object.assign(blendScene(SCENES[k0], SCENES[k1], t), { label: 'Auto' }), night, sig: `${k0}>${k1}:${t.toFixed(2)}` };
+}
+// By day the sun rises on the left and sets on the right; at night the light comes from a fixed moon.
+function placeSun(h, night) {
+  const a = Math.PI * clamp((h - 6) / 12, 0, 1);
+  sun.position.set(-18 * Math.cos(a), 8 + 16 * Math.sin(a), 12).lerp(MOON_POS, night);
+}
+let autoSig = '';
+setInterval(() => {                                                 // re-check once a minute
+  if (sceneKey !== 'auto') return;
+  const h = clockHours(), r = autoScene(h);
+  if (r.sig !== autoSig) applyScene('auto'); else placeSun(h, r.night);
+}, 60000);
 function applyScene(key) {
-  sceneKey = key; sceneT = SCENES[key]; const T = sceneT;
+  sceneKey = key;
+  if (key === 'auto') { const h = clockHours(), r = autoScene(h); sceneT = r.T; autoSig = r.sig; placeSun(h, r.night); }
+  else { sceneT = SCENES[key]; sun.position.copy(SUN_POS); }
+  const T = sceneT;
   scene.background = new THREE.Color(T.haze); drawSky(T); scene.fog.color.set(T.haze);
   cityMats.forEach((m, i) => { m.color.set(mix(CITY_TINTS[i], '#1E2636', T.cityDark)); m.emissiveIntensity = T.cityLit; });
   beaconMat.color.set(T.dark ? '#FF3B30' : '#C8453C'); mats.window.color.set(T.skyMid); fadeGlass.color.set(T.skyMid); fadeFrame.color.set(T.black); shellT = -1;
@@ -2106,8 +2142,9 @@ function toast(msg, action, fn) {
 
 /* customize */
 function buildCustomize() {
-  $('#themes').innerHTML = Object.entries(SCENES).map(([k, T]) => `<button class="theme-card" data-key="${k}" aria-pressed="${k === sceneKey}"><span class="sw"><i style="background:${T.floor}"></i><i style="background:${T.fabric}"></i><i style="background:${T.fabric2}"></i><i style="background:${T.felt1}"></i></span>${T.label}</button>`).join('');
-  document.querySelectorAll('.theme-card').forEach(b => b.onclick = () => applyScene(b.dataset.key));
+  const autoCard = `<button class="theme-card" data-key="auto" aria-pressed="${sceneKey === 'auto'}" title="Follows your clock: daylight from 8 to 17, golden hour at dawn and dusk, night from 20"><span class="sw">${['loft', 'golden', 'night'].map(k => `<i style="background:${SCENES[k].skyTop}"></i>`).join('')}</span>Auto (your time)</button>`;
+  $('#themes').innerHTML = autoCard + Object.entries(SCENES).map(([k, T]) => `<button class="theme-card" data-key="${k}" aria-pressed="${k === sceneKey}"><span class="sw"><i style="background:${T.floor}"></i><i style="background:${T.fabric}"></i><i style="background:${T.fabric2}"></i><i style="background:${T.felt1}"></i></span>${T.label}</button>`).join('');
+  document.querySelectorAll('.theme-card').forEach(b => b.onclick = () => { applyScene(b.dataset.key); uiPrefs.theme = b.dataset.key; saveUi(); });
   const mains = agents.filter(a => a.kind === 'main'), box$ = $('#cust-agents');
   const open = new Set([...box$.querySelectorAll('details[open]')].map(d => d.dataset.id));
   const seg = (a, key, options) => `<div class="mini-seg">${Object.entries(options).map(([k, v]) => `<button type="button" data-look="${key}" data-v="${k}" aria-pressed="${a.look[key] === k}">${typeof v === 'string' ? v : v.label}</button>`).join('')}</div>`;
@@ -2587,7 +2624,7 @@ document.addEventListener('visibilitychange', () => {
 window.agentOffice = { agents, SPOTS, DOOR };   // for debugging from the console
 curFloor = makeFloor('lobby', 'Your first project', true); rebuildTower();
 setLiftOpen(uiPrefs.lift !== false); if (uiPrefs.panel === false) setPanelOpen(false);
-applyScene(sceneKey); buildCustomize(); renderJSON(); drawTerm(); drawBoard(); layout();
+applyScene(uiPrefs.theme in SCENES ? uiPrefs.theme : 'auto'); buildCustomize(); renderJSON(); drawTerm(); drawBoard(); layout();
 setView('3d'); Object.assign(cam, { theta: goal.theta, phi: goal.phi, radius: goal.radius }); cam.target.copy(goal.target); applyCam();
 if (MODE === 'demo' || !/^https?:$/.test(location.protocol)) startDemo(); else connectLive();
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { agents.forEach(a => a.labelDirty = true); floorLabels.forEach(l => l.draw()); drawTerm(); drawBoard(); drawNeon(); floors.forEach(f => drawSign(f, true)); });

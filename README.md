@@ -77,6 +77,10 @@ Agents are small robots with a screen for a face, and the face shows what the ag
 
 Customize each agent in **Customize → Agents**: body shape, face style, colors, and accessories (headphones, beanie, cap, glasses, antenna, scarf, backpack, mug). Looks are remembered per project. Subagents automatically look like a smaller "intern" version of their parent, and agents from other tools get a default accessory (Cursor wears headphones, Codex a cap, and so on). Try looks side by side in `prototype/character-lab.html`.
 
+## Day and night
+
+The office follows your clock by default (**Customize → Office theme → Auto**): night until 5:00, dawn into daylight by 8:00, daylight until 17:00, then golden hour and night by 20:00. Colors and light blend through the transitions, the sun crosses the sky during the day, and the city lights come on at dusk. Pick any other theme to keep it fixed; your choice is remembered.
+
 ## Jumping to an agent's chat
 
 Every live agent has an **↗** button in the agent list, and an **Open chat** / **Open in …** button on its card. When an agent finishes, a toast pops up with the same button, so one click takes you back to it.
@@ -111,6 +115,7 @@ This works with Claude Code today. Codex, Copilot CLI, Gemini CLI, Cursor and Fa
 | `AGENT_OFFICE_HOST` | `127.0.0.1` | Interface the bridge listens on. |
 | `?demo` | | Simulated agents instead of live sessions. |
 | `?fast` | | Shorter idle timers, useful when testing. |
+| `?time=18:45` | | Preview the **Auto** theme at another hour. |
 
 ## Uninstall the hooks
 
