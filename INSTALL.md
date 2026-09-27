@@ -18,7 +18,7 @@ You also need [Claude Code](https://claude.com/claude-code) itself, either the C
 
 ## Desktop app (Mac)
 
-1. **Download** `Agent-Office_<version>_aarch64.dmg` from the [latest release](https://github.com/regisBafutwabo/agent-office/releases/latest). The repo is private for now, so you need to be added to it first.
+1. **Download** `Agent-Office_<version>_aarch64.dmg` from the [latest release](https://github.com/regisBafutwabo/agent-office/releases/latest).
 2. **Install:** open the .dmg and drag **Agent Office** to Applications.
 3. **Open it.** The app isn't code-signed yet, so macOS blocks it the first time. Go to **System Settings → Privacy & Security** and click **Open Anyway**.
 4. **Connect your agents.** The office opens with a **Connect your coding agents** card. Click **Connect Claude Code**, plus **Connect Codex** or **Connect Cursor** if you use them.

@@ -4,6 +4,8 @@ A 3D office where your Claude Code agents work. Every session you run in the **C
 
 Works in any browser on your computer. Phone and VR headset support comes next (see the roadmap).
 
+> **Preview.** Agent Office is early and Mac-first. The desktop app isn't code-signed yet, so macOS asks you to allow it once (see [INSTALL.md](INSTALL.md)). **Open chat** relies on how the Claude and Codex apps open their chats today; that isn't documented by either app and could change, in which case the button still brings the app forward. Issues and ideas are welcome.
+
 ## Quick start
 
 **On a Mac:** download the app from the [latest release](https://github.com/regisBafutwabo/agent-office/releases/latest), open it, and click **Connect Claude Code**. That's it.
@@ -124,6 +126,10 @@ npm test                                  # bridge unit tests
 (cd desktop/src-tauri && cargo test)      # desktop app server tests
 claude --plugin-dir ./plugin              # try the hooks in one session without installing them
 ```
+
+## License
+
+[MIT](LICENSE). Agent Office isn't affiliated with Anthropic, OpenAI, Cursor or the other tools it works with. App logos in the office are read from the apps installed on your Mac, not shipped with this repo.
 
 ## Roadmap
 
