@@ -1,6 +1,6 @@
 {
   "name": "agent-office",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Streams Claude Code session activity to the local Agent Office, a 3D office where your agents work, and lets you allow or deny permission requests from it.",
   "author": {
     "name": "Regis Bafutwabo"

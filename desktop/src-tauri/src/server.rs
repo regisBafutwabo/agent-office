@@ -6,7 +6,7 @@ use crate::focus;
 use crate::store::{self, Origin, Store};
 use axum::{
     body::Bytes,
-    extract::{ws::{Message, WebSocket, WebSocketUpgrade}, Query, Request, State},
+    extract::{ws::{Message, WebSocket, WebSocketUpgrade}, Path, Query, Request, State},
     http::{header, HeaderMap, StatusCode, Uri},
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -71,6 +71,7 @@ pub fn router(port: u16, on_change: OnChange) -> Router {
         .route("/permission", post(permission))
         .route("/api/state", get(state_json))
         .route("/api/log", post(client_log))
+        .route("/api/app-icon/{file}", get(app_icon))
         .route("/ws", get(ws))
         .route("/vendor/three.min.js", get(three))
         .fallback(get(asset))
@@ -125,7 +126,7 @@ fn ingest(st: &Shared, headers: &HeaderMap, query: &HashMap<String, String>, bod
     let agent = header("x-agent-office-agent").or(query.get("agent").map(String::as_str)).unwrap_or("claude-code").to_lowercase();
     let Some(payload) = adapters::normalize(&agent, &raw, header("x-agent-office-event")) else { return Ok(None) };
     let mut store = st.store.lock().unwrap();
-    let origin = Origin { app: header("x-agent-office-app"), term: header("x-agent-office-term"), tty: header("x-agent-office-tty") };
+    let origin = Origin { app: header("x-agent-office-app"), term: header("x-agent-office-term"), tty: header("x-agent-office-tty"), chat: header("x-agent-office-chat") };
     let event = store.ingest_from(&payload, header("x-agent-office-entrypoint"), header("x-agent-office-project"), &agent, origin);
     if let Some(e) = &event {
         (st.on_change)(&store, e);
@@ -199,6 +200,15 @@ async fn permission(State(st): State<AppState>, Query(query): Query<HashMap<Stri
     Json(json!({ "hookSpecificOutput": { "hookEventName": "PermissionRequest", "decision": decision_json } })).into_response()
 }
 
+/// Real app icons for the office (floor signs, lift, agent list): /api/app-icon/com.openai.codex.png
+async fn app_icon(Path(file): Path<String>) -> Response {
+    let bundle = file.trim_end_matches(".png").to_string();
+    match tokio::task::spawn_blocking(move || focus::app_icon(&bundle)).await.ok().flatten() {
+        Some(png) => ([(header::CONTENT_TYPE, "image/png"), (header::CACHE_CONTROL, "max-age=86400")], png).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
 /// The page reports its errors and frame rate here so they show up in the app log.
 async fn client_log(body: Bytes) -> StatusCode {
     eprintln!("[office page] {}", String::from_utf8_lossy(&body[..body.len().min(2000)]));
@@ -246,13 +256,13 @@ async fn client(mut socket: WebSocket, st: AppState) {
                             }
                         }
                         Some("focus") => {
-                            // "Open in …" from the agent card: bring that session's app, window or terminal tab forward.
+                            // "Open in …" / "Open chat": bring that session's chat, window or terminal tab forward.
                             let target = msg["sessionId"].as_str().and_then(|sid| {
                                 let store = st.store.lock().unwrap();
-                                store.sessions.iter().find(|s| s.id == sid).map(|s| (s.app.clone(), s.term.clone(), s.tty.clone(), s.cwd.clone()))
+                                store.sessions.iter().find(|s| s.id == sid).cloned()
                             });
                             let result = match target {
-                                Some((app, term, tty, cwd)) => tokio::task::spawn_blocking(move || focus::focus(app.as_deref(), term.as_deref(), tty.as_deref(), &cwd))
+                                Some(s) => tokio::task::spawn_blocking(move || focus::focus(&s.agent, &s.id, s.chat.as_deref(), s.app.as_deref(), s.term.as_deref(), s.tty.as_deref(), &s.cwd))
                                     .await.unwrap_or_else(|_| Err("Couldn't open the app".into())),
                                 None => Err("That session has ended".into()),
                             };

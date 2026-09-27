@@ -1,6 +1,6 @@
 // Turns raw Claude Code hook payloads into a small, UI-friendly model of sessions and subagents.
 import path from 'node:path';
-import { validTty } from './focus.js';
+import { validTty, validChat } from './focus.js';
 
 const STALE_MS = 6 * 60 * 60 * 1000;   // forget sessions that went silent (crashed without SessionEnd)
 const RECENT_MAX = 200;
@@ -59,7 +59,7 @@ export class Store {
 
   // Returns the normalized event (or null if the payload is unusable).
   // projectDir is CLAUDE_PROJECT_DIR from the hook; it stays put when the session cds into a subfolder.
-  // origin: { app, term, tty } from the hook scripts, used for "Open in …".
+  // origin: { app, term, tty, chat } from the hook scripts, used for "Open in …" and "Open chat".
   ingest(p, entrypoint, projectDir, agent = 'claude-code', origin = {}) {
     const type = p.hook_event_name, sid = p.session_id;
     if (!type || !sid) return null;
@@ -78,6 +78,7 @@ export class Store {
     if (origin.app) s.app = origin.app;
     if (origin.term) s.term = origin.term;
     if (validTty(origin.tty)) s.tty = origin.tty;
+    if (validChat(origin.chat)) s.chat = origin.chat;
 
     const e = { type, sessionId: sid, at: now, agentId: p.agent_id || null, agentType: p.agent_type || null };
     // Internal helper agents (e.g. the desktop app's prompt suggestions) only report SubagentStop. They never did visible work, so skip them.
@@ -109,7 +110,7 @@ export class Store {
       case 'SessionEnd': e.reason = p.reason; this.sessions.delete(sid); break;
       default: break;
     }
-    e.session = { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, cwd: s.cwd, project: s.project, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity };
+    e.session = { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, cwd: s.cwd, project: s.project, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity };
     this.recent.push(e); if (this.recent.length > RECENT_MAX) this.recent.shift();
     return e;
   }

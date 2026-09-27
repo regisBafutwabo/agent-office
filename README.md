@@ -68,9 +68,21 @@ Agents are small robots with a screen for a face, and the face shows what the ag
 
 Customize each agent in **Customize → Agents**: body shape, face style, colors, and accessories (headphones, beanie, cap, glasses, antenna, scarf, backpack, mug). Looks are remembered per project. Subagents automatically look like a smaller "intern" version of their parent, and agents from other tools get a default accessory (Cursor wears headphones, Codex a cap, and so on). Try looks side by side in `prototype/character-lab.html`.
 
-## Jumping to an agent's app
+## Jumping to an agent's chat
 
-The agent card has an **Open in …** button named after where that agent runs: Terminal, iTerm, Cursor, VS Code, Claude, Codex and a few others. For Terminal and iTerm it selects the exact tab running that session; for Cursor and VS Code it opens that project's window; for the rest it brings the app forward. The desktop app asks once for permission to control Terminal or iTerm. It only ever opens apps from a fixed list of coding tools (see `desktop/src-tauri/src/focus.rs`), on macOS.
+Every live agent has an **↗** button in the agent list, and an **Open chat** / **Open in …** button on its card. When an agent finishes, a toast pops up with the same button, so one click takes you back to it.
+
+- **Claude desktop app:** opens that exact chat (the plugin passes the app's session id; needs plugin 0.4.0).
+- **Codex app:** opens that exact thread.
+- **Terminal and iTerm:** selects the tab running that session.
+- **Cursor, VS Code, Windsurf, Zed:** opens that project's window, where its agent chat lives.
+- **Anything else on the list:** brings the app forward.
+
+The desktop app asks once for permission to control Terminal or iTerm. It only ever opens apps from a fixed list of coding tools, and chat links are built from validated ids only (see `desktop/src-tauri/src/focus.rs`), on macOS.
+
+## App logos
+
+Floors and agents show the logo of the tool they come from (Claude, Codex, Cursor…) in the Floors list, the agent list and on the floor signs. The logos are the real icons of the apps installed on your Mac, read from macOS by the local office, so no artwork ships with this repo. Tools without an installed app, and the claude.ai preview, show a lettered badge.
 
 ## Approving from the office
 

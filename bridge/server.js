@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { Store } from './store.js';
 import { normalize } from './adapters.js';
-import { focus } from './focus.js';
+import { focus, appIcon } from './focus.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = path.join(ROOT, 'web');
@@ -20,6 +20,8 @@ const APPROVAL_HOLD_MS = 45_000;   // how long a watched office holds a permissi
 // Only this machine's office pages may talk to the bridge. Without this, any website open in a browser
 // could reach localhost and approve commands. Hooks (curl) send no Origin header.
 const ALLOWED_ORIGINS = new Set(['localhost', '127.0.0.1', '[::1]'].map(h => `http://${h}:${PORT}`));
+// Where the hook came from: app, terminal, tty and chat id, for "Open in …" and "Open chat".
+const originOf = req => ({ app: req.headers['x-agent-office-app'], term: req.headers['x-agent-office-term'], tty: req.headers['x-agent-office-tty'], chat: req.headers['x-agent-office-chat'] });
 const originOk = req => !req.headers.origin || ALLOWED_ORIGINS.has(req.headers.origin);
 
 const store = new Store();
@@ -53,8 +55,7 @@ const decisionJson = behavior => JSON.stringify({ hookSpecificOutput: { hookEven
 async function handlePermission(req, res, url) {
   let body;
   try { body = JSON.parse(await readBody(req)); } catch { res.writeHead(400); res.end(); return; }
-  const event = store.ingest(body, req.headers['x-agent-office-entrypoint'], req.headers['x-agent-office-project'], 'claude-code',
-    { app: req.headers['x-agent-office-app'], term: req.headers['x-agent-office-term'], tty: req.headers['x-agent-office-tty'] });
+  const event = store.ingest(body, req.headers['x-agent-office-entrypoint'], req.headers['x-agent-office-project'], 'claude-code', originOf(req));
   if (event) broadcast({ type: 'event', event });
   if (!event || watchers() === 0) { res.writeHead(204); res.end(); return; }   // nobody watching: Claude Code asks as usual
   const id = `a${Date.now().toString(36)}${(++seq).toString(36)}`;
@@ -85,8 +86,7 @@ const server = http.createServer(async (req, res) => {
       // Other agents (Codex, Cursor, Gemini CLI…) send their own payloads through adapters/hook.sh; translate them to the Claude shape.
       const agent = String(req.headers['x-agent-office-agent'] || url.searchParams.get('agent') || 'claude-code').toLowerCase();
       const payload = normalize(agent, JSON.parse(await readBody(req)), req.headers['x-agent-office-event']);
-      const origin = { app: req.headers['x-agent-office-app'], term: req.headers['x-agent-office-term'], tty: req.headers['x-agent-office-tty'] };
-      const event = payload && store.ingest(payload, req.headers['x-agent-office-entrypoint'], req.headers['x-agent-office-project'], agent, origin);
+      const event = payload && store.ingest(payload, req.headers['x-agent-office-entrypoint'], req.headers['x-agent-office-project'], agent, originOf(req));
       if (event) broadcast({ type: 'event', event });
       res.writeHead(204); res.end();
     } catch { res.writeHead(400); res.end(); }
@@ -99,6 +99,11 @@ const server = http.createServer(async (req, res) => {
   if (req.method !== 'GET') { res.writeHead(405); res.end(); return; }
   if (url.pathname === '/api/state') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(snapshot())); return; }
   if (url.pathname === '/vendor/three.min.js') return sendFile(res, THREE_JS);
+  if (url.pathname.startsWith('/api/app-icon/')) {               // real app icons for floor signs and the agent list
+    const png = await appIcon(decodeURIComponent(url.pathname.slice(14)).replace(/\.png$/, ''));
+    if (!png) { res.writeHead(404); res.end(); return; }
+    res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'max-age=86400' }); res.end(png); return;
+  }
 
   const rel = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, '');
   const file = path.resolve(WEB, rel);

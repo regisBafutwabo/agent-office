@@ -97,6 +97,9 @@ button{font:inherit;color:inherit}
 .pill{--c:var(--s-idle);font:600 11px/1 var(--font-b);padding:5px 8px;border-radius:999px;background:color-mix(in srgb,var(--c) 15%,transparent);color:var(--c);white-space:nowrap}
 .s-thinking{--c:var(--s-think)} .s-working{--c:var(--s-work)} .s-waiting{--c:var(--s-wait)} .s-done{--c:var(--s-done)} .s-idle{--c:var(--s-idle)}
 .pill.s-waiting{animation:pulse 1.3s ease-in-out infinite}
+.row-end{display:flex;align-items:center;gap:6px}
+.row-open{display:grid;place-items:center;width:24px;height:24px;border-radius:8px;color:var(--muted);border:1px solid var(--line);opacity:.7}
+.row-open:hover{opacity:1;color:var(--ink);background:var(--panel)}
 @keyframes pulse{50%{background:color-mix(in srgb,var(--c) 32%,transparent)}}
 
 .feed{list-style:none;margin:0;padding:0}
@@ -193,6 +196,16 @@ pre.json{margin:0 4px;padding:10px 12px;background:var(--panel-2);border:1px sol
 .lift-btn:hover{background:var(--panel-2)}
 .lift-btn.on{background:var(--panel-2);box-shadow:inset 0 0 0 1px var(--line)}
 .fl-num{min-width:30px;height:24px;border-radius:7px;display:grid;place-items:center;background:var(--ink);color:var(--panel);font:700 12.5px/1 var(--font-d);font-variant-numeric:tabular-nums;padding:0 5px}
+.fl-apps{display:inline-flex;align-items:center;min-width:30px;height:24px;padding:0 2px;border-radius:7px}
+.fl-apps.wait{background:var(--s-wait);animation:flpulse 1.2s ease-in-out infinite}
+.app-ico{width:22px;height:22px;border-radius:6px;flex:none;object-fit:contain}
+.app-ico.mono{display:inline-grid;place-items:center;background:var(--ink);color:var(--panel);font:700 10px/1 var(--font-d)}
+.fl-apps .app-ico + .app-ico{margin-left:-7px;box-shadow:0 0 0 2px var(--panel)}
+.floor-row .app-ico{width:18px;height:18px;border-radius:5px}
+.lift-current .app-ico{width:18px;height:18px}
+.av{position:relative}
+.av-app{position:absolute;right:-5px;bottom:-5px;width:15px;height:15px;border-radius:4px;object-fit:contain;box-shadow:0 0 0 1.5px var(--panel);background:var(--panel)}
+.av-app.mono{display:grid;place-items:center;background:var(--ink);color:var(--panel);font:700 8px/1 var(--font-d)}
 .fl-num.wait{background:var(--s-wait);color:#1B1206;animation:flpulse 1.2s ease-in-out infinite}
 @keyframes flpulse{50%{filter:brightness(1.25)}}
 .fl-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
@@ -246,7 +259,7 @@ body.live .speed-top, body.live .demo-only{display:none}
   .detail{top:118px}
 }
 @media (prefers-reduced-motion: reduce){
-  .pill.s-waiting,.toast,.fl-num.wait{animation:none}
+  .pill.s-waiting,.toast,.fl-num.wait,.fl-apps.wait{animation:none}
 }
 </style>
 
@@ -1213,6 +1226,40 @@ function goRoofView() {
 const tmpV3 = new THREE.Vector3();
 const worldPos = a => a.g.getWorldPosition(tmpV3);
 
+/* ---------- app logos ---------- */
+// Real icons of the apps installed on this Mac, served by the local office (/api/app-icon/<bundle id>.png).
+// Tools with no app installed, and the claude.ai preview, get a lettered badge instead.
+const TOOL_ICON = { 'claude-code': 'com.anthropic.claudefordesktop', codex: 'com.openai.codex', cursor: 'com.todesktop.230313mzl4w4u92',
+  windsurf: 'com.exafunction.windsurf', copilot: 'com.microsoft.VSCode', cline: 'com.microsoft.VSCode' };
+const TOOL_LETTER = { 'claude-code': 'C', codex: 'X', cursor: 'Cu', gemini: 'G', copilot: 'Co', factory: 'F', qwen: 'Q', goose: 'Go',
+  kiro: 'K', windsurf: 'W', cline: 'Cl', opencode: 'O', amp: 'A' };
+const LOCAL_OFFICE = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(location.host);
+const iconState = {}, iconImg = {};
+function iconFor(bundle) {
+  if (!bundle || !LOCAL_OFFICE) return null;
+  if (!iconState[bundle]) {
+    iconState[bundle] = 'loading';
+    const img = new Image();
+    img.onload = () => { iconState[bundle] = 'ok'; iconImg[bundle] = img; uiDirty = true; floors.forEach(f => drawSign(f, true)); };
+    img.onerror = () => { iconState[bundle] = 'missing'; };
+    img.src = `/api/app-icon/${encodeURIComponent(bundle)}.png`;
+  }
+  return iconState[bundle] === 'ok' ? iconImg[bundle] : null;
+}
+const toolOf = a => (a.parent || a).agentName || 'claude-code';
+// The tool's own logo (Claude, Codex, Cursor…), else the app it runs in (Terminal, iTerm…).
+const agentIcon = a => iconFor(TOOL_ICON[toolOf(a)]) || iconFor((a.parent || a).hostApp);
+function appBadge(a, cls = 'app-ico') {
+  const img = agentIcon(a);
+  return img ? `<img class="${cls}" src="${img.src}" alt="">` : `<span class="${cls} mono">${esc(TOOL_LETTER[toolOf(a)] || '?')}</span>`;
+}
+// A floor shows the logos of the tools working on it (up to three), or its number when it's empty.
+function floorBadge(f, waiting) {
+  const seen = new Set(), ms = floorAgents(f).filter(a => a.kind === 'main' && !seen.has(toolOf(a)) && seen.add(toolOf(a))).slice(0, 3);
+  if (!ms.length) return `<span class="fl-num${waiting ? ' wait' : ''}">${floorNum(f)}</span>`;
+  return `<span class="fl-apps${waiting ? ' wait' : ''}" title="Floor ${floorNum(f)}">${ms.map(a => appBadge(a)).join('')}</span>`;
+}
+
 /* ---------- floors: one project per floor ---------- */
 // The floor you're on is the furnished interior at y = 0. Every other floor is a glass shell
 // in `building`, which slides up and down so the current floor always sits at y = 0.
@@ -1258,12 +1305,14 @@ function makeFloor(key, name, placeholder = false) {
 }
 function drawSign(f, force) {
   const ag = floorAgents(f), waiting = ag.some(a => a.state === 'waiting');
-  const sig = `${f.name}|${floorNum(f)}|${ag.map(a => a.color + a.state + a.kind).join()}`;
+  const lead = ag.find(a => a.kind === 'main'), logo = lead && agentIcon(lead);
+  const sig = `${f.name}|${floorNum(f)}|${ag.map(a => a.color + a.state + a.kind).join()}|${logo ? logo.src : ''}`;
   if (!force && sig === f.signSig) return; f.signSig = sig;
   const x = f.sign.x; x.clearRect(0, 0, 512, 128);
   x.fillStyle = 'rgba(16,22,26,.9)'; rrect(x, 4, 8, 504, 112, 22); x.fill();
   x.fillStyle = waiting ? '#F2A22C' : '#F2F5F6'; rrect(x, 16, 20, 92, 88, 16); x.fill();
-  x.fillStyle = '#15212A'; x.font = '700 50px "Bricolage Grotesque", sans-serif'; x.textAlign = 'center'; x.fillText(String(floorNum(f)), 62, 82);
+  if (logo) { x.save(); rrect(x, 22, 26, 80, 76, 14); x.clip(); x.drawImage(logo, 22, 24, 80, 80); x.restore(); }
+  else { x.fillStyle = '#15212A'; x.font = '700 50px "Bricolage Grotesque", sans-serif'; x.textAlign = 'center'; x.fillText(String(floorNum(f)), 62, 82); }
   x.textAlign = 'left'; x.fillStyle = '#F2F5F6'; x.font = '700 40px "Bricolage Grotesque", sans-serif'; x.fillText(fitText(x, f.name, 370), 126, 62);
   ag.slice(0, 11).forEach((a, k) => { x.fillStyle = a.color; x.beginPath(); x.arc(138 + k * 26, 95, a.kind === 'sub' ? 7 : 10, 0, 7); x.fill(); });
   x.font = '600 24px "IBM Plex Sans", sans-serif';
@@ -1337,7 +1386,7 @@ function renderLift() {
   const rows = floors.slice().reverse().map(f => {
     const ag = floorAgents(f), w = ag.some(a => a.state === 'waiting');
     return `<button class="lift-btn${f === curFloor && viewMode === 'floor' ? ' on' : ''}" data-floor="${f.i}" aria-label="Floor ${floorNum(f)}, ${esc(f.name)}">
-      <span class="fl-num${w ? ' wait' : ''}">${floorNum(f)}</span><span class="fl-name">${esc(f.name)}</span>
+      ${floorBadge(f, w)}<span class="fl-name">${esc(f.name)}</span>
       <span class="fl-dots">${ag.filter(a => a.kind === 'main').map(a => `<i style="--c:${a.color}"></i>`).join('')}</span></button>`;
   }).join('');
   const up = roofAgents();
@@ -1345,7 +1394,7 @@ function renderLift() {
     + `<button class="lift-btn roof${viewMode === 'roof' ? ' on' : ''}" data-floor="roof"><span class="fl-num">${ROOF_ICON}</span><span class="fl-name">Rooftop terrace</span><span class="fl-dots">${up.map(a => `<i style="--c:${a.color}"></i>`).join('')}</span></button>` + rows;
   if (html !== el._html) { el.innerHTML = html; el._html = html; }
   const cur = viewMode === 'building' ? `<span class="fl-num">${BUILDING_ICON}</span>Whole building`
-    : viewMode === 'roof' ? `<span class="fl-num">${ROOF_ICON}</span>Rooftop` : `<span class="fl-num">${floorNum(curFloor)}</span>${esc(curFloor.name)}`;
+    : viewMode === 'roof' ? `<span class="fl-num">${ROOF_ICON}</span>Rooftop` : `${floorBadge(curFloor, false)}${esc(curFloor.name)}`;
   const ce = $('#lift-current'); if (ce._html !== cur) { ce.innerHTML = cur; ce._html = cur; }
 }
 
@@ -1942,25 +1991,28 @@ document.querySelectorAll('[data-speed]').forEach(b => b.onclick = () => setSpee
 
 const rosterEl = $('#roster');
 // pointerdown so a click still lands when the list re-renders mid-press; click covers keyboard
-const rosterPick = e => { const fr = e.target.closest('.floor-row'); if (fr) { goToFloor(+fr.dataset.floor); return; }
+const rosterPick = e => { const op = e.target.closest('[data-open]');
+  if (op) { if (e.type === 'click') openHost(agents.find(a => a.id === op.dataset.open)); return; }   // the ↗ on a row: jump to the chat, don't select
+  const fr = e.target.closest('.floor-row'); if (fr) { goToFloor(+fr.dataset.floor); return; }
   const b = e.target.closest('.agent-row'); if (b) select(agents.find(a => a.id === b.dataset.id), true); };
 const liftPick = e => { const b = e.target.closest('.lift-btn'); if (!b) return; if (b.dataset.floor === 'building') goBuilding(); else if (b.dataset.floor === 'roof') goRoofView(); else goToFloor(+b.dataset.floor); };
 $('#lift-list').addEventListener('click', liftPick);
 rosterEl.addEventListener('pointerdown', rosterPick); rosterEl.addEventListener('click', rosterPick);
+const OPEN_ICON = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M6 3h7v7M13 3 5.5 10.5M11 13H3V5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 function row(a) {
   const sub = a.kind === 'sub';
   const act = (a.where ? a.where + ' · ' : '') + a.activity + (a.pending.length ? ` · ${a.pending.length} queued` : '');
   return `<button class="agent-row${sub ? ' sub' : ''}${a === selected ? ' sel' : ''}" data-id="${a.id}">
-    <span class="av" style="--c:${a.color}">${esc(a.name[0] || '?')}</span>
+    <span class="av" style="--c:${a.color}">${esc(a.name[0] || '?')}${a.live ? appBadge(a, 'av-app') : ''}</span>
     <span class="who"><span class="nm">${esc(a.name)} <span class="proj">${sub ? 'subagent' : esc(a.project.key)}${a.live && !sub ? ` · <span class="entry">${whereFrom(a)}</span>` : ''}</span></span><span class="act">${esc(act)}</span></span>
-    <span class="pill s-${a.state}">${STATUS[a.state].label}</span></button>`;
+    <span class="row-end">${!sub && a.live && hostName(a) ? `<span class="row-open" data-open="${a.id}" title="${esc(openLabel(a))}" aria-label="${esc(openLabel(a))}">${OPEN_ICON}</span>` : ''}<span class="pill s-${a.state}">${STATUS[a.state].label}</span></span></button>`;
 }
 function renderUI() {
   const mains = agents.filter(a => a.kind === 'main');
   const html = floors.slice().reverse().map(f => {
     const ms = mains.filter(m => m.floor === f); if (!ms.length) return '';
     const w = agents.some(a => a.floor === f && a.state === 'waiting');
-    return `<button class="floor-row${f === curFloor ? ' on' : ''}" data-floor="${f.i}"><span class="fl-num${w ? ' wait' : ''}">${floorNum(f)}</span><b>${esc(f.name)}</b>${w ? '<em>needs you</em>' : ''}</button>`
+    return `<button class="floor-row${f === curFloor ? ' on' : ''}" data-floor="${f.i}">${floorBadge(f, w)}<b>${esc(f.name)}</b>${w ? '<em>needs you</em>' : ''}</button>`
       + ms.map(m => row(m) + agents.filter(s => s.parent === m).map(row).join('')).join('');
   }).join('');
   if (html !== rosterEl._html) { rosterEl.innerHTML = html; rosterEl._html = html; }
@@ -1987,7 +2039,7 @@ function select(a, focus) {
 }
 function renderDetail() {
   const a = selected; if (!a) return; detailDirty = false;
-  const av = $('#d-av'); av.style.setProperty('--c', a.color); av.textContent = a.name[0] || '?';
+  const av = $('#d-av'); av.style.setProperty('--c', a.color); av.innerHTML = esc(a.name[0] || '?') + (a.live ? appBadge(a, 'av-app') : '');
   $('#d-name').textContent = a.name;
   $('#d-sub').textContent = `Floor ${floorNum(a.floor)} · ` + (a.kind === 'sub' ? `${a.subType} subagent of ${a.parent.name}` : a.live ? `${a.cwd} · ${whereFrom(a)}` : `~/Documents/${a.project.key}`) + (a.where ? ` · ${a.where}` : '');
   const pill = $('#d-pill'); pill.className = 'pill s-' + a.state; pill.textContent = STATUS[a.state].label;
@@ -1999,7 +2051,7 @@ function renderDetail() {
   const main = a.kind === 'main';
   $('#d-form').hidden = !main || !!a.live; $('#d-spawn').hidden = !main || !!a.live;
   const host = a.live ? hostName(a) : null, openBtn = $('#d-open');
-  openBtn.hidden = !host; if (host) openBtn.textContent = `Open in ${host}`;
+  openBtn.hidden = !host; if (host) openBtn.textContent = openLabel(a);
   const note = $('#d-note'); note.hidden = !a.live;
   if (a.live) { const w = a.state === 'waiting'; note.classList.toggle('warn', w);
     const src = a.parent || a, app = AGENT_NAMES[src.agentName] || `Claude Code (${(ENTRY[src.entrypoint] || 'Claude Code').toLowerCase()})`;
@@ -2166,7 +2218,10 @@ const HOST_APPS = { 'com.apple.Terminal': 'Terminal', 'com.googlecode.iterm2': '
   'com.microsoft.VSCode': 'VS Code', 'com.exafunction.windsurf': 'Windsurf', 'dev.zed.Zed': 'Zed', 'com.anthropic.claudefordesktop': 'Claude',
   'com.openai.codex': 'Codex', 'com.openai.chat': 'ChatGPT' };
 const HOST_TERMS = { Apple_Terminal: 'Terminal', 'iTerm.app': 'iTerm', WarpTerminal: 'Warp', ghostty: 'Ghostty', WezTerm: 'WezTerm' };
-const hostName = a => { const src = a.parent || a; return HOST_APPS[src.hostApp] || HOST_TERMS[src.hostTerm] || null; };
+// Claude desktop sessions and Codex app threads open on the exact chat (chatLink in focus.rs / focus.js); the rest open their app or tab.
+const opensChat = a => { const s = a.parent || a; return !!s.hostChat || (s.agentName === 'codex' && !s.hostTerm && (!s.hostApp || s.hostApp === 'com.openai.codex')); };
+const hostName = a => { const s = a.parent || a; return HOST_APPS[s.hostApp] || HOST_TERMS[s.hostTerm] || (opensChat(a) ? (s.hostChat ? 'Claude' : 'Codex') : null); };
+const openLabel = a => opensChat(a) ? `Open chat in ${hostName(a)}` : `Open in ${hostName(a)}`;
 function openHost(a) {
   const src = a.parent || a;
   if (!live.ws || live.ws.readyState !== 1) { toast('The office server isn’t connected'); return; }
@@ -2264,7 +2319,7 @@ function liveMain(s, instant) {
   const name = saved.name || (s.project + (same ? ` ${same + 1}` : ''));
   const color = saved.color || PALETTE[hashStr(s.cwd || s.id) % PALETTE.length];
   a = createAgent({ name, kind: 'main', color, home, project: { key: s.project, agent: name }, cwd: s.cwd, sessionId: s.id,
-                    entrypoint: s.entrypoint, agentName: s.agent, hostApp: s.app, hostTerm: s.term, pref: saved.pref || 'anywhere', look: saved.look ? { ...saved.look, intern: false } : undefined, live: true, subs: new Map(), streak: 0, floor });
+                    entrypoint: s.entrypoint, agentName: s.agent, hostApp: s.app, hostTerm: s.term, hostChat: s.chat, pref: saved.pref || 'anywhere', look: saved.look ? { ...saved.look, intern: false } : undefined, live: true, subs: new Map(), streak: 0, floor });
   if (isNew && !instant) toast(`${s.project} moved into floor ${floorNum(floor)}`, 'Go there', () => goToFloor(floor.i));
   home.by = a.id; if (home.type === 'desk') { home.owner = a; if (floor === curFloor) home.chairMat.color.set(color); }
   a.ws = home;
@@ -2312,6 +2367,7 @@ function onLiveEvent(e, replay) {
   if (s.entrypoint && s.entrypoint !== 'unknown') a.entrypoint = s.entrypoint;
   if (s.app) a.hostApp = s.app;
   if (s.term) a.hostTerm = s.term;
+  if (s.chat) a.hostChat = s.chat;
   a.permissionMode = s.permissionMode;
   const who = e.agentId ? liveSub(a, e.agentId, e.agentType, replay) : a;
   const label = `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}`;
@@ -2345,7 +2401,9 @@ function onLiveEvent(e, replay) {
         if (!replay) toast(`${a.name} needs your permission in the ${whereFrom(a).toLowerCase()}`, 'Show me', () => select(who, true));
       } else if (e.notificationType === 'idle_prompt') applyStatus(a, 'idle', 'Waiting for your input');
       break; }
-    case 'Stop': emit(a, 'Stop', 'Finished responding', e.at); applyStatus(a, 'done', 'Finished'); break;
+    case 'Stop': emit(a, 'Stop', 'Finished responding', e.at); applyStatus(a, 'done', 'Finished');
+      if (!replay) toast(`${a.name} finished in ~/${a.project.key}`, hostName(a) ? [[opensChat(a) ? 'Open chat' : `Open in ${hostName(a)}`, () => openHost(a), true], ['Show me', () => select(a, true)]] : 'Show me', () => select(a, true));
+      break;
     case 'SubagentStart': emit(who, 'SubagentStart', `${e.agentType || 'Subagent'} started`, e.at); break;
     case 'SubagentStop': emit(who, 'SubagentStop', e.message || 'Returned its result', e.at); if (!replay) leaveOffice(who); else { removeAgent(who); a.subs.delete(e.agentId); } break;
     case 'PermissionResolved': emit(who, 'PermissionResolved', e.message, e.at); applyStatus(who, 'thinking', e.message);
@@ -2362,7 +2420,7 @@ function onSnapshot(msg) {
   agents.forEach(a => { if (a.approval && a.approval.live) a.approval = null; });
   for (const s of msg.sessions) {
     const a = liveMain(s, true);
-    if (s.app) a.hostApp = s.app; if (s.term) a.hostTerm = s.term;
+    if (s.app) a.hostApp = s.app; if (s.term) a.hostTerm = s.term; if (s.chat) a.hostChat = s.chat;
     applyStatus(a, s.status, s.activity);
     for (const sub of s.subagents || []) { const x = liveSub(a, sub.id, sub.type, true); applyStatus(x, sub.status, sub.activity); }
   }

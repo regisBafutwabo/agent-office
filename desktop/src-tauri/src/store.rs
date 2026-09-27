@@ -117,6 +117,8 @@ pub struct Session {
     pub app: Option<String>,
     pub term: Option<String>,
     pub tty: Option<String>,
+    /// The Claude desktop app's chat id, so "Open chat" lands on this exact conversation.
+    pub chat: Option<String>,
 }
 
 /// Where a hook came from (headers sent by the hook scripts).
@@ -125,6 +127,7 @@ pub struct Origin<'a> {
     pub app: Option<&'a str>,
     pub term: Option<&'a str>,
     pub tty: Option<&'a str>,
+    pub chat: Option<&'a str>,
 }
 
 #[derive(Default)]
@@ -214,7 +217,7 @@ impl Store {
                     id: sid.into(), agent: agent.into(), cwd, project, entrypoint: entrypoint_label(entrypoint), started_at: now, last_event_at: now,
                     status: "idle".into(), activity: "Session started".into(),
                     permission_mode: if pm.is_empty() { "default".into() } else { pm.into() }, subagents: vec![], tool: None,
-                    app: None, term: None, tty: None,
+                    app: None, term: None, tty: None, chat: None,
                 });
                 self.sessions.len() - 1
             }
@@ -234,6 +237,7 @@ impl Store {
             if let Some(a) = origin.app.filter(|a| !a.is_empty()) { s.app = Some(a.into()); }
             if let Some(t) = origin.term.filter(|t| !t.is_empty()) { s.term = Some(t.into()); }
             if let Some(t) = origin.tty.filter(|t| crate::focus::valid_tty(t)) { s.tty = Some(t.into()); }
+            if let Some(c) = origin.chat.filter(|c| crate::focus::valid_chat(c)) { s.chat = Some(c.into()); }
             // Internal helper agents (e.g. the desktop app's prompt suggestions) only report SubagentStop. They never did visible work, so skip them.
             if kind == "SubagentStop" && !agent_id.is_empty() && !s.subagents.iter().any(|a| a.id == agent_id) {
                 return None;
@@ -346,7 +350,7 @@ impl Store {
         }
         e.insert("session".into(), json!({
             "id": s.id, "agent": s.agent, "cwd": s.cwd, "project": s.project, "entrypoint": s.entrypoint,
-            "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": s.app, "term": s.term,
+            "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": s.app, "term": s.term, "chat": s.chat,
         }));
         if remove_session {
             self.sessions.remove(idx);

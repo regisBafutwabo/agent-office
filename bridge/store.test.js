@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store, summarizeTool, entrypointLabel } from './store.js';
+import { chatLink } from './focus.js';
 
 const base = { session_id: 's1', cwd: '/Users/me/code/shop', permission_mode: 'default' };
 
@@ -65,6 +66,19 @@ test('remembers where the session runs, ignoring bad tty values', () => {
   st.ingest({ ...base, hook_event_name: 'Stop' }, 'cli', undefined, 'claude-code', { tty: '"; rm -rf ~' });
   const s = st.snapshot().sessions[0];
   assert.deepEqual([s.app, s.term, s.tty], ['com.apple.Terminal', 'Apple_Terminal', 'ttys004']);
+});
+
+test('opens the exact chat in the Claude and Codex apps, and only there', () => {
+  const st = new Store();
+  st.ingest({ ...base, hook_event_name: 'SessionStart' }, 'claude-desktop', undefined, 'claude-code', { app: 'com.anthropic.claudefordesktop', chat: 'local_ab-12' });
+  const s = st.snapshot().sessions[0];
+  assert.equal(chatLink(s).url, 'claude://code/continue?session=local_ab-12&source=agent_office');
+  st.ingest({ ...base, session_id: 's2', hook_event_name: 'Stop' }, 'cli', undefined, 'claude-code', { chat: 'local_x&open=evil' });
+  assert.equal(st.sessions.get('s2').chat, undefined);
+  const id = 'codex:01a0e0d8-2f30-7311-b7ee-864db5ef85bd';
+  assert.equal(chatLink({ agent: 'codex', id }).url, 'codex://threads/01a0e0d8-2f30-7311-b7ee-864db5ef85bd');
+  assert.equal(chatLink({ agent: 'codex', id, term: 'Apple_Terminal' }), null);   // Codex CLI in a terminal: open the tab instead
+  assert.equal(chatLink({ agent: 'codex', id: 'codex:../../x' }), null);
 });
 
 test('ignores payloads without a session or event name', () => {
