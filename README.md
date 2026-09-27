@@ -6,7 +6,11 @@ Works in any browser on your computer. Phone and VR headset support comes next (
 
 ## Quick start
 
+Full step-by-step setup, including the desktop app and troubleshooting, is in **[INSTALL.md](INSTALL.md)**. The short version:
+
 ```bash
+git clone https://github.com/regisBafutwabo/agent-office.git
+cd agent-office
 npm install
 npm start                # starts the office at http://localhost:4747
 ```
@@ -14,7 +18,7 @@ npm start                # starts the office at http://localhost:4747
 Then install the hooks once, so Claude Code reports what it's doing:
 
 ```bash
-claude plugin marketplace add "/path/to/agent-office"
+claude plugin marketplace add "$(pwd)"
 claude plugin install agent-office@agent-office
 ```
 
