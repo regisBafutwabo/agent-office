@@ -113,6 +113,18 @@ pub struct Session {
     pub permission_mode: String,
     pub subagents: Vec<Subagent>,
     pub tool: Option<String>,
+    /// Where the agent runs, for "Open in …": macOS bundle id, TERM_PROGRAM and tty.
+    pub app: Option<String>,
+    pub term: Option<String>,
+    pub tty: Option<String>,
+}
+
+/// Where a hook came from (headers sent by the hook scripts).
+#[derive(Default, Clone, Copy)]
+pub struct Origin<'a> {
+    pub app: Option<&'a str>,
+    pub term: Option<&'a str>,
+    pub tty: Option<&'a str>,
 }
 
 #[derive(Default)]
@@ -181,11 +193,11 @@ impl Store {
     /// `project_dir` is CLAUDE_PROJECT_DIR from the hook; it stays put when the session cds into a subfolder.
     #[cfg(test)]
     pub fn ingest(&mut self, p: &Value, entrypoint: Option<&str>, project_dir: Option<&str>) -> Option<Value> {
-        self.ingest_from(p, entrypoint, project_dir, "claude-code")
+        self.ingest_from(p, entrypoint, project_dir, "claude-code", Origin::default())
     }
 
     /// Same as `ingest`, for a payload already translated from another tool by adapters.rs.
-    pub fn ingest_from(&mut self, p: &Value, entrypoint: Option<&str>, project_dir: Option<&str>, agent: &str) -> Option<Value> {
+    pub fn ingest_from(&mut self, p: &Value, entrypoint: Option<&str>, project_dir: Option<&str>, agent: &str, origin: Origin) -> Option<Value> {
         let kind = str_of(p, "hook_event_name");
         let sid = str_of(p, "session_id");
         if kind.is_empty() || sid.is_empty() {
@@ -202,6 +214,7 @@ impl Store {
                     id: sid.into(), agent: agent.into(), cwd, project, entrypoint: entrypoint_label(entrypoint), started_at: now, last_event_at: now,
                     status: "idle".into(), activity: "Session started".into(),
                     permission_mode: if pm.is_empty() { "default".into() } else { pm.into() }, subagents: vec![], tool: None,
+                    app: None, term: None, tty: None,
                 });
                 self.sessions.len() - 1
             }
@@ -218,6 +231,9 @@ impl Store {
             if label != "unknown" {
                 s.entrypoint = label;
             }
+            if let Some(a) = origin.app.filter(|a| !a.is_empty()) { s.app = Some(a.into()); }
+            if let Some(t) = origin.term.filter(|t| !t.is_empty()) { s.term = Some(t.into()); }
+            if let Some(t) = origin.tty.filter(|t| crate::focus::valid_tty(t)) { s.tty = Some(t.into()); }
             // Internal helper agents (e.g. the desktop app's prompt suggestions) only report SubagentStop. They never did visible work, so skip them.
             if kind == "SubagentStop" && !agent_id.is_empty() && !s.subagents.iter().any(|a| a.id == agent_id) {
                 return None;
@@ -330,7 +346,7 @@ impl Store {
         }
         e.insert("session".into(), json!({
             "id": s.id, "agent": s.agent, "cwd": s.cwd, "project": s.project, "entrypoint": s.entrypoint,
-            "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity,
+            "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": s.app, "term": s.term,
         }));
         if remove_session {
             self.sessions.remove(idx);

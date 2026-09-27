@@ -3,6 +3,9 @@
 <plist version="1.0">
 <dict>
   <!-- the office window loads the built-in server over http://localhost -->
+  <!-- asked once, the first time you use "Open in Terminal" or "Open in iTerm" -->
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Agent Office brings the terminal tab of the agent you clicked to the front.</string>
   <key>NSAppTransportSecurity</key>
   <dict>
     <key>NSAllowsLocalNetworking</key>

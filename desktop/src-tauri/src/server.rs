@@ -2,7 +2,8 @@
 // and answers permission requests you allow or deny from the office.
 // Same endpoints as bridge/server.js, so phones and VR headsets can connect to it too.
 use crate::adapters;
-use crate::store::{self, Store};
+use crate::focus;
+use crate::store::{self, Origin, Store};
 use axum::{
     body::Bytes,
     extract::{ws::{Message, WebSocket, WebSocketUpgrade}, Query, Request, State},
@@ -124,7 +125,8 @@ fn ingest(st: &Shared, headers: &HeaderMap, query: &HashMap<String, String>, bod
     let agent = header("x-agent-office-agent").or(query.get("agent").map(String::as_str)).unwrap_or("claude-code").to_lowercase();
     let Some(payload) = adapters::normalize(&agent, &raw, header("x-agent-office-event")) else { return Ok(None) };
     let mut store = st.store.lock().unwrap();
-    let event = store.ingest_from(&payload, header("x-agent-office-entrypoint"), header("x-agent-office-project"), &agent);
+    let origin = Origin { app: header("x-agent-office-app"), term: header("x-agent-office-term"), tty: header("x-agent-office-tty") };
+    let event = store.ingest_from(&payload, header("x-agent-office-entrypoint"), header("x-agent-office-project"), &agent, origin);
     if let Some(e) = &event {
         (st.on_change)(&store, e);
         broadcast(st, json!({ "type": "event", "event": e }));
@@ -242,6 +244,20 @@ async fn client(mut socket: WebSocket, st: AppState) {
                                 if now_visible { st.watchers.fetch_add(1, Ordering::SeqCst); } else { st.watchers.fetch_sub(1, Ordering::SeqCst); }
                                 visible = now_visible;
                             }
+                        }
+                        Some("focus") => {
+                            // "Open in …" from the agent card: bring that session's app, window or terminal tab forward.
+                            let target = msg["sessionId"].as_str().and_then(|sid| {
+                                let store = st.store.lock().unwrap();
+                                store.sessions.iter().find(|s| s.id == sid).map(|s| (s.app.clone(), s.term.clone(), s.tty.clone(), s.cwd.clone()))
+                            });
+                            let result = match target {
+                                Some((app, term, tty, cwd)) => tokio::task::spawn_blocking(move || focus::focus(app.as_deref(), term.as_deref(), tty.as_deref(), &cwd))
+                                    .await.unwrap_or_else(|_| Err("Couldn't open the app".into())),
+                                None => Err("That session has ended".into()),
+                            };
+                            let reply = match result { Ok(m) => json!({ "type": "focus-result", "ok": true, "message": m }), Err(m) => json!({ "type": "focus-result", "ok": false, "message": m }) };
+                            if socket.send(Message::Text(reply.to_string().into())).await.is_err() { break; }
                         }
                         Some("decide") => {
                             let decision = match msg["decision"].as_str() { Some("allow") => "allow", Some("deny") => "deny", _ => "defer" };

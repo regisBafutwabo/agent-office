@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { Store } from './store.js';
 import { normalize } from './adapters.js';
+import { focus } from './focus.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = path.join(ROOT, 'web');
@@ -52,7 +53,8 @@ const decisionJson = behavior => JSON.stringify({ hookSpecificOutput: { hookEven
 async function handlePermission(req, res, url) {
   let body;
   try { body = JSON.parse(await readBody(req)); } catch { res.writeHead(400); res.end(); return; }
-  const event = store.ingest(body, req.headers['x-agent-office-entrypoint'], req.headers['x-agent-office-project']);
+  const event = store.ingest(body, req.headers['x-agent-office-entrypoint'], req.headers['x-agent-office-project'], 'claude-code',
+    { app: req.headers['x-agent-office-app'], term: req.headers['x-agent-office-term'], tty: req.headers['x-agent-office-tty'] });
   if (event) broadcast({ type: 'event', event });
   if (!event || watchers() === 0) { res.writeHead(204); res.end(); return; }   // nobody watching: Claude Code asks as usual
   const id = `a${Date.now().toString(36)}${(++seq).toString(36)}`;
@@ -83,7 +85,8 @@ const server = http.createServer(async (req, res) => {
       // Other agents (Codex, Cursor, Gemini CLI…) send their own payloads through adapters/hook.sh; translate them to the Claude shape.
       const agent = String(req.headers['x-agent-office-agent'] || url.searchParams.get('agent') || 'claude-code').toLowerCase();
       const payload = normalize(agent, JSON.parse(await readBody(req)), req.headers['x-agent-office-event']);
-      const event = payload && store.ingest(payload, req.headers['x-agent-office-entrypoint'], req.headers['x-agent-office-project'], agent);
+      const origin = { app: req.headers['x-agent-office-app'], term: req.headers['x-agent-office-term'], tty: req.headers['x-agent-office-tty'] };
+      const event = payload && store.ingest(payload, req.headers['x-agent-office-entrypoint'], req.headers['x-agent-office-project'], agent, origin);
       if (event) broadcast({ type: 'event', event });
       res.writeHead(204); res.end();
     } catch { res.writeHead(400); res.end(); }
@@ -116,6 +119,12 @@ wss.on('connection', ws => {
   ws.on('message', raw => {
     let msg; try { msg = JSON.parse(raw); } catch { return; }
     if (msg.type === 'presence') ws.visible = !!msg.visible;
+    if (msg.type === 'focus') {                                    // "Open in …" from the agent card
+      const s = store.sessions.get(msg.sessionId);
+      (s ? focus(s) : Promise.reject(new Error('That session has ended')))
+        .then(message => ws.send(JSON.stringify({ type: 'focus-result', ok: true, message })))
+        .catch(err => ws.send(JSON.stringify({ type: 'focus-result', ok: false, message: err.message })));
+    }
     if (msg.type === 'decide' && pending.has(msg.id) && ['allow', 'deny', 'defer'].includes(msg.decision)) pending.get(msg.id).resolve(msg.decision);
   });
 });

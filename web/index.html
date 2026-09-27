@@ -363,6 +363,7 @@ body.live .speed-top, body.live .demo-only{display:none}
       <button class="btn primary" type="submit">Send</button>
     </form>
     <div class="d-actions">
+      <button class="btn primary" id="d-open" hidden>Open in app</button>
       <button class="btn ghost" id="d-follow" aria-pressed="false">Follow</button>
       <button class="btn ghost" id="d-spawn">Spawn a subagent</button>
     </div>
@@ -1997,6 +1998,8 @@ function renderDetail() {
   $('#d-log').innerHTML = a.log.map(e => `<li><time>${stamp(e)}</time><code class="hook${e.hook === 'Notification' ? ' warn' : ''}">${e.hook}</code><span class="what" title="${esc(e.detail)}">${esc(e.detail)}</span></li>`).join('');
   const main = a.kind === 'main';
   $('#d-form').hidden = !main || !!a.live; $('#d-spawn').hidden = !main || !!a.live;
+  const host = a.live ? hostName(a) : null, openBtn = $('#d-open');
+  openBtn.hidden = !host; if (host) openBtn.textContent = `Open in ${host}`;
   const note = $('#d-note'); note.hidden = !a.live;
   if (a.live) { const w = a.state === 'waiting'; note.classList.toggle('warn', w);
     const src = a.parent || a, app = AGENT_NAMES[src.agentName] || `Claude Code (${(ENTRY[src.entrypoint] || 'Claude Code').toLowerCase()})`;
@@ -2020,6 +2023,7 @@ $('#d-form').addEventListener('submit', e => {
 });
 function setFollow(v) { follow = v; $('#d-follow').setAttribute('aria-pressed', v); $('#opt-follow').checked = v; }
 $('#d-follow').onclick = () => setFollow(!follow);
+$('#d-open').onclick = () => selected && openHost(selected);
 $('#d-spawn').onclick = async () => {
   const a = selected; if (!a || a.kind !== 'main') return;
   emit(a, 'PreToolUse', 'Task · general-purpose (started by you)'); toolCalls++;
@@ -2156,6 +2160,18 @@ const FAST = params.has('fast');                                   // shorter id
 const ENTRY = { desktop:'Desktop app', terminal:'Terminal', sdk:'SDK', unknown:'Claude Code' };
 const AGENT_NAMES = { codex:'Codex', cursor:'Cursor', gemini:'Gemini CLI', copilot:'Copilot', factory:'Droid', qwen:'Qwen Code',
   goose:'Goose', kiro:'Kiro', windsurf:'Windsurf', cline:'Cline', opencode:'OpenCode', amp:'Amp' };
+// Apps the desktop app can bring forward (matches focus.rs / focus.js).
+const HOST_APPS = { 'com.apple.Terminal': 'Terminal', 'com.googlecode.iterm2': 'iTerm', 'dev.warp.Warp-Stable': 'Warp', 'com.mitchellh.ghostty': 'Ghostty',
+  'net.kovidgoyal.kitty': 'kitty', 'com.github.wez.wezterm': 'WezTerm', 'org.alacritty': 'Alacritty', 'com.todesktop.230313mzl4w4u92': 'Cursor',
+  'com.microsoft.VSCode': 'VS Code', 'com.exafunction.windsurf': 'Windsurf', 'dev.zed.Zed': 'Zed', 'com.anthropic.claudefordesktop': 'Claude',
+  'com.openai.codex': 'Codex', 'com.openai.chat': 'ChatGPT' };
+const HOST_TERMS = { Apple_Terminal: 'Terminal', 'iTerm.app': 'iTerm', WarpTerminal: 'Warp', ghostty: 'Ghostty', WezTerm: 'WezTerm' };
+const hostName = a => { const src = a.parent || a; return HOST_APPS[src.hostApp] || HOST_TERMS[src.hostTerm] || null; };
+function openHost(a) {
+  const src = a.parent || a;
+  if (!live.ws || live.ws.readyState !== 1) { toast('The office server isn’t connected'); return; }
+  live.ws.send(JSON.stringify({ type: 'focus', sessionId: src.sessionId }));
+}
 const whereFrom = a => AGENT_NAMES[a.agentName] || ENTRY[a.entrypoint] || 'Claude Code';   // "Terminal", "Desktop app", or the tool's name
 const READ_TOOLS = new Set(['Read', 'Grep', 'Glob']);
 const WEB_TOOLS = new Set(['WebFetch', 'WebSearch']);
@@ -2248,7 +2264,7 @@ function liveMain(s, instant) {
   const name = saved.name || (s.project + (same ? ` ${same + 1}` : ''));
   const color = saved.color || PALETTE[hashStr(s.cwd || s.id) % PALETTE.length];
   a = createAgent({ name, kind: 'main', color, home, project: { key: s.project, agent: name }, cwd: s.cwd, sessionId: s.id,
-                    entrypoint: s.entrypoint, agentName: s.agent, pref: saved.pref || 'anywhere', look: saved.look ? { ...saved.look, intern: false } : undefined, live: true, subs: new Map(), streak: 0, floor });
+                    entrypoint: s.entrypoint, agentName: s.agent, hostApp: s.app, hostTerm: s.term, pref: saved.pref || 'anywhere', look: saved.look ? { ...saved.look, intern: false } : undefined, live: true, subs: new Map(), streak: 0, floor });
   if (isNew && !instant) toast(`${s.project} moved into floor ${floorNum(floor)}`, 'Go there', () => goToFloor(floor.i));
   home.by = a.id; if (home.type === 'desk') { home.owner = a; if (floor === curFloor) home.chairMat.color.set(color); }
   a.ws = home;
@@ -2294,6 +2310,8 @@ function onLiveEvent(e, replay) {
   const a = liveMain(s, replay);
   if (e.type === 'SubagentStop' && e.agentId && !a.subs.has(e.agentId)) return;   // never saw it work: nothing to show
   if (s.entrypoint && s.entrypoint !== 'unknown') a.entrypoint = s.entrypoint;
+  if (s.app) a.hostApp = s.app;
+  if (s.term) a.hostTerm = s.term;
   a.permissionMode = s.permissionMode;
   const who = e.agentId ? liveSub(a, e.agentId, e.agentType, replay) : a;
   const label = `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}`;
@@ -2344,6 +2362,7 @@ function onSnapshot(msg) {
   agents.forEach(a => { if (a.approval && a.approval.live) a.approval = null; });
   for (const s of msg.sessions) {
     const a = liveMain(s, true);
+    if (s.app) a.hostApp = s.app; if (s.term) a.hostTerm = s.term;
     applyStatus(a, s.status, s.activity);
     for (const sub of s.subagents || []) { const x = liveSub(a, sub.id, sub.type, true); applyStatus(x, sub.status, sub.activity); }
   }
@@ -2418,6 +2437,7 @@ function connectLive() {
   ws.onopen = () => { live.connected = live.everConnected = true; clearTimeout(fallback); setModeLine(); sendPresence(); };
   ws.onmessage = m => { let msg; try { msg = JSON.parse(m.data); } catch (_) { return; }
     if (msg.type === 'snapshot') onSnapshot(msg); else if (msg.type === 'event') onLiveEvent(msg.event, false);
+    else if (msg.type === 'focus-result') toast(msg.message);
     else if (msg.type === 'approval') onApproval(msg.approval, true); else if (msg.type === 'approval-resolved') onApprovalResolved(msg); };
   ws.onclose = () => {
     clearTimeout(fallback);

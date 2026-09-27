@@ -68,6 +68,10 @@ Agents are small robots with a screen for a face, and the face shows what the ag
 
 Customize each agent in **Customize → Agents**: body shape, face style, colors, and accessories (headphones, beanie, cap, glasses, antenna, scarf, backpack, mug). Looks are remembered per project. Subagents automatically look like a smaller "intern" version of their parent, and agents from other tools get a default accessory (Cursor wears headphones, Codex a cap, and so on). Try looks side by side in `prototype/character-lab.html`.
 
+## Jumping to an agent's app
+
+The agent card has an **Open in …** button named after where that agent runs: Terminal, iTerm, Cursor, VS Code, Claude, Codex and a few others. For Terminal and iTerm it selects the exact tab running that session; for Cursor and VS Code it opens that project's window; for the rest it brings the app forward. The desktop app asks once for permission to control Terminal or iTerm. It only ever opens apps from a fixed list of coding tools (see `desktop/src-tauri/src/focus.rs`), on macOS.
+
 ## Approving from the office
 
 When an agent needs permission, it raises its hand and its floor pulses amber. If the office is open on your screen, you can answer right there: **Allow**, **Deny**, or **Answer in Claude Code**. You can do this from the agent's card or from the pop-up alert.

@@ -59,6 +59,14 @@ test('files the session under the project folder, not the current folder', () =>
   assert.equal(st.snapshot().sessions[0].project, 'shop');
 });
 
+test('remembers where the session runs, ignoring bad tty values', () => {
+  const st = new Store();
+  st.ingest({ ...base, hook_event_name: 'SessionStart' }, 'cli', undefined, 'claude-code', { app: 'com.apple.Terminal', term: 'Apple_Terminal', tty: 'ttys004' });
+  st.ingest({ ...base, hook_event_name: 'Stop' }, 'cli', undefined, 'claude-code', { tty: '"; rm -rf ~' });
+  const s = st.snapshot().sessions[0];
+  assert.deepEqual([s.app, s.term, s.tty], ['com.apple.Terminal', 'Apple_Terminal', 'ttys004']);
+});
+
 test('ignores payloads without a session or event name', () => {
   assert.equal(new Store().ingest({ hook_event_name: 'Stop' }), null);
 });
