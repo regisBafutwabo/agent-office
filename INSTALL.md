@@ -11,7 +11,7 @@ Setup takes about 10 minutes:
 | | Desktop app (recommended) | Browser only |
 |---|---|---|
 | Computer | A Mac (Apple silicon or Intel) | macOS, Linux or Windows |
-| To build it | Node 18+, Rust, Xcode Command Line Tools | Node 18+ |
+| To run it | Nothing: download the app (Apple silicon), or build it with Node 18+ and Rust | Node 18+ |
 | Menu-bar icon and notifications | Yes | No |
 | **Open chat** button and app logos | Yes | macOS only |
 
@@ -24,7 +24,7 @@ git clone https://github.com/regisBafutwabo/agent-office.git
 cd agent-office
 ```
 
-The repo is private for now, so you need to be added to it first. Keep the folder: the hooks for other agents run a script from it.
+The repo is private for now, so you need to be added to it first. You need this folder even if you download the app: step 3 installs the Claude Code plugin from it, and the hooks for other agents run a script from it.
 
 ## 2. Run the office
 
@@ -32,7 +32,20 @@ Pick one of the two options below.
 
 ### Option A: Desktop app (macOS)
 
-This option gives you a 4 MB menu-bar app with the office server built in. It needs no Node or terminal once it's built.
+This option gives you a 4 MB menu-bar app with the office server built in. It needs no Node or terminal.
+
+**Download it (Apple silicon Macs):**
+
+1. Get `Agent-Office_0.1.0_aarch64.dmg` from the [latest release](https://github.com/regisBafutwabo/agent-office/releases/latest).
+2. Open it and drag **Agent Office** to Applications.
+3. Open the app once. It isn't code-signed yet, so macOS blocks it.
+4. Go to **System Settings → Privacy & Security** and click **Open Anyway**.
+
+An office icon appears in the menu bar. Click it and choose **Open Agent Office**.
+
+To start it automatically, add it in **System Settings → General → Login Items**.
+
+**Or build it yourself (Intel Macs, or to run the latest code):**
 
 1. Install the build tools, if you don't have them:
 
@@ -52,7 +65,7 @@ This option gives you a 4 MB menu-bar app with the office server built in. It ne
 
    The first build takes a few minutes. It produces:
    - `desktop/src-tauri/target/release/bundle/macos/Agent Office.app`
-   - `desktop/src-tauri/target/release/bundle/dmg/Agent Office_0.1.0_aarch64.dmg`, for sharing (the file name ends in `x64` on Intel Macs)
+   - a `.dmg` in `desktop/src-tauri/target/release/bundle/dmg/`, for sharing
 
 3. Move it to Applications and open it:
 
@@ -60,16 +73,6 @@ This option gives you a 4 MB menu-bar app with the office server built in. It ne
    cp -R "src-tauri/target/release/bundle/macos/Agent Office.app" /Applications/
    open "/Applications/Agent Office.app"
    ```
-
-An office icon appears in the menu bar. Click it and choose **Open Agent Office**.
-
-To start it automatically, add it in **System Settings → General → Login Items**.
-
-**Installing from someone else's .dmg:** the app isn't code-signed yet, so macOS blocks it the first time.
-
-1. Drag it to Applications.
-2. Open it once. macOS will refuse.
-3. Go to **System Settings → Privacy & Security** and click **Open Anyway**.
 
 ### Option B: Browser only (any OS)
 
@@ -137,7 +140,7 @@ claude plugin update agent-office@agent-office
 ```
 
 After that:
-- **Desktop app:** rebuild it (`cd desktop && npm run build`) and copy it to Applications again.
+- **Desktop app:** download the newest release, or rebuild it (`cd desktop && npm run build`), and replace the copy in Applications.
 - **Browser only:** restart `npm start`.
 
 Start new Claude Code sessions to pick up new plugin versions.
