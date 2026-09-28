@@ -1922,8 +1922,11 @@ function chooseWorkspot(a) {
   if (a.pref === 'lounge') return away() || a.home;
   return Math.random() < .5 ? a.home : (away() || a.home);
 }
+const IDLE_WEIGHT = { hoops: 4 };                                  // hoops is the fun one: pick it more often
 function chooseIdle(fl) {
-  const f = freeSpots(['coffee','hoops','beanbag','pouf','sofa'], fl); return f.length ? pick(f) : null;
+  const f = freeSpots(['coffee','hoops','beanbag','pouf','sofa'], fl); if (!f.length) return null;
+  let r = Math.random() * f.reduce((n, s) => n + (IDLE_WEIGHT[s.type] || 1), 0);
+  return f.find(s => (r -= IDLE_WEIGHT[s.type] || 1) < 0) || f[f.length - 1];
 }
 
 /* ---------- behaviour ---------- */
