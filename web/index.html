@@ -354,6 +354,7 @@ body.live .speed-top, body.live .demo-only{display:none}
       <div class="themes" id="themes"></div>
       <h3>City</h3>
       <div class="themes" id="cities"></div>
+      <button class="theme-card" id="gangnam-skyline" hidden>View Seoul skyline</button>
       <button class="theme-card" id="sf-skyline" hidden>View SF skyline</button>
       <button class="theme-card" id="sf-bridge" hidden>View Golden Gate</button>
       <h3>Agents</h3>
@@ -1216,39 +1217,261 @@ function buildSFLandmarks() {
   trims.push(...buildSFBridge(), ...buildSFBackdrop());
   [[bodies,landmarkMat],[trims,landmarkTrimMat]].forEach(([parts,material]) => skyline.add(new THREE.Mesh(mergeCityGeometry(parts), material)));
 }
+// Gangnam is a photo-guided interpretation over the unchanged OSM snapshot.
+const GANGNAM_VIEW_CENTER = [37.4992, 127.0338];
+const GANGNAM_LANDMARKS = [
+  { name: 'Gangnam Finance Center', center: [37.50001544, 127.03653603], height: 204, kind: 'gfc' },
+  { name: 'GS Tower', center: [37.50223677, 127.03769228], height: 167, kind: 'gs' },
+  { name: 'Centerfield North', center: [37.50355877, 127.04159179], height: 159, kind: 'centerfield' },
+  { name: 'Centerfield South', center: [37.50290226, 127.04134241], height: 159, kind: 'centerfield' },
+  { name: 'GT Tower', center: [37.49806, 127.02594], height: 130.1, kind: 'gt' }
+];
+const gangnamFacade = canvasTex(768, 1024), gangnamLights = canvasTex(768, 1024);
+{
+  const f = gangnamFacade.x, l = gangnamLights.x;
+  l.fillStyle = '#000'; l.fillRect(0, 0, 768, 1024);
+  ['#74949D', '#C3CAC7', '#899DA4'].forEach((base, tile) => {
+    const X = tile * 256; f.fillStyle = base; f.fillRect(X, 0, 256, 1024);
+    for (let row = 0; row < 44; row++) {
+      const y = 8 + row * 23;
+      for (let col = 0; col < 16; col++) {
+        const x = X + col * 16;
+        f.fillStyle = ['#355865', '#537984', '#48717F'][tile];
+        f.fillRect(x + 2, y + 2, 12, 18);
+        if ((row * 7 + col * 11) % 23 < 7) {
+          l.fillStyle = row % 3 ? '#FFE8BF' : '#CBDDE7'; l.fillRect(x + 2, y + 2, 12, 18);
+        }
+      }
+      f.fillStyle = tile === 0 ? '#C2CBC9' : '#7F969C'; f.fillRect(X, y, 256, tile === 0 ? 4 : 1);
+    }
+    if (tile === 1) for (let x = 0; x < 256; x += 8) {
+      f.fillStyle = x % 32 === 0 ? '#F0ECE1' : '#CED6D2'; f.fillRect(X + x, 8, 2, 1016);
+    }
+  });
+}
+const gangnamLandmarkMat = new THREE.MeshLambertMaterial({ map: gangnamFacade.t, emissiveMap: gangnamLights.t, emissive: '#FFFFFF', emissiveIntensity: 0 });
+// Repeating neighborhood facades: office ribbon windows, pale masonry, brick shops.
+const gangnamNeighborhood = [0,1,2,3].map(style => {
+  const tex = canvasTex(256,256), lights = canvasTex(256,256), f = tex.x, l = lights.x;
+  f.fillStyle = ['#BAC8C9','#D5D0C4','#B59B8A','#BACDD3'][style]; f.fillRect(0,0,256,256);
+  l.fillStyle = '#000'; l.fillRect(0,0,256,256);
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 8; c++) {
+    const x = c*32+4, y = r*64+12, w = style === 0 ? 28 : 19;
+    f.fillStyle = ['#557F8A','#68777A','#526D70','#7198AD'][style]; f.fillRect(x,y,w,37);
+    if ((r*7+c*11+style)%9<3) { l.fillStyle = '#FFE6B5'; l.fillRect(x,y,w,37); }
+    if (style === 0) { f.fillStyle = '#E4E7DC'; f.fillRect(c*32,r*64+53,32,5); }
+  }
+  if (style===3) for(let x=0;x<256;x+=16) { f.fillStyle='#D4E0DF'; f.fillRect(x,0,2,256); }
+  [tex,lights].forEach(t => { t.t.wrapS = t.t.wrapT = THREE.RepeatWrapping; });
+  return { tex, lights };
+});
+const gangnamMats = cityMats.map((c,i) => new THREE.MeshLambertMaterial({ color: '#FFFFFF', vertexColors: true,
+  map: gangnamNeighborhood[[0,1,2,3,1,0][i]].tex.t, emissiveMap: gangnamNeighborhood[[0,1,2,3,1,0][i]].lights.t, emissive: '#FFFFFF', emissiveIntensity: 0 }));
+// Stable depth ordering for pavement, asphalt and paint at rooftop viewing distances.
+const gangnamStreetMats = [1,2,3].map(layer => new THREE.MeshLambertMaterial({
+  color:'#FFFFFF', vertexColors:true, polygonOffset:true, polygonOffsetFactor:-layer, polygonOffsetUnits:-4*layer
+}));
+function gangnamColor(g, color) {
+  const c = new THREE.Color(color), colors = new Float32Array(g.attributes.position.count*3);
+  for (let i=0;i<colors.length;i+=3) { colors[i]=c.r; colors[i+1]=c.g; colors[i+2]=c.b; }
+  g.setAttribute('color',new THREE.BufferAttribute(colors,3)); return g;
+}
+// Art direction only: the older bake doesn't retain provenance for individual 15 m entries.
+// Keep other heights (and explicitly sourced 15 m heights) intact; never write estimates to the data.
+function gangnamProfile(b, center) {
+  const r=b.rings[0], n=r.length, point=r.reduce((s,p)=>[s[0]+p[0]/n,s[1]+p[1]/n],[0,0]);
+  let area=0, perimeter=0;
+  for(let i=0,j=n-1;i<n;j=i++) {
+    area+=r[j][0]*r[i][1]-r[i][0]*r[j][1]; perimeter+=Math.hypot(r[i][0]-r[j][0],r[i][1]-r[j][1]);
+  }
+  area=Math.abs(area)/2;
+  const origin=cityPoint(center,[37.5006,127.0364]), x=point[0]+origin[0], z=point[1]+origin[1];
+  const seed=Math.abs(Math.sin(Math.round(x)*12.9898+Math.round(z)*78.233)*43758.5453)%1;
+  const teheran=Math.abs(z+x*230/610)/Math.hypot(1,230/610);
+  const nonhyeon=Math.abs(x-z*210/590)/Math.hypot(1,210/590);
+  let height=b.h;
+  if(b.h===15 && (!b.heightSource || b.heightSource==='default')) {
+    const thickness=2*area/(perimeter||1);
+    if(teheran<180 && area>350 && thickness>8) height=132+seed*77;
+    else if(Math.min(teheran,nonhyeon)<200 && area>280 && thickness>8) height=65+seed*65;
+    else if(area>500) height=35+seed*43;
+    else height=12+seed*23;
+    // Small/slender footprints should never become needles.
+    height=Math.min(height,Math.max(18,thickness*18));
+    height=Math.round(height/3.5)*3.5;
+  }
+  return {height, point, seed, estimated:height!==b.h};
+}
+
+// Scenic background only, not map records. Keep all of it outside the real snapshot.
+function buildGangnamBackdrop(data) {
+  const batches=gangnamMats.map(()=>[]), offset=cityPoint(data.center,GANGNAM_VIEW_CENTER);
+  const radius=data.radius||600, extent=2400;
+  const noise=(x,z,s=0)=>Math.abs(Math.sin(x*12.9898+z*78.233+s*31.7)*43758.5453)%1;
+  const landmarks=GANGNAM_LANDMARKS.map(l=>cityPoint(l.center,data.center));
+  for(let x=-extent;x<=extent;x+=120) for(let z=-extent;z<=extent;z+=120) {
+    if(Math.hypot(x,z)>extent || (Math.abs(x)<radius+100 && Math.abs(z)<radius+100)) continue;
+    const along=Math.abs(z+x*230/610)/Math.hypot(1,230/610);
+    const across=Math.abs(x-z*210/590)/Math.hypot(1,210/590);
+    if(along<45||across<38||landmarks.some(p=>Math.hypot(x-p[0],z-p[1])<100)) continue;
+    for(let k=0;k<2;k++) {
+      const seed=noise(x,z,k), px=x+(k?29:-29), pz=z+(noise(x,z,k+4)-.5)*35;
+      const office=along<200, apartment=!office&&seed>.88;
+      const w=apartment?54:23+seed*22, d=apartment?19:22+noise(x,z,k+8)*23;
+      const h=office?85+seed*100:apartment?95+seed*50:18+seed*65;
+      const g=new THREE.BoxGeometry(w,h,d), uv=g.attributes.uv;
+      [[d,h],[d,h],null,null,[w,h],[w,h]].forEach((face,fi)=>{
+        for(let v=0;v<4;v++) { const i=fi*4+v; uv.setXY(i,face?uv.getX(i)*face[0]/12:.01,face?uv.getY(i)*face[1]/12:.99); }
+      });
+      const geometry=g.toNonIndexed(); g.dispose();
+      geometry.rotateY(.36); geometry.translate(px+offset[0],GROUND_Y+h/2,pz+offset[1]);
+      gangnamColor(geometry,office?'#A9BEC6':apartment?'#DFDFD2':'#C5C7BC');
+      batches[office?[0,3,4][Math.floor(seed*3)]:Math.floor(seed*6)].push(geometry);
+    }
+  }
+  return batches;
+}
+function buildGangnamHills() {
+  const parts=[], sections=96, rings=[2850,3200,3650];
+  const height=(a,r)=>r===0?0:r===2?30:105+85*Math.sin(a*3+.4)**2+65*Math.cos(a*7)**2;
+  for(let r=0;r<2;r++) for(let i=0;i<sections;i++) {
+    const a=i/sections*Math.PI*2, b=(i+1)/sections*Math.PI*2;
+    const point=(angle,index)=>[Math.cos(angle)*rings[index],GROUND_Y+height(angle,index),Math.sin(angle)*rings[index]];
+    const p=point(a,r),q=point(b,r),s=point(a,r+1),t=point(b,r+1);
+    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute([...p,...q,...s,...q,...t,...s],3));
+    g.setAttribute('uv',new THREE.Float32BufferAttribute(new Array(12).fill(0),2)); g.computeVertexNormals();
+    parts.push(gangnamColor(g,'#839A8D'));
+  }
+  return parts;
+}
+
+function buildGangnam(data) {
+  const bodies = [], trim = [], streets = [[],[],[]], offset = cityPoint(data.center, GANGNAM_VIEW_CENTER);
+  const box = (w,h,d,x,y,z,color) => { const g = new THREE.BoxGeometry(w,h,d).toNonIndexed(); g.translate(x,y,z); return gangnamColor(g,color); };
+  // Clockwise perimeter with clipped corners; dimensions are visual approximations.
+  const ring = (y,w,d,c=3) => [[w,y,d-c],[w-c,y,d],[-w+c,y,d],[-w,y,d-c],[-w,y,-d+c],[-w+c,y,-d],[w-c,y,-d],[w,y,-d+c]];
+  for (const landmark of GANGNAM_LANDMARKS) {
+    const local = [], detail = [], h = landmark.height;
+    if (landmark.kind === 'gfc') {
+      local.push(landmarkLoft([ring(0,38,27,7),ring(12,38,27,7),ring(12,33,24,6),ring(169,33,24,6),ring(180,29,21,5),ring(193,23,17,4),ring(h,17,12,3)],0,h));
+      for (const [y,w,d] of [[12,38,27],[169,33,24],[180,29,21],[193,23,17]]) detail.push(box(w*2+1,1.3,d*2+1,0,y,0,'#D1D3C8'));
+      for (const x of [-29,29]) detail.push(box(2.6,156,3,x,90,23,'#D9D7C9'),box(2.6,156,3,x,90,-23,'#D9D7C9'));
+    } else if (landmark.kind === 'centerfield') {
+      local.push(landmarkLoft([ring(0,25,29),ring(14,25,29),ring(14,22,26),ring(119,22,26),ring(139,20,24),ring(h,18,22)],1,h));
+      for (let x=-20;x<=20;x+=4) for (const side of [-1,1]) detail.push(box(.45,124,.8,x,76,side*26,'#D5D9CD'));
+      for (const [y,w,d] of [[14,25,29],[119,22,26],[139,20,24],[h,18,22]]) detail.push(box(w*2,1,d*2,0,y,0,'#E0DFD3'));
+    } else if (landmark.kind === 'gs') {
+      local.push(landmarkLoft([ring(0,34,26,2),ring(18,34,26,2),ring(18,25,24,2),ring(150,25,24,2),ring(157,23,22,2),ring(h,20,19,2)],1,h));
+      for (let y=22;y<150;y+=4.6) detail.push(box(51,.6,49,0,y,0,'#CBD1CB'));
+      detail.push(box(16,9,14,0,161,0,'#BBC5C3'));
+    } else {
+      const rings = Array.from({length:33},(_,j) => {
+        const y=j*h/32, shift=5*Math.sin(y/h*Math.PI*2-.5), swell=2.5*Math.cos(y/h*Math.PI*3);
+        return ring(y,23+swell,22,7).map(([x,y,z]) => [x+shift,y,z]);
+      });
+      local.push(landmarkLoft(rings,2,h));
+      for (let j=2;j<32;j+=2) {
+        const y=j*h/32, shift=5*Math.sin(y/h*Math.PI*2-.5), swell=2.5*Math.cos(y/h*Math.PI*3);
+        // Thin ribbon outlines follow the undulating body.
+        detail.push(landmarkLoft([ring(y,23+swell,22,7),ring(y+.45,23+swell,22,7)].map(r=>r.map(([x,y,z])=>[x+shift,y,z])),2,h));
+      }
+    }
+    const p = cityPoint(landmark.center,data.center);
+    for (const [parts,target] of [[local,bodies],[detail,trim]]) for (const g of parts) {
+      g.rotateY(.36); g.translate(p[0]+offset[0],GROUND_Y,p[1]+offset[1]); target.push(g);
+    }
+  }
+  // Draw the two main avenues schematically through their mapped intersection.
+  // Street furniture and markings are authored scenery, not extra OSM records.
+  const avenue = (a,b,width,lanes) => {
+    const dx=b[0]-a[0], dz=b[1]-a[1], length=Math.hypot(dx,dz), angle=-Math.atan2(dz,dx);
+    const parts = [], layers = [[],[],[]];
+    const surface = (layer,w,d,x,z,color) => {
+      const g=new THREE.PlaneGeometry(w,d).toNonIndexed(); g.rotateX(-Math.PI/2); g.translate(x,.4,z);
+      layers[layer].push(gangnamColor(g,color));
+    };
+    surface(0,length,width+10,0,0,'#B8B6A9');
+    surface(1,length,width,0,0,'#596268');
+    for (let lane=1;lane<lanes;lane++) {
+      const z=-width/2+width*lane/lanes;
+      for (let x=-length/2+6;x<length/2-6;x+=14) if (Math.abs(x)>40 && Math.abs(x)<900) surface(2,6,.4,x,z,lane===lanes/2?'#EBC873':'#D8DBCF');
+    }
+    for (const x of [-33,33]) for (let z=-width/2+1;z<width/2-1;z+=2.4) surface(2,4.5,1.1,x,z,'#E2E3D9');
+    for (let x=-length/2+14;x<length/2-14;x+=26) for (const side of [-1,1]) {
+      // Leave the central intersection open.
+      if (Math.abs(x)<35 || Math.abs(x)>900) continue;
+      const z=side*(width/2+3.5);
+      parts.push(box(.65,5,.65,x,2.5,z,'#6C6759'));
+      const crown = new THREE.IcosahedronGeometry(3.4,0); crown.scale(1,1.4,1); crown.translate(x,7,z); parts.push(gangnamColor(crown,'#63846A'));
+    }
+    const place = (g,target) => { g.rotateY(angle); g.translate((a[0]+b[0])/2+offset[0],GROUND_Y,(a[1]+b[1])/2+offset[1]); target.push(g); };
+    parts.forEach(g=>place(g,trim));
+    layers.forEach((parts,i)=>parts.forEach(g=>place(g,streets[i])));
+  };
+  const streetOrigin = cityPoint([37.5006,127.0364],data.center);
+  const streetPoint = p => p.map((v,i)=>v+streetOrigin[i]);
+  avenue(streetPoint([-2196,828]),streetPoint([2196,-828]),38,8);
+  avenue(streetPoint([-756,-2124]),streetPoint([756,2124]),30,6);
+  // Mechanical details follow the same artistic profile as the roof beneath them.
+  data.buildings.forEach((b,i)=>{
+    const profile=gangnamProfile(b,data.center);
+    if (i%5 || profile.height>90 || GANGNAM_LANDMARKS.some(l=>footprintNear(b.rings[0],cityPoint(l.center,data.center),0))) return;
+    const r=b.rings[0], x=r.reduce((s,p)=>s+p[0],0)/r.length, z=r.reduce((s,p)=>s+p[1],0)/r.length;
+    if (footprintNear(r,offset.map(v=>-v),25) || !footprintNear(r,[x,z],0)) return;
+    // Only place small rooftop units on roofs wide enough to contain them.
+    if (![[x-2,z-2],[x+2,z-2],[x+2,z+2],[x-2,z+2]].every(p=>footprintNear(r,p,0))) return;
+    trim.push(box(3,1.4,2,x+offset[0],GROUND_Y+profile.height+.7,z+offset[1],'#B7BCB1'));
+  });
+  trim.push(...buildGangnamHills());
+  const ground = new THREE.PlaneGeometry(10000,10000).toNonIndexed(); ground.rotateX(-Math.PI/2); ground.translate(0,GROUND_Y-.1,0); trim.push(gangnamColor(ground,'#ABB1AA'));
+  [[bodies,gangnamLandmarkMat],[trim,landmarkTrimMat],...streets.map((parts,i)=>[parts,gangnamStreetMats[i]])].forEach(([parts,mat])=>skyline.add(new THREE.Mesh(mergeCityGeometry(parts),mat)));
+}
+
 function setCityAtmosphere(id) {
-  const sf = id === 'sf'; scene.fog.near = sf ? 800 : 120; scene.fog.far = sf ? 6000 : 420;
-  camera.fov = 40; camera.far = sf ? 7000 : 900; camera.updateProjectionMatrix(); skyDome.scale.setScalar(sf ? 10 : 1);
-  city.children[1].visible = !sf;
-  $('#city-credit').textContent = sf ? 'Stylized landmarks · © OpenStreetMap contributors' : '© OpenStreetMap contributors';
+  const sf = id === 'sf', gangnam = id === 'gangnam'; scene.fog.near = sf ? 800 : gangnam ? 650 : 120; scene.fog.far = sf ? 6000 : gangnam ? 3800 : 420;
+  camera.fov = 40; camera.far = sf ? 7000 : gangnam ? 4200 : 900; camera.updateProjectionMatrix(); skyDome.scale.setScalar(sf ? 10 : gangnam ? 9 : 1);
+  city.children[1].visible = id === 'generic';
+  $('#city-credit').textContent = gangnam ? 'Artistic skyline · estimated heights · © OpenStreetMap contributors' : sf ? 'Stylized landmarks · © OpenStreetMap contributors' : '© OpenStreetMap contributors';
 }
 
 function buildRealCity(data) {
   if (!data.buildings?.length) throw new Error('Empty city');
-  const batches = cityMats.map(() => []);
-  const offset = data.id === 'sf' ? cityPoint(data.center, SF_VIEW_CENTER) : [0,0];
+  const materials = data.id === 'gangnam' ? gangnamMats : cityMats, batches = materials.map(() => []);
+  const offset = data.id === 'sf' ? cityPoint(data.center, SF_VIEW_CENTER) : data.id === 'gangnam' ? cityPoint(data.center, GANGNAM_VIEW_CENTER) : [0,0];
   try {
     data.buildings.forEach((b, i) => {
       if (!Number.isFinite(b.h) || b.h <= 0 || !b.rings?.length || b.rings.some(r => r.length < 3 || r.some(p => p.length !== 2 || !p.every(Number.isFinite)))) throw new Error('Invalid building');
       if (data.id === 'sf' && (footprintNear(b.rings[0], offset.map(v => -v), 25) ||
         SF_LANDMARKS.some(l => footprintNear(b.rings[0], cityPoint(l.center, data.center), 0)))) return;
-      const paths = b.rings.map(r => r.map(([x, z]) => new THREE.Vector2(x + offset[0], -z - offset[1])));
-      const shape = new THREE.Shape(paths[0]); shape.holes = paths.slice(1).map(p => new THREE.Path(p));
-      const geo = new THREE.ExtrudeGeometry(shape, { depth: b.h, bevelEnabled: false, steps: 1, UVGenerator: cityUV });
-      geo.rotateX(-Math.PI / 2); geo.translate(0, GROUND_Y, 0); batches[i % cityMats.length].push(geo);
+      if (data.id === 'gangnam' && (footprintNear(b.rings[0], offset.map(v => -v), 25) ||
+        GANGNAM_LANDMARKS.some(l => footprintNear(b.rings[0], cityPoint(l.center, data.center), 0)))) return;
+      const profile = data.id === 'gangnam' ? gangnamProfile(b,data.center) : {height:b.h};
+      const tiers = profile.estimated && profile.height>80 && profile.seed>.35 ? (profile.seed>.72 ? [[0,.78,1],[.78,.94,.86],[.94,1,.7]] : [[0,.88,1],[.88,1,.8]]) : [[0,1,1]];
+      const materialIndex = data.id === 'gangnam' && profile.height>75 ? [0,3,4][i%3] : i%materials.length;
+      for(const [bottom,top,scale] of tiers) {
+        const paths = b.rings.map(r => r.map(([x,z]) => {
+          if(scale!==1) { x=profile.point[0]+(x-profile.point[0])*scale; z=profile.point[1]+(z-profile.point[1])*scale; }
+          return new THREE.Vector2(x+offset[0],-z-offset[1]);
+        }));
+        const shape = new THREE.Shape(paths[0]); shape.holes = paths.slice(1).map(p => new THREE.Path(p));
+        const geo = new THREE.ExtrudeGeometry(shape, { depth:profile.height*(top-bottom), bevelEnabled:false, steps:1, UVGenerator:cityUV });
+        geo.rotateX(-Math.PI/2); geo.translate(0,GROUND_Y+profile.height*bottom,0);
+        if(data.id==='gangnam') {
+          const tint = profile.height>75 ? ['#B1C9CE','#C5D1D1','#94B3BE'][i%3] : ['#EBE1CC','#CFD7CE','#E3CFBD'][i%3];
+          gangnamColor(geo,tint);
+          const colors=geo.attributes.color, roof=new THREE.Color(profile.height>75?'#ABB9BC':['#719686','#99A89B','#BCBFB1'][i%3]);
+          for(let v=0;v<colors.count;v++) if(geo.attributes.normal.getY(v)>.5) colors.setXYZ(v,roof.r,roof.g,roof.b);
+        }
+        batches[materialIndex].push(geo);
+      }
     });
-    batches.forEach((parts, i) => { if (parts.length) skyline.add(new THREE.Mesh(mergeCityGeometry(parts), cityMats[i])); });
+    if (data.id === 'gangnam') buildGangnamBackdrop(data).forEach((parts,i)=>batches[i].push(...parts));
+    batches.forEach((parts, i) => { if (parts.length) skyline.add(new THREE.Mesh(mergeCityGeometry(parts), materials[i])); });
     if (data.id === 'sf') buildSFLandmarks();
-    if (data.id === 'gangnam') {
-      const dx = (127.1025 - data.center[1]) * Math.cos(data.center[0] * Math.PI / 180), dz = data.center[0] - 37.5126, distance = Math.hypot(dx, dz);
-      const h = 330; // the real tower is 555 m; compress it with the distance so its tip stays visible in the fog
-      const geo = new THREE.CylinderGeometry(2, 18, h, 8, 8), uv = geo.attributes.uv, normals = geo.attributes.normal;
-      for (let i = 0; i < uv.count; i++) { if (Math.abs(normals.getY(i)) > .99) uv.setXY(i, .01, .99); else uv.setXY(i, uv.getX(i) * Math.PI * 36 / 12, uv.getY(i) * h / 12); }
-      const tower = new THREE.Mesh(geo, cityMats[3]); tower.position.set(dx / distance * 380, GROUND_Y + h / 2, dz / distance * 380); skyline.add(tower);
-    }
+    if (data.id === 'gangnam') buildGangnam(data);
   } catch (err) { batches.flat().forEach(g => g.dispose()); throw err; }
 }
-const CITIES = { gangnam: 'Gangnam', sf: 'San Francisco', generic: 'Generic city' };
+const CITIES = { gangnam: 'Seoul', sf: 'San Francisco', generic: 'Generic city' };
 let cityKey = 'generic', cityRequest = 0, cityController;
 function clearCity() { skyline.traverse(o => { if (o.geometry) o.geometry.dispose(); }); skyline.clear(); }
 async function setCity(id) {
@@ -1980,6 +2203,9 @@ function applyScene(key) {
   const T = sceneT;
   scene.background = new THREE.Color(T.haze); drawSky(T); scene.fog.color.set(T.haze);
   landmarkMat.color.set(mix('#FFFFFF', '#26354C', T.cityDark)); landmarkMat.emissiveIntensity = T.cityLit;
+  gangnamLandmarkMat.color.set(mix('#FFFFFF', '#26354C', T.cityDark)); gangnamLandmarkMat.emissiveIntensity = T.cityLit;
+  gangnamStreetMats.forEach(m => m.color.set(mix('#FFFFFF', '#596C83', T.cityDark)));
+  gangnamMats.forEach(m => { m.color.set(mix('#FFFFFF', '#26354C', T.cityDark)); m.emissiveIntensity = T.cityLit; });
   landmarkTrimMat.color.set(mix('#FFFFFF', '#596C83', T.cityDark));
   cityMats.forEach((m, i) => { m.color.set(mix(CITY_TINTS[i], '#1E2636', T.cityDark)); m.emissiveIntensity = T.cityLit; });
   beaconMat.color.set(T.dark ? '#FF3B30' : '#C8453C'); mats.window.color.set(T.skyMid); fadeGlass.color.set(T.skyMid); fadeFrame.color.set(T.black); shellT = -1;
@@ -2526,7 +2752,7 @@ canvas.addEventListener('pointermove', e => {
   if (!p) { const now = performance.now(); if (e.pointerType === 'mouse' && now - hoverT > 80) { hoverT = now; canvas.style.cursor = agentAt(e.clientX, e.clientY) ? 'pointer' : 'grab'; } return; }
   const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
   if (ptrs.size === 1) {
-    if (panMode) pan(dx, dy); else { goal.theta -= dx * .006; goal.phi = clamp(goal.phi - dy * .005, .3, cityKey === 'sf' ? 1.54 : 1.38); }
+    if (panMode) pan(dx, dy); else { goal.theta -= dx * .006; goal.phi = clamp(goal.phi - dy * .005, .3, cityKey !== 'generic' ? 1.54 : 1.38); }
   } else if (ptrs.size === 2 && pinch) {
     const [a, b] = [...ptrs.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
     goal.radius = clamp(goal.radius * pinch.d / Math.max(d, 1), 7, 150); pan(mx - pinch.mx, my - pinch.my);
@@ -2706,6 +2932,7 @@ function toast(msg, action, fn) {
 
 /* customize */
 function buildCityChoices() {
+  $('#gangnam-skyline').hidden = cityKey !== 'gangnam';
   $('#sf-skyline').hidden = $('#sf-bridge').hidden = cityKey !== 'sf';
   for (const selector of ['#cities', '#city-choices']) {
     if (!$(selector).children.length) $(selector).innerHTML = Object.entries(CITIES).map(([id, label]) => `<button class="theme-card city-card" data-city="${id}">${label}</button>`).join('');
@@ -2713,6 +2940,9 @@ function buildCityChoices() {
   }
 }
 $('#city-picker').addEventListener('cancel', e => e.preventDefault());
+$('#gangnam-skyline').onclick = () => {
+  setFollow(false); goRoofView(); camera.fov = 55; camera.updateProjectionMatrix(); goal.phi = 1.43; goal.theta = -1.04; goal.radius = 65;
+};
 $('#sf-bridge').onclick = () => {
   setFollow(false); goRoofView(); camera.fov = 55; camera.updateProjectionMatrix(); goal.phi = 1.50; goal.theta = 1.05; goal.radius = 65; goal.target.x = -10; goal.target.z = 17;
 };

@@ -102,3 +102,105 @@ test('expanded SF covers every side of the office and the backdrop has upward-fa
     g.dispose();
   }
 });
+
+test('Gangnam replaces four mapped landmarks, preserves source data and stays within its geometry budget', () => {
+  const {context, skyline, run} = setup();
+  const data = JSON.parse(readFileSync(new URL('../web/cities/gangnam.json', import.meta.url)));
+  context.data = data; const before = JSON.stringify(data);
+  assert.equal(run('data.buildings.filter(b => GANGNAM_LANDMARKS.some(l => footprintNear(b.rings[0],cityPoint(l.center,data.center),0))).length'),4);
+  run('buildRealCity(data)');
+  assert.equal(JSON.stringify(data),before);
+  assert.equal(skyline.children.length,11); // plus the office: twelve city draw calls
+  let triangles=0,bytes=0;
+  for (const mesh of skyline.children) {
+    assert.equal(mesh.geometry.groups.length,0);
+    for (const attribute of Object.values(mesh.geometry.attributes)) {
+      assert.ok(attribute.array.every(Number.isFinite)); bytes+=attribute.array.byteLength;
+    }
+    triangles+=mesh.geometry.attributes.position.count/3;
+  }
+  assert.ok(triangles<85000, `${triangles} Gangnam triangles`);
+  assert.ok(bytes<11*1024*1024, `${bytes} Gangnam geometry bytes`);
+  const body=skyline.children[6].geometry;
+  assert.ok(body.attributes.uv.array.every(v=>v>=0&&v<=1));
+  for(const landmark of run('GANGNAM_LANDMARKS')) {
+    const [x,z]=run(`cityPoint(${JSON.stringify(landmark.center)},GANGNAM_VIEW_CENTER)`);
+    let top=-Infinity;
+    for(let i=0;i<body.attributes.position.count;i++) {
+      const p=body.attributes.position;
+      if(Math.hypot(p.getX(i)-x,p.getZ(i)-z)<40) top=Math.max(top,p.getY(i)+150);
+    }
+    assert.ok(Math.abs(top-landmark.height)<.1, `${landmark.name}: ${top}`);
+  }
+  for(const mesh of skyline.children.slice(0,6)) {
+    const p=mesh.geometry.attributes.position;
+    for(let i=0;i<p.count;i++) assert.ok(Math.hypot(p.getX(i),p.getZ(i))>=25);
+  }
+});
+
+test('city switching restores fog, ground, camera range and landmark attribution', () => {
+  const {context,run}=setup(); const credit={};
+  context.scene={fog:{}}; context.camera={updateProjectionMatrix(){}};
+  context.skyDome={scale:{setScalar(){}}}; context.city={children:[{},{}]}; context.$=()=>credit;
+  for(const [id,far,ground] of [['sf',7000,false],['gangnam',4200,false],['generic',900,true],['gangnam',4200,false]]) {
+    run(`setCityAtmosphere('${id}')`);
+    assert.equal(context.camera.far,far); assert.equal(context.city.children[1].visible,ground);
+    assert.equal(credit.textContent.includes('estimated heights'),id==='gangnam');
+    assert.equal(credit.textContent.includes('Stylized landmarks'),id==='sf');
+  }
+});
+
+
+test('artistic Gangnam forms a tower corridor without changing supplied heights or data', () => {
+  const {context,run}=setup();
+  const data=JSON.parse(readFileSync(new URL('../web/cities/gangnam.json',import.meta.url)));
+  context.data=data;
+  const profiles=run('data.buildings.map(b=>gangnamProfile(b,data.center))');
+  assert.ok(profiles.filter(p=>p.estimated&&p.height>=90).length>=40);
+  assert.ok(profiles.filter(p=>p.height<40).length>800);
+  assert.ok(profiles.filter(p=>p.height>=150).length>=15);
+  assert.ok(profiles.every(p=>Number.isFinite(p.height)&&p.height>0&&(!p.estimated||p.height<=210)));
+  data.buildings.forEach((b,i)=>{ if(b.h!==15) assert.equal(profiles[i].height,b.h); });
+  assert.deepEqual(JSON.parse(JSON.stringify(run('data.buildings.map(b=>gangnamProfile(b,data.center))'))),JSON.parse(JSON.stringify(profiles)));
+  assert.equal(run('gangnamProfile({h:15,heightSource:"height",rings:[[[50,-40],[100,-40],[100,-90],[50,-90]]]},data.center).height'),15);
+});
+
+
+test('Gangnam streets use flat surfaces with distinct depth offsets for stable markings', () => {
+  const {context,skyline,run}=setup();
+  context.data=JSON.parse(readFileSync(new URL('../web/cities/gangnam.json',import.meta.url)));
+  run('buildGangnam(data)');
+  const layers=skyline.children.slice(-3);
+  assert.equal(layers.length,3);
+  layers.forEach((mesh,i)=>{
+    assert.equal(mesh.material.polygonOffset,true);
+    assert.equal(mesh.material.polygonOffsetFactor,-i-1);
+    assert.equal(mesh.material.polygonOffsetUnits,-4*(i+1));
+    const {position,normal}=mesh.geometry.attributes;
+    for(let v=0;v<position.count;v++) {
+      assert.ok(Math.abs(position.getY(v)+149.6)<.001);
+      assert.ok(normal.getY(v)>.999);
+    }
+  });
+});
+
+
+test('Gangnam scenic background covers all directions without invading the mapped center', () => {
+  const {context,run}=setup();
+  context.data=JSON.parse(readFileSync(new URL('../web/cities/gangnam.json',import.meta.url)));
+  const parts=run('buildGangnamBackdrop(data)'), offset=run('cityPoint(data.center,GANGNAM_VIEW_CENTER)');
+  const quadrants=[0,0,0,0]; let triangles=0;
+  for(const g of parts.flat()) {
+    g.computeBoundingBox(); const center=g.boundingBox.getCenter(new THREE.Vector3());
+    const b=g.boundingBox, x=center.x-offset[0], z=center.z-offset[1];
+    assert.ok(b.max.x<offset[0]-600 || b.min.x>offset[0]+600 || b.max.z<offset[1]-600 || b.min.z>offset[1]+600);
+    quadrants[(x<0?0:1)+(z<0?0:2)]++;
+    triangles+=g.attributes.position.count/3;
+    for(const a of Object.values(g.attributes)) assert.ok(a.array.every(Number.isFinite));
+  }
+  assert.ok(quadrants.every(n=>n>250),String(quadrants)); assert.ok(triangles<30000);
+  for(const g of run('buildGangnamHills()')) {
+    for(const a of Object.values(g.attributes)) assert.ok(a.array.every(Number.isFinite));
+    for(let i=0;i<g.attributes.normal.count;i++) assert.ok(g.attributes.normal.getY(i)>0);
+  }
+});
