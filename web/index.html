@@ -1077,9 +1077,9 @@ function landmarkLoft(rings, tile, height) {
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); g.computeVertexNormals(); return g;
 }
 // A scenic reconstruction: actual NW bearing, compressed distance and span for readability.
-const SF_BRIDGE = { center: [37.8199, -122.4783], distance: 1500, span: 704, tower: 227, deck: 80, angle: 1.75 };
+const SF_BRIDGE = { center: [37.8199, -122.4783], distance: 3600, span: 1280, tower: 227, deck: 80, angle: 1.75 };
 function buildSFBridge() {
-  const parts = [], orange = '#BC492D', water = '#6E9AA6', hills = '#778C79';
+  const parts = [], orange = '#BC492D';
   const colorize = (g, color) => {
     const c = new THREE.Color(color), colors = new Float32Array(g.attributes.position.count * 3);
     for (let i = 0; i < colors.length; i += 3) { colors[i] = c.r; colors[i+1] = c.g; colors[i+2] = c.b; }
@@ -1117,22 +1117,50 @@ function buildSFBridge() {
       beam([x,deck-5,z],[Math.min(x+32,end),deck-12,z],1.1);
     }
   }
-  // Illustrative water and low shores give the span context; these are not terrain data.
-  const sea = new THREE.PlaneGeometry(1700,1050).toNonIndexed(); sea.rotateX(-Math.PI/2); sea.translate(0,.4,0); colorize(sea,water);
-  for (const side of [-1,1]) {
-    const profile = [[0,12],[90,42],[180,73],[290,87],[420,65]];
-    const p = [], uv = [];
-    for (let i=0;i<profile.length-1;i++) {
-      const [a,h] = profile[i], [b,k] = profile[i+1];
-      for (const v of [[side*(end+a),0,-220],[side*(end+a),h,-220],[side*(end+b),k,-220],
-        [side*(end+a),0,-220],[side*(end+b),k,-220],[side*(end+b),0,-220]]) { p.push(...v); uv.push(0,0); }
-    }
-    const g = new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(p,3)); g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
-    if (side > 0) { const a=g.attributes.position.array; for(let i=0;i<a.length;i+=9) for(let j=0;j<3;j++) { const v=a[i+3+j];a[i+3+j]=a[i+6+j];a[i+6+j]=v; } }
-    g.computeVertexNormals(); colorize(g,hills);
-  }
   const [dx,dz] = cityPoint(SF_BRIDGE.center,SF_VIEW_CENTER), distance = Math.hypot(dx,dz);
   parts.forEach(g => { g.rotateY(SF_BRIDGE.angle); g.translate(dx/distance*SF_BRIDGE.distance, GROUND_Y, dz/distance*SF_BRIDGE.distance); });
+  return parts;
+}
+
+// Continuous illustrative coast and terrain, independent of the real OSM building database.
+function buildSFBackdrop() {
+  const parts = [];
+  const colorize = (g, color) => {
+    const c = new THREE.Color(color), a = new Float32Array(g.attributes.position.count * 3);
+    for (let i=0;i<a.length;i+=3) { a[i]=c.r; a[i+1]=c.g; a[i+2]=c.b; }
+    g.setAttribute('color',new THREE.BufferAttribute(a,3)); parts.push(g);
+  };
+  const sea = new THREE.PlaneGeometry(24000,24000).toNonIndexed(); sea.rotateX(-Math.PI/2); sea.translate(0,GROUND_Y-2,0); colorize(sea,'#719DAA');
+  const coast = [[-12000,12000],[12000,12000],[12000,2200],[3200,2100],[2850,1700],[2700,900],
+    [2550,0],[2500,-1900],[2000,-2750],[1000,-3250],[-700,-3350],[-1750,-3100],[-2300,-2700],
+    [-2550,-1850],[-2850,-1400],[-3700,-950],[-4800,-350],[-6500,700],[-12000,2200]];
+  const land = new THREE.ShapeGeometry(new THREE.Shape(coast.map(([x,z]) => new THREE.Vector2(x,-z))));
+  const landGeo = land.toNonIndexed(); land.dispose(); landGeo.rotateX(-Math.PI/2); landGeo.translate(0,GROUND_Y,0); colorize(landGeo,'#979E93');
+  // Height fields with submerged edges replace the old vertical, single-sided shore cards.
+  const terrain = (nx,nz,point,color) => {
+    const p=[],uv=[],colors=[],base=new THREE.Color(color);
+    const vertex = (i,j) => {
+      const v=point(i/nx,j/nz); p.push(...v); uv.push(i/nx,j/nz);
+      const shade=.88+.12*Math.sin(i*.7+j*.4); colors.push(base.r*shade,base.g*shade,base.b*shade);
+    };
+    for(let i=0;i<nx;i++) for(let j=0;j<nz;j++) [[i,j],[i,j+1],[i+1,j+1],[i,j],[i+1,j+1],[i+1,j]].forEach(([x,z])=>vertex(x,z));
+    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(p,3)); g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+    g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3)); g.computeVertexNormals(); parts.push(g);
+  };
+  const [bx,bz]=cityPoint(SF_BRIDGE.center,SF_VIEW_CENTER), length=Math.hypot(bx,bz), cx=bx/length*SF_BRIDGE.distance, cz=bz/length*SF_BRIDGE.distance;
+  const c=Math.cos(SF_BRIDGE.angle),s=Math.sin(SF_BRIDGE.angle), end=SF_BRIDGE.span/2+205;
+  terrain(42,44,(u,v)=>{
+    const z=(v-.5)*12000, shore=end-40+Math.abs(z)*.14+90*Math.sin(z/900), x=shore+u*10000;
+    const rise=1-Math.exp(-u*10000/650), ridge=450+300*Math.sin(u*7+v*4)**2+180*Math.cos(v*9)**2;
+    return [cx+x*c+z*s,GROUND_Y-4+rise*ridge,cz-x*s+z*c];
+  },'#5F756B');
+  // Western / southern ridges sit beyond the enlarged city sample, with a gentle foot slope.
+  terrain(36,40,(u,v)=>{
+    const x=-9800+u*7500,z=-900+v*12000;
+    const rise=(1-Math.exp(-(1-u)*7500/550))*Math.min(1,v*12);
+    const h=rise*(100+150*Math.sin(u*7+v*10)**2+80*Math.cos(v*12)**2);
+    return [x,GROUND_Y+h,z];
+  },'#8A947E');
   return parts;
 }
 
@@ -1185,13 +1213,13 @@ function buildSFLandmarks() {
       g.rotateY(-.66); g.translate(x, GROUND_Y, z); target.push(g);
     });
   });
-  trims.push(...buildSFBridge());
+  trims.push(...buildSFBridge(), ...buildSFBackdrop());
   [[bodies,landmarkMat],[trims,landmarkTrimMat]].forEach(([parts,material]) => skyline.add(new THREE.Mesh(mergeCityGeometry(parts), material)));
 }
 function setCityAtmosphere(id) {
-  const sf = id === 'sf'; scene.fog.near = sf ? 400 : 120; scene.fog.far = sf ? 3000 : 420;
-  camera.fov = 40; camera.far = sf ? 2600 : 900; camera.updateProjectionMatrix(); skyDome.scale.setScalar(sf ? 4 : 1);
-  city.children[1].scale.setScalar(sf ? 2 : 1);
+  const sf = id === 'sf'; scene.fog.near = sf ? 800 : 120; scene.fog.far = sf ? 6000 : 420;
+  camera.fov = 40; camera.far = sf ? 7000 : 900; camera.updateProjectionMatrix(); skyDome.scale.setScalar(sf ? 10 : 1);
+  city.children[1].visible = !sf;
   $('#city-credit').textContent = sf ? 'Stylized landmarks · © OpenStreetMap contributors' : '© OpenStreetMap contributors';
 }
 

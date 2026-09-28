@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 
 // Change these centers when the office addresses are known. Coordinates are [latitude, longitude].
 export const CITIES = { sf: [37.7897, -122.3972], gangnam: [37.5006, 127.0364] };
+export const CITY_RADIUS_M = { sf: 2200, gangnam: 600 };
 const METERS = Math.PI * 6371000 / 180;
 export function project(lat, lon, center) {
   return [(lon - center[1]) * METERS * Math.cos(center[0] * Math.PI / 180), (center[0] - lat) * METERS];
@@ -71,7 +72,7 @@ async function main() {
   const ids = process.argv.slice(2); if (!ids.length) ids.push(...Object.keys(CITIES));
   for (const id of ids) {
     const center = CITIES[id]; if (!center) throw new Error(`Unknown city: ${id}`);
-    const lat = 600 / METERS, lon = lat / Math.cos(center[0] * Math.PI / 180);
+    const lat = CITY_RADIUS_M[id] / METERS, lon = lat / Math.cos(center[0] * Math.PI / 180);
     const bbox = [center[0] - lat, center[1] - lon, center[0] + lat, center[1] + lon].join(',');
     const query = `[out:json][timeout:120];(way[building](${bbox});relation[building][type=multipolygon](${bbox}););out geom;`;
     const endpoint = process.env.OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
@@ -80,7 +81,7 @@ async function main() {
     const raw = await response.json(); if (raw.remark) throw new Error(raw.remark);
     const { buildings, coverage } = bake(raw.elements, center);
     if (!buildings.length) throw new Error(`No buildings returned for ${id}`);
-    const data = { id, center, source: '© OpenStreetMap contributors', license: 'ODbL-1.0', sourceDate: raw.osm3s?.timestamp_osm_base, coverage, buildings };
+    const data = { id, center, radius: CITY_RADIUS_M[id], source: '© OpenStreetMap contributors', license: 'ODbL-1.0', sourceDate: raw.osm3s?.timestamp_osm_base, coverage, buildings };
     const out = new URL(`../web/cities/${id}.json`, import.meta.url), json = JSON.stringify(data) + '\n';
     await mkdir(new URL('../web/cities/', import.meta.url), { recursive: true }); await writeFile(out, json);
     console.log(`${id}: ${buildings.length} buildings, ${Buffer.byteLength(json)} bytes; height tags ${(coverage.height / buildings.length * 100).toFixed(1)}% (${coverage.height}), levels fallback ${coverage.levels}, default 15 m ${coverage.default}, excluded near office ${coverage.excluded}`);

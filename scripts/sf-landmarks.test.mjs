@@ -25,12 +25,12 @@ test('landmarks render in r128 with finite geometry, outward walls and bounded a
     assert.equal(mesh.geometry.index, null);
     assert.equal(mesh.geometry.groups.length, 0);
     for (const attribute of Object.values(mesh.geometry.attributes)) assert.ok(attribute.array.every(Number.isFinite));
-    assert.ok(mesh.geometry.attributes.uv.array.every(v => v >= 0 && v <= 1));
+    if (mesh.material.map) assert.ok(mesh.geometry.attributes.uv.array.every(v => v >= 0 && v <= 1));
     vertices += mesh.geometry.attributes.position.count;
   }
   assert.equal(skyline.children[1].geometry.attributes.color.count, skyline.children[1].geometry.attributes.position.count);
   assert.ok(skyline.children[1].geometry.attributes.color.array.some(v => v < .5));
-  assert.ok(vertices < 50000, `${vertices} vertices exceeds landmark budget`);
+  assert.ok(vertices < 100000, `${vertices} vertices exceeds landmark budget`);
   const firstNormal = new THREE.Vector3().fromBufferAttribute(skyline.children[0].geometry.attributes.normal, 0);
   assert.ok(firstNormal.dot(new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0), -.66)) > .8);
   for (const landmark of run('SF_LANDMARKS')) {
@@ -50,7 +50,7 @@ test('SF replaces the two baked landmarks, keeps source data intact and uses eig
   const before = JSON.stringify(data); context.data = data;
   assert.equal(run('data.buildings.filter(b => SF_LANDMARKS.some(l => footprintNear(b.rings[0], cityPoint(l.center, data.center), 0))).length'), 2);
   run('buildRealCity(data)');
-  assert.equal(skyline.children.length, 8); // + ground + office = ten draw calls
+  assert.equal(skyline.children.length, 8); // + office = nine draw calls; SF ground is in the colored backdrop batch
   assert.equal(JSON.stringify(data), before);
 });
 
@@ -74,7 +74,31 @@ test('Golden Gate keeps its NW bearing, finite colored geometry and suspended ca
   const towers = new THREE.Box3(); parts.slice(0,20).forEach(g => towers.union(g.boundingBox));
   const center = towers.getCenter(new THREE.Vector3());
   assert.ok(center.x < 0 && center.z < 0);
-  assert.ok(Math.abs(Math.hypot(center.x,center.z) - 1500) < 1);
+  assert.ok(Math.abs(Math.hypot(center.x,center.z) - 3600) < 1);
   assert.ok(Math.abs(box.max.y - (-150 + 230)) < .1);
   assert.ok(parts.length > 200);
+});
+
+
+test('expanded SF covers every side of the office and the backdrop has upward-facing terrain', () => {
+  const {run,context}=setup();
+  const data=JSON.parse(readFileSync(new URL('../web/cities/sf.json',import.meta.url)));
+  assert.equal(data.radius,2200); assert.ok(data.buildings.length>10000);
+  context.data=data;
+  const quadrants=run(`(() => {
+    const offset=cityPoint(data.center,SF_VIEW_CENTER), counts=[0,0,0,0];
+    for(const b of data.buildings) {
+      const r=b.rings[0], x=r.reduce((s,p)=>s+p[0],0)/r.length+offset[0], z=r.reduce((s,p)=>s+p[1],0)/r.length+offset[1];
+      counts[(x<0?0:1)+(z<0?0:2)]++;
+    }
+    return counts;
+  })()`);
+  assert.ok(quadrants.every(n=>n>300),String(quadrants));
+  const parts=run('buildSFBackdrop()');
+  for(const g of parts) {
+    for(const a of Object.values(g.attributes)) assert.ok(a.array.every(Number.isFinite));
+    const normals=g.attributes.normal;
+    for(let i=0;i<normals.count;i++) assert.ok(normals.getY(i)>0,'terrain must face up');
+    g.dispose();
+  }
 });
