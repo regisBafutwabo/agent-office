@@ -3,6 +3,7 @@
 // Same endpoints as bridge/server.js, so phones and VR headsets can connect to it too.
 use crate::adapters;
 use crate::focus;
+use crate::music;
 use crate::setup;
 use crate::store::{self, Origin, Store};
 use axum::{
@@ -49,6 +50,8 @@ struct Shared {
     seq: AtomicU64,
     /// Only this machine's office pages may connect; otherwise any website could reach localhost and approve commands.
     origins: Vec<String>,
+    /// What the rooftop DJ plays: your Spotify or Apple Music song, or null.
+    music: Mutex<Value>,
 }
 type AppState = Arc<Shared>;
 
@@ -66,7 +69,9 @@ pub fn router(port: u16, on_change: OnChange) -> Router {
         watchers: AtomicUsize::new(0),
         seq: AtomicU64::new(0),
         origins: ["localhost", "127.0.0.1", "[::1]"].iter().map(|h| format!("http://{h}:{port}")).collect(),
+        music: Mutex::new(Value::Null),
     });
+    tokio::spawn(watch_music(state.clone()));
     Router::new()
         .route("/hook", post(hook))
         .route("/permission", post(permission))
@@ -108,6 +113,27 @@ pub async fn run(port: u16, on_change: OnChange) {
     println!("Agent Office is running at http://localhost:{port}{}", if waiting { " (took over the port)" } else { "" });
     if let Err(err) = axum::serve(listener, app).await {
         eprintln!("Agent Office server stopped: {err}");
+    }
+}
+
+/// Every few seconds while an office page is connected, check what's playing and tell the pages when the song changes.
+async fn watch_music(st: AppState) {
+    let mut tick = tokio::time::interval(Duration::from_secs(5));
+    loop {
+        tick.tick().await;
+        if st.tx.receiver_count() == 0 {
+            continue;
+        }
+        let now = tokio::task::spawn_blocking(music::now_playing).await.unwrap_or(Value::Null);
+        let changed = {
+            let mut music = st.music.lock().unwrap();
+            let changed = *music != now;
+            *music = now.clone();
+            changed
+        };
+        if changed {
+            broadcast(&st, json!({ "type": "music", "music": now }));
+        }
     }
 }
 
@@ -242,6 +268,7 @@ async fn client_log(body: Bytes) -> StatusCode {
 fn snapshot(st: &Shared) -> Value {
     let mut v = st.store.lock().unwrap().snapshot();
     v["approvals"] = st.pending.lock().unwrap().values().map(|p| p.approval.clone()).collect::<Vec<_>>().into();
+    v["music"] = st.music.lock().unwrap().clone();
     v
 }
 

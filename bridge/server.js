@@ -8,6 +8,7 @@ import { WebSocketServer } from 'ws';
 import { Store } from './store.js';
 import { normalize } from './adapters.js';
 import { focus, appIcon } from './focus.js';
+import { watchMusic } from './music.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = path.join(ROOT, 'web');
@@ -112,7 +113,8 @@ const server = http.createServer(async (req, res) => {
 });
 
 const wss = new WebSocketServer({ server, path: '/ws', verifyClient: ({ req }) => originOk(req) });
-const snapshot = () => ({ ...store.snapshot(), approvals: [...pending.values()].map(p => p.approval) });
+let music = null;                                               // what the rooftop DJ plays: your Spotify or Apple Music song
+const snapshot = () => ({ ...store.snapshot(), approvals: [...pending.values()].map(p => p.approval), music });
 // Office pages report whether they're visible; requests are only held while at least one is.
 const watchers = () => [...wss.clients].filter(c => c.readyState === 1 && c.visible).length;
 function broadcast(msg) {
@@ -134,6 +136,7 @@ wss.on('connection', ws => {
   });
 });
 setInterval(() => store.prune(), 60_000).unref();
+watchMusic(m => { music = m; broadcast({ type: 'music', music }); }, () => wss.clients.size > 0);
 
 server.on('error', err => {
   if (err.code === 'EADDRINUSE') console.error(`Port ${PORT} is already in use. Is Agent Office already running? Set AGENT_OFFICE_PORT to use another port.`);
