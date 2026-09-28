@@ -126,6 +126,14 @@ button{font:inherit;color:inherit}
 .theme-card[aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--accent);border-color:transparent}
 .theme-card .sw{display:flex;height:34px;border-radius:7px;overflow:hidden;margin-bottom:6px}
 .theme-card .sw i{flex:1}
+.city-card{padding:12px}
+.city-picker{width:min(380px,calc(100% - 32px));padding:22px;border:1px solid var(--line);border-radius:18px;color:var(--ink);background:var(--panel);box-shadow:0 16px 60px #0003}
+.city-picker::backdrop{background:#0003}
+.city-picker h2{margin:0 0 8px;font-size:20px}
+.city-picker p{margin:0 0 18px;color:var(--muted);font-size:13px}
+.city-picker .themes{grid-template-columns:1fr;padding:0}
+.city-credit{position:absolute;bottom:5px;left:10px;z-index:4;padding:3px 7px;border-radius:6px;font-size:10px;color:var(--muted);background:var(--panel)}
+@media(max-width:760px){.city-credit{bottom:auto;top:112px}}
 .cust-agent-old{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 10px;align-items:center;padding:8px 6px;border-bottom:1px solid var(--line)}
 .cust-agent input[type=text]{width:100%;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:6px 9px;font:500 13px var(--font-b)}
 .cust-agent .proj{grid-column:2;margin-top:-4px}
@@ -344,6 +352,8 @@ body.live .speed-top, body.live .demo-only{display:none}
     <div class="tabpane cust" id="tab-custom" hidden>
       <h3>Office theme</h3>
       <div class="themes" id="themes"></div>
+      <h3>City</h3>
+      <div class="themes" id="cities"></div>
       <h3>Agents</h3>
       <div id="cust-agents"></div>
       <h3 id="connect-title" hidden>Connect agents</h3>
@@ -414,6 +424,13 @@ body.live .speed-top, body.live .demo-only{display:none}
   </div>
   <div class="hint glass" id="hint">Drag to look around · scroll or pinch to zoom · click an agent · [ ] hide panels</div>
   <div class="toasts" id="toasts"></div>
+  <a class="city-credit" id="city-credit" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" hidden>© OpenStreetMap contributors</a>
+  <dialog class="city-picker" id="city-picker" aria-labelledby="city-title" aria-describedby="city-description">
+    <h2 id="city-title">Pick your city</h2>
+    <p id="city-description">Choose the view outside. You can change it in Customize.</p>
+    <div class="themes" id="city-choices"></div>
+    <p id="city-status" role="status" hidden></p>
+  </dialog>
 </div>
 
 <script>
@@ -938,9 +955,13 @@ function facadeBox(w, h, d, mat) {
   return new THREE.Mesh(geo, mat);
 }
 const city = new THREE.Group(); scene.add(city);
+const skyline = new THREE.Group(); city.add(skyline);
 {
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), new THREE.MeshLambertMaterial({ color: '#8E989C' })); ground.rotation.x = -Math.PI / 2; ground.position.y = GROUND_Y; city.add(ground);
   const own = facadeBox(28.6, -1.1 - GROUND_Y, 18.6, cityMats[3]); own.position.set(0, (GROUND_Y - 1.1) / 2, 0); city.add(own);
+}
+function buildGenericCity() {
+  const city = skyline;
   const placed = [];
   for (let n = 0; n < 1400 && placed.length < 260; n++) {
     const ang = rand(0, Math.PI * 2), dist = rand(60, 340), x = Math.cos(ang) * dist, z = Math.sin(ang) * dist;
@@ -954,6 +975,81 @@ const city = new THREE.Group(); scene.add(city);
     if (top > 0 && Math.random() < .6) { const m = new THREE.Mesh(new THREE.CylinderGeometry(.25, .25, 12, 6), cityMats[0]); m.position.set(x, top + 6, z); city.add(m);
       const bl = new THREE.Mesh(new THREE.SphereGeometry(.7, 8, 6), beaconMat); bl.position.set(x, top + 12.2, z); city.add(bl); }
   } }
+buildGenericCity(); batchGenericCity();
+
+// Non-indexed triangles with one material per batch; no geometry groups (and no extra draw calls).
+function mergeCityGeometry(parts) {
+  const merged = new THREE.BufferGeometry();
+  for (const name of ['position', 'normal', 'uv']) {
+    const size = parts[0].attributes[name].itemSize, length = parts.reduce((n, g) => n + g.attributes[name].array.length, 0);
+    const array = new Float32Array(length); let offset = 0;
+    for (const g of parts) { array.set(g.attributes[name].array, offset); offset += g.attributes[name].array.length; }
+    merged.setAttribute(name, new THREE.BufferAttribute(array, size));
+  }
+  parts.forEach(g => g.dispose()); merged.computeBoundingSphere(); return merged;
+}
+function batchGenericCity() {
+  const batches = new Map();
+  skyline.children.forEach(o => {
+    const geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(); o.updateMatrix(); geo.applyMatrix4(o.matrix);
+    if (!batches.has(o.material)) batches.set(o.material, []); batches.get(o.material).push(geo);
+  });
+  clearCity(); batches.forEach((parts, mat) => skyline.add(new THREE.Mesh(mergeCityGeometry(parts), mat)));
+}
+const cityUV = {
+  generateTopUV: () => [0, 0, 0].map(() => new THREE.Vector2(.01, .99)),
+  generateSideWallUV: (g, v, a, b, c, d) => {
+    const dx = v[b * 3] - v[a * 3], dy = v[b * 3 + 1] - v[a * 3 + 1], length = Math.hypot(dx, dy) || 1;
+    return [a, b, c, d].map(i => new THREE.Vector2(((v[i * 3] - v[a * 3]) * dx + (v[i * 3 + 1] - v[a * 3 + 1]) * dy) / length / 12, v[i * 3 + 2] / 12));
+  }
+};
+function buildRealCity(data) {
+  if (!data.buildings?.length) throw new Error('Empty city');
+  const batches = cityMats.map(() => []);
+  try {
+    data.buildings.forEach((b, i) => {
+      if (!Number.isFinite(b.h) || b.h <= 0 || !b.rings?.length || b.rings.some(r => r.length < 3 || r.some(p => p.length !== 2 || !p.every(Number.isFinite)))) throw new Error('Invalid building');
+      const paths = b.rings.map(r => r.map(([x, z]) => new THREE.Vector2(x, -z)));
+      const shape = new THREE.Shape(paths[0]); shape.holes = paths.slice(1).map(p => new THREE.Path(p));
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: b.h, bevelEnabled: false, steps: 1, UVGenerator: cityUV });
+      geo.rotateX(-Math.PI / 2); geo.translate(0, GROUND_Y, 0); batches[i % cityMats.length].push(geo);
+    });
+    batches.forEach((parts, i) => { if (parts.length) skyline.add(new THREE.Mesh(mergeCityGeometry(parts), cityMats[i])); });
+    if (data.id === 'gangnam') {
+      const dx = (127.1025 - data.center[1]) * Math.cos(data.center[0] * Math.PI / 180), dz = data.center[0] - 37.5126, distance = Math.hypot(dx, dz);
+      const h = 330; // the real tower is 555 m; compress it with the distance so its tip stays visible in the fog
+      const geo = new THREE.CylinderGeometry(2, 18, h, 8, 8), uv = geo.attributes.uv, normals = geo.attributes.normal;
+      for (let i = 0; i < uv.count; i++) { if (Math.abs(normals.getY(i)) > .99) uv.setXY(i, .01, .99); else uv.setXY(i, uv.getX(i) * Math.PI * 36 / 12, uv.getY(i) * h / 12); }
+      const tower = new THREE.Mesh(geo, cityMats[3]); tower.position.set(dx / distance * 380, GROUND_Y + h / 2, dz / distance * 380); skyline.add(tower);
+    }
+  } catch (err) { batches.flat().forEach(g => g.dispose()); throw err; }
+}
+const CITIES = { gangnam: 'Gangnam', sf: 'San Francisco', generic: 'Generic city' };
+let cityKey = 'generic', cityRequest = 0, cityController;
+function clearCity() { skyline.traverse(o => { if (o.geometry) o.geometry.dispose(); }); skyline.clear(); }
+async function setCity(id) {
+  if (!Object.hasOwn(CITIES, id)) return false;
+  const request = ++cityRequest; if (cityController) cityController.abort();
+  const controller = cityController = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+  try {
+    let data;
+    if (id !== 'generic') {
+      const response = await fetch(`/cities/${id}.json`, { signal: controller.signal });
+      if (!response.ok) throw new Error('City unavailable'); data = await response.json();
+      if (data.id !== id) throw new Error('Wrong city');
+    }
+    if (request !== cityRequest) return false;
+    clearCity(); if (data) buildRealCity(data); else { buildGenericCity(); batchGenericCity(); }
+    cityKey = id; uiPrefs.city = id; saveUi(); $('#city-credit').hidden = id === 'generic';
+    $('#city-picker').close(); $('#city-status').hidden = true; buildCityChoices(); return true;
+  } catch (err) {
+    if (request !== cityRequest) return false;
+    clearCity(); buildGenericCity(); batchGenericCity(); cityKey = 'generic'; $('#city-credit').hidden = true; buildCityChoices();
+    const message = 'Couldn’t load that city. Showing Generic city.'; toast(message);
+    $('#city-status').textContent = message; $('#city-status').hidden = false; return false;
+  } finally { clearTimeout(timeout); }
+}
 
 // floor grid
 const gridMat = new THREE.LineBasicMaterial({ color:'#888', transparent:true, opacity:.22 });
@@ -1672,7 +1768,7 @@ function applyScene(key) {
   floors.forEach(f => { f.mGlass.color.set(T.dark ? '#56657A' : '#FFFFFF'); });
   agents.forEach(a => { a.labelDirty = true; updateScreen(a); });
   floorLabels.forEach(l => l.draw()); drawNeon();
-  document.querySelectorAll('.theme-card').forEach(b => b.setAttribute('aria-pressed', b.dataset.key === key));
+  $('#themes').querySelectorAll('.theme-card').forEach(b => b.setAttribute('aria-pressed', b.dataset.key === key));
   renderJSON(); renderLift();
 }
 
@@ -2220,7 +2316,7 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
 canvas.addEventListener('wheel', e => { e.preventDefault(); goal.radius = clamp(goal.radius * (1 + e.deltaY * .0012), 7, 150); hideHint(); }, { passive:false });
 const keys = new Set();
 addEventListener('keydown', e => {
-  if (e.target.closest('input,textarea,select')) return;
+  if (e.target.closest('input,textarea,select,dialog')) return;
   if (e.key === 'Escape') select(null);
   if (e.key === '[') setLiftOpen(liftEl.classList.contains('collapsed'));
   if (e.key === ']') setPanelOpen(!panelOpen());
@@ -2382,10 +2478,18 @@ function toast(msg, action, fn) {
 }
 
 /* customize */
+function buildCityChoices() {
+  for (const selector of ['#cities', '#city-choices']) {
+    if (!$(selector).children.length) $(selector).innerHTML = Object.entries(CITIES).map(([id, label]) => `<button class="theme-card city-card" data-city="${id}">${label}</button>`).join('');
+    $(selector).querySelectorAll('[data-city]').forEach(b => { b.setAttribute('aria-pressed', b.dataset.city === cityKey); b.onclick = () => setCity(b.dataset.city); });
+  }
+}
+$('#city-picker').addEventListener('cancel', e => e.preventDefault());
 function buildCustomize() {
   const autoCard = `<button class="theme-card" data-key="auto" aria-pressed="${sceneKey === 'auto'}" title="Follows your clock: daylight from 8 to 17, golden hour at dawn and dusk, night from 20"><span class="sw">${['loft', 'golden', 'night'].map(k => `<i style="background:${SCENES[k].skyTop}"></i>`).join('')}</span>Auto (your time)</button>`;
   $('#themes').innerHTML = autoCard + Object.entries(SCENES).map(([k, T]) => `<button class="theme-card" data-key="${k}" aria-pressed="${k === sceneKey}"><span class="sw"><i style="background:${T.floor}"></i><i style="background:${T.fabric}"></i><i style="background:${T.fabric2}"></i><i style="background:${T.felt1}"></i></span>${T.label}</button>`).join('');
-  document.querySelectorAll('.theme-card').forEach(b => b.onclick = () => { applyScene(b.dataset.key); uiPrefs.theme = b.dataset.key; saveUi(); });
+  $('#themes').querySelectorAll('.theme-card').forEach(b => b.onclick = () => { applyScene(b.dataset.key); uiPrefs.theme = b.dataset.key; saveUi(); });
+  buildCityChoices();
   const mains = agents.filter(a => a.kind === 'main'), box$ = $('#cust-agents');
   const open = new Set([...box$.querySelectorAll('details[open]')].map(d => d.dataset.id));
   const seg = (a, key, options) => `<div class="mini-seg">${Object.entries(options).map(([k, v]) => `<button type="button" data-look="${key}" data-v="${k}" aria-pressed="${a.look[key] === k}">${typeof v === 'string' ? v : v.label}</button>`).join('')}</div>`;
@@ -2902,6 +3006,7 @@ curFloor = makeFloor('lobby', 'Your first project', true); rebuildTower();
 setLiftOpen(uiPrefs.lift !== false); if (uiPrefs.panel === false) setPanelOpen(false);
 showDetailTab(uiPrefs.detailTab === 'activity' ? 'activity' : 'chat');
 applyScene(uiPrefs.theme in SCENES ? uiPrefs.theme : 'auto'); buildCustomize(); renderJSON(); drawTerm(); drawBoard(); layout();
+if (Object.hasOwn(CITIES, uiPrefs.city)) setCity(uiPrefs.city); else $('#city-picker').showModal();
 setView('3d'); Object.assign(cam, { theta: goal.theta, phi: goal.phi, radius: goal.radius }); cam.target.copy(goal.target); applyCam();
 if (MODE === 'demo' || !/^https?:$/.test(location.protocol)) startDemo(); else connectLive();
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { agents.forEach(a => a.labelDirty = true); floorLabels.forEach(l => l.draw()); drawTerm(); drawBoard(); drawNeon(); floors.forEach(f => drawSign(f, true)); });

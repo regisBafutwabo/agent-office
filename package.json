@@ -7,7 +7,7 @@
   "bin": { "agent-office": "bridge/server.js" },
   "scripts": {
     "start": "node bridge/server.js",
-    "test": "node --test bridge/*.test.js"
+    "test": "node --test bridge/*.test.js scripts/*.test.mjs"
   },
   "engines": { "node": ">=18" },
   "dependencies": {

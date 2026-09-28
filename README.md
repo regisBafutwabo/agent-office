@@ -81,6 +81,8 @@ Customize each agent in **Customize → Agents**: body shape, face style, colors
 
 The office follows your clock by default (**Customize → Office theme → Auto**): night until 5:00, dawn into daylight by 8:00, daylight until 17:00, then golden hour and night by 20:00. Colors and light blend through the transitions, the sun crosses the sky during the day, and the city lights come on at dusk. Pick any other theme to keep it fixed; your choice is remembered.
 
+Choose **Gangnam**, **San Francisco**, or **Generic city** on your first visit, or change it under **Customize → City**. Real skylines use bundled OpenStreetMap footprints, with windows that light up at night. Your choice is saved on this device. See [the city data notes](web/cities/README.md) to change the office centers and rebake the snapshots.
+
 ## Rooftop DJ
 
 The rooftop DJ plays what you're listening to. On a Mac, the office asks the Spotify app for its current song, then Apple Music, and shows it on the front of the DJ booth. With your music on, the DJ plays by day too; the full party (lights, fire, bar) still waits for dark. With nothing playing, the DJ spins its own office mix of made-up tracks.
@@ -133,7 +135,7 @@ claude plugin marketplace remove agent-office
 ## Development
 
 ```bash
-npm test                                  # bridge unit tests
+npm test                                  # bridge and city bake unit tests
 (cd desktop/src-tauri && cargo test)      # desktop app server tests
 claude --plugin-dir ./plugin              # try the hooks in one session without installing them
 ```
