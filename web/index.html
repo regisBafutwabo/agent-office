@@ -221,6 +221,8 @@ pre.json{margin:0 4px;padding:10px 12px;background:var(--panel-2);border:1px sol
 .av-app.mono{display:grid;place-items:center;background:var(--ink);color:var(--panel);font:700 8px/1 var(--font-d)}
 .fl-num.wait{background:var(--s-wait);color:#1B1206;animation:flpulse 1.2s ease-in-out infinite}
 @keyframes flpulse{50%{filter:brightness(1.25)}}
+.fl-num.party{background:linear-gradient(120deg,#FF4FA3,#7C6CF2,#3DCBE0,#F5B342,#FF4FA3);background-size:300% 100%;color:#fff;animation:flparty 3s linear infinite}
+@keyframes flparty{to{background-position:-300% 0}}
 .fl-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
 .fl-dots{display:flex;gap:3px}
 .fl-dots i{width:8px;height:8px;border-radius:50%;background:var(--c)}
@@ -272,7 +274,7 @@ body.live .speed-top, body.live .demo-only{display:none}
   .detail{top:118px}
 }
 @media (prefers-reduced-motion: reduce){
-  .pill.s-waiting,.toast,.fl-num.wait,.fl-apps.wait{animation:none}
+  .pill.s-waiting,.toast,.fl-num.wait,.fl-num.party,.fl-apps.wait{animation:none}
 }
 </style>
 
@@ -1588,10 +1590,10 @@ function renderLift() {
   }).join('');
   const up = roofAgents();
   const html = `<button class="lift-btn bld${viewMode === 'building' ? ' on' : ''}" data-floor="building"><span class="fl-num">${BUILDING_ICON}</span><span class="fl-name">Whole building</span></button>`
-    + `<button class="lift-btn roof${viewMode === 'roof' ? ' on' : ''}" data-floor="roof"><span class="fl-num">${ROOF_ICON}</span><span class="fl-name">${isParty() ? 'Rooftop party' : 'Rooftop terrace'}</span><span class="fl-dots">${up.map(a => `<i style="--c:${a.color}"></i>`).join('')}</span></button>` + rows;
+    + `<button class="lift-btn roof${viewMode === 'roof' ? ' on' : ''}" data-floor="roof"><span class="fl-num${isParty() ? ' party' : ''}">${ROOF_ICON}</span><span class="fl-name">${isParty() ? 'Rooftop party' : 'Rooftop terrace'}</span><span class="fl-dots">${up.map(a => `<i style="--c:${a.color}"></i>`).join('')}</span></button>` + rows;
   if (html !== el._html) { el.innerHTML = html; el._html = html; }
   const cur = viewMode === 'building' ? `<span class="fl-num">${BUILDING_ICON}</span>Whole building`
-    : viewMode === 'roof' ? `<span class="fl-num">${ROOF_ICON}</span>Rooftop` : `${floorBadge(curFloor, false)}${esc(curFloor.name)}`;
+    : viewMode === 'roof' ? `<span class="fl-num${isParty() ? ' party' : ''}">${ROOF_ICON}</span>Rooftop` : `${floorBadge(curFloor, false)}${esc(curFloor.name)}`;
   const ce = $('#lift-current'); if (ce._html !== cur) { ce.innerHTML = cur; ce._html = cur; }
 }
 
