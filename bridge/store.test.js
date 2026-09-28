@@ -84,3 +84,49 @@ test('opens the exact chat in the Claude and Codex apps, and only there', () => 
 test('ignores payloads without a session or event name', () => {
   assert.equal(new Store().ingest({ hook_event_name: 'Stop' }), null);
 });
+
+test('names a session after its chat title, or its first prompt until there is one', () => {
+  let title = null;
+  const st = new Store(() => title);
+  const t = { ...base, transcript_path: '/Users/me/.claude/projects/shop/s1.jsonl' };
+  st.ingest({ ...t, hook_event_name: 'SessionStart' });
+  assert.equal(st.snapshot().sessions[0].title, null);
+  const e = st.ingest({ ...t, hook_event_name: 'UserPromptSubmit', prompt: 'fix the   cart total' });
+  assert.equal(e.session.title, 'fix the cart total');
+  title = 'Fix cart total rounding';
+  assert.equal(st.ingest({ ...t, hook_event_name: 'Stop' }).session.title, 'Fix cart total rounding');
+});
+
+test('reads the latest custom title, falling back to the AI title', async () => {
+  const { titleFromText } = await import('./title.js');
+  const ai = '{"type":"ai-title","aiTitle":"Locate storage"}', custom = n => `{"type":"custom-title","customTitle":"${n}"}`;
+  assert.equal(titleFromText(`half a line"}\n${ai}\n`), 'Locate storage');
+  assert.equal(titleFromText(`${custom('Old')}\n${ai}\n${custom('Checkout  bug')}\n`), 'Checkout bug');
+  assert.equal(titleFromText('{"type":"user"}\n'), null);
+});
+
+test('spots merges, but not syncing with main or auto-merge', async () => {
+  const { isMerge } = await import('./store.js');
+  const bash = command => isMerge('Bash', { command });
+  assert.ok(bash('gh pr merge 42 --squash --delete-branch'));
+  assert.ok(bash('cd repo && GH_PROMPT_DISABLED=1 gh pr merge --merge'));
+  assert.ok(bash('git merge --no-ff feature/cart'));
+  assert.ok(bash('git -C ../shop merge --continue'));
+  assert.ok(isMerge('mcp__github__merge_pull_request', {}));
+  assert.ok(!bash('gh pr merge 42 --auto --squash'));
+  assert.ok(!bash('git merge origin/main'));
+  assert.ok(!bash('git merge main'));
+  assert.ok(!bash('git merge --abort'));
+  assert.ok(!bash('git merge-base HEAD main'));
+  assert.ok(!bash('echo "gh pr merge"'));
+  assert.ok(!isMerge('Read', { file_path: 'merge.ts' }));
+});
+
+test('marks the session merged until the next prompt', () => {
+  const st = new Store(() => null);
+  const e = st.ingest({ ...base, hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: { command: 'gh pr merge 7 --squash' } });
+  assert.equal(e.merged, true); assert.equal(e.session.merged, true);
+  assert.equal(st.ingest({ ...base, hook_event_name: 'Stop' }).session.activity, 'Finished · merged');
+  assert.equal(st.ingest({ ...base, hook_event_name: 'UserPromptSubmit', prompt: 'next' }).session.merged, false);
+  assert.equal(st.ingest({ ...base, hook_event_name: 'PostToolUseFailure', tool_name: 'Bash', tool_input: { command: 'gh pr merge 7' } }).merged, undefined);
+});
