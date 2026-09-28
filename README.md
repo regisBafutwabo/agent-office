@@ -1,14 +1,22 @@
-# Agent Office
+# <img src="desktop/src-tauri/icons/128x128@2x.png" alt="Agent Office logo" width="48" height="48" align="absmiddle"> Agent Office
 
 A 3D office where your Claude Code agents work. Every session you run in the **Claude desktop app** or in the **terminal** becomes an agent that rides up in the lift, takes a desk, walks to the library when it researches, raises a hand when it needs your permission, and heads to the lounge when it's done. Subagents show up as smaller teammates.
 
 Works in any browser on your computer. Phone and VR headset support comes next (see the roadmap).
+
+![Agent Office demo: agents working on a sunlit office floor overlooking Seoul](docs/images/office-seoul.jpg)
+
+*The office in demo mode, with fictional projects and the artistic Seoul skyline.*
 
 > **Preview.** Agent Office is early and Mac-first. The desktop app is ad-hoc signed and not notarized, so macOS may ask you to allow it once (see [first-launch instructions](INSTALL.md#allow-the-first-launch)). **Open chat** relies on how the Claude and Codex apps open their chats today; that isn't documented by either app and could change, in which case the button still brings the app forward. Issues and ideas are welcome.
 
 ## Quick start
 
 **On a Mac:** download the DMG from the [latest release](https://github.com/regisBafutwabo/agent-office/releases/latest) and drag **Agent Office** to **Applications**. Open it once. If macOS blocks it, go to **System Settings → Privacy & Security → Security → Open Anyway**, then confirm **Open**. Click **Connect Claude Code** in the app. See the [step-by-step first-launch instructions](INSTALL.md#allow-the-first-launch).
+
+<img src="docs/images/connect-agents.jpg" alt="Connect agents settings showing Claude Code, Codex, and Cursor connected" width="332">
+
+*Customize → Connect agents after setup. Each Connect button installs that tool's hooks; start a new agent session afterward.*
 
 Full setup, including building from source and troubleshooting, is in **[INSTALL.md](INSTALL.md)**. From source, the short version is:
 
@@ -81,9 +89,11 @@ Customize each agent in **Customize → Agents**: body shape, face style, colors
 
 The office follows your clock by default (**Customize → Office theme → Auto**): night until 5:00, dawn into daylight by 8:00, daylight until 17:00, then golden hour and night by 20:00. Colors and light blend through the transitions, the sun crosses the sky during the day, and the city lights come on at dusk. Pick any other theme to keep it fixed; your choice is remembered.
 
-Choose **Gangnam**, **San Francisco**, or **Generic city** on your first visit, or change it under **Customize → City**. Real skylines use bundled OpenStreetMap footprints, with windows that light up at night. Your choice is saved on this device. See [the city data notes](web/cities/README.md) to change the office centers and rebake the snapshots.
+Choose **Seoul**, **San Francisco**, or **Generic city** on your first visit, or change it under **Customize → City**. City views combine bundled OpenStreetMap footprints with stylized landmarks and artistic scenery, with windows that light up at night. Your choice is saved on this device. See [the city data notes](web/cities/README.md) to change the office centers and rebake the snapshots.
 
 ## Rooftop DJ
+
+<img src="docs/images/rooftop-party.jpg" alt="Rooftop party in demo mode with a robot DJ, illuminated dance floor, bar, and fire pit" width="640">
 
 The rooftop DJ plays what you're listening to. On a Mac, the office asks the Spotify app for its current song, then Apple Music, and shows it on the front of the DJ booth. With your music on, the DJ plays by day too; the full party (lights, fire, bar) still waits for dark. With nothing playing, the DJ spins its own office mix of made-up tracks.
 
