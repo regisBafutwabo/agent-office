@@ -6,6 +6,7 @@ import { readTranscript, MESSAGE_CHARS } from './transcript.js';
 const STALE_MS = 6 * 60 * 60 * 1000;   // forget sessions that went silent (crashed without SessionEnd)
 const RECENT_MAX = 200;
 const TRANSCRIPT_RECHECK_MS = 5_000;    // between prompts and stops, re-read the transcript at most this often
+const TASK_WAIT_MS = 2 * 60 * 1000;    // how long a launched Task/Agent call waits for its subagent to show up
 
 const clip = (s, n = 140) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 
@@ -54,7 +55,24 @@ export function isMerge(tool, input = {}) {
 }
 
 export class Store {
-  constructor(read = readTranscript) { this.sessions = new Map(); this.recent = []; this.read = read; this.transcriptChecks = new Map(); }
+  constructor(read = readTranscript) { this.sessions = new Map(); this.recent = []; this.read = read; this.transcriptChecks = new Map(); this.pendingTasks = new Map(); }
+
+  // SubagentStart has no task description, but the parent's Task/Agent call just before it does.
+  // Remember those calls and hand each new subagent the oldest one of its type.
+  rememberTask(sid, input, now) {
+    const q = (this.pendingTasks.get(sid) || []).filter(t => now - t.at < TASK_WAIT_MS);
+    q.push({ type: input?.subagent_type || '', task: clip(input?.description, 40), at: now });
+    this.pendingTasks.set(sid, q);
+  }
+
+  claimTask(sid, type, now) {
+    const q = (this.pendingTasks.get(sid) || []).filter(t => now - t.at < TASK_WAIT_MS);
+    let i = q.findIndex(t => t.type && t.type === type);
+    if (i < 0) i = q.findIndex(t => !t.type || !type);
+    const [t] = i < 0 ? [] : q.splice(i, 1);
+    this.pendingTasks.set(sid, q);
+    return t?.task || null;
+  }
 
   // The chat's title and last messages from its transcript; until it has a title, its first prompt stands in.
   // Returns true when the messages changed, so only those events carry them.
@@ -84,7 +102,7 @@ export class Store {
 
   prune() {
     const now = Date.now();
-    for (const [id, s] of this.sessions) if (now - s.lastEventAt > STALE_MS) { this.sessions.delete(id); this.transcriptChecks.delete(id); }
+    for (const [id, s] of this.sessions) if (now - s.lastEventAt > STALE_MS) { this.sessions.delete(id); this.transcriptChecks.delete(id); this.pendingTasks.delete(id); }
   }
 
   // A permission request answered from the office: the session (or subagent) stops waiting.
@@ -125,7 +143,9 @@ export class Store {
     const e = { type, sessionId: sid, at: now, agentId: p.agent_id || null, agentType: p.agent_type || null };
     // Internal helper agents (e.g. the desktop app's prompt suggestions) only report SubagentStop. They never did visible work, so skip them.
     if (type === 'SubagentStop' && e.agentId && !s.subagents[e.agentId]) return null;
-    const sub = e.agentId ? (s.subagents[e.agentId] ||= { id: e.agentId, type: e.agentType || 'subagent', status: 'thinking', activity: 'Starting', startedAt: now }) : null;
+    const sub = e.agentId ? (s.subagents[e.agentId] ||= { id: e.agentId, type: e.agentType || 'subagent', task: this.claimTask(sid, e.agentType, now),
+                                                          status: 'thinking', activity: 'Starting', startedAt: now }) : null;
+    if (sub) e.agentTask = sub.task;
     const target = sub || s;
 
     switch (type) {
@@ -133,7 +153,9 @@ export class Store {
       case 'UserPromptSubmit': e.prompt = clip(p.prompt, 160); s.merged = false; s.status = 'thinking'; s.activity = e.prompt || 'New prompt'; break;
       case 'PreToolUse':
         e.tool = p.tool_name; e.summary = summarizeTool(p.tool_name, p.tool_input, s.cwd);
-        target.status = 'working'; target.activity = `${e.tool}${e.summary ? ' ' + e.summary : ''}`; target.tool = e.tool; break;
+        target.status = 'working'; target.activity = `${e.tool}${e.summary ? ' ' + e.summary : ''}`; target.tool = e.tool;
+        if (!sub && (e.tool === 'Task' || e.tool === 'Agent')) this.rememberTask(sid, p.tool_input, now);
+        break;
       case 'PostToolUse': case 'PostToolUseFailure':
         e.tool = p.tool_name; e.summary = summarizeTool(p.tool_name, p.tool_input, s.cwd); e.failed = type === 'PostToolUseFailure';
         target.status = 'thinking'; target.activity = e.failed ? `${e.tool} failed` : 'Thinking'; target.tool = null;
@@ -151,7 +173,7 @@ export class Store {
       case 'SubagentStart': if (sub) { sub.status = 'thinking'; sub.activity = 'Starting'; } break;
       case 'SubagentStop': if (sub) { sub.status = 'done'; sub.activity = 'Reported back'; e.message = clip(p.last_assistant_message, 160); delete s.subagents[e.agentId]; } break;
       case 'PreCompact': s.status = 'working'; s.activity = 'Compacting context'; break;
-      case 'SessionEnd': e.reason = p.reason; this.sessions.delete(sid); this.transcriptChecks.delete(sid); break;
+      case 'SessionEnd': e.reason = p.reason; this.sessions.delete(sid); this.transcriptChecks.delete(sid); this.pendingTasks.delete(sid); break;
       default: break;
     }
     e.session = { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, cwd: s.cwd, project: s.project, title: s.title || null, merged: !!s.merged, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity };

@@ -39,6 +39,17 @@ test('routes subagent tool calls to the subagent and removes it when it stops', 
   assert.equal(st.snapshot().sessions[0].subagents.length, 0);
 });
 
+test('names subagents after the task they were given', () => {
+  const st = new Store();
+  const launch = (t, d) => st.ingest({ ...base, hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_input: { subagent_type: t, description: d } });
+  launch('Explore', 'Find cart code'); launch('Plan', 'Plan checkout');
+  assert.equal(st.ingest({ ...base, hook_event_name: 'SubagentStart', agent_id: 'p1', agent_type: 'Plan' }).agentTask, 'Plan checkout');
+  st.ingest({ ...base, hook_event_name: 'SubagentStart', agent_id: 'x1', agent_type: 'Explore' });
+  st.ingest({ ...base, hook_event_name: 'SubagentStart', agent_id: 'x2', agent_type: 'Explore' });
+  const subs = st.snapshot().sessions[0].subagents;
+  assert.equal(subs[1].task, 'Find cart code'); assert.equal(subs[2].task, null);
+});
+
 test('permission prompts mark the session as waiting and SessionEnd forgets it', () => {
   const st = new Store();
   st.ingest({ ...base, hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'Claude needs your permission to use Bash' });

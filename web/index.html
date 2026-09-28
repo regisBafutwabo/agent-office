@@ -2265,7 +2265,7 @@ function row(a) {
   const act = (a.where ? a.where + ' · ' : '') + a.activity + (a.pending.length ? ` · ${a.pending.length} queued` : '');
   return `<button class="agent-row${sub ? ' sub' : ''}${a === selected ? ' sel' : ''}" data-id="${a.id}">
     <span class="av" style="--c:${a.color}">${esc(a.name[0] || '?')}${a.live ? appBadge(a, 'av-app') : ''}</span>
-    <span class="who"><span class="nm">${esc(a.name)} <span class="proj">${sub ? 'subagent' : esc(a.project.key)}${a.live && !sub ? ` · <span class="entry">${whereFrom(a)}</span>` : ''}</span></span><span class="act">${esc(act)}</span></span>
+    <span class="who"><span class="nm">${esc(a.name)} <span class="proj">${sub ? esc(a.subType || 'subagent') : esc(a.project.key)}${a.live && !sub ? ` · <span class="entry">${whereFrom(a)}</span>` : ''}</span></span><span class="act">${esc(act)}</span></span>
     <span class="row-end">${!sub && a.live && hostName(a) ? `<span class="row-open" data-open="${a.id}" title="${esc(openLabel(a))}" aria-label="${esc(openLabel(a))}">${OPEN_ICON}</span>` : ''}<span class="pill s-${a.state}">${STATUS[a.state].label}</span></span></button>`;
 }
 function renderUI() {
@@ -2640,13 +2640,13 @@ function liveMain(s, instant) {
   buildCustomize(); renderJSON(); setModeLine();
   return a;
 }
-function liveSub(a, id, type, instant) {
+function liveSub(a, id, type, instant, task) {
   let sub = a.subs.get(id); if (sub) return sub;
   const fl = a.floor;
   let home = type === 'Plan' ? freeSpots(['meeting'], fl)[0] : null;
   if (!home) home = fl.deskSeats.filter(d => !d.by).sort((p, q) => Math.hypot(p.x - a.home.x, p.z - a.home.z) - Math.hypot(q.x - a.home.x, q.z - a.home.z))[0]
                  || freeSpots(['hightable', 'stool', 'sofa'], fl)[0] || pick(fl.SPOTS.stool);
-  sub = createAgent({ name: type || 'Subagent', kind: 'sub', subType: type || 'subagent', color: mix(a.color, '#ffffff', .35), home, parent: a, project: a.project, live: true, streak: 0, floor: fl });
+  sub = createAgent({ name: task || type || 'Subagent', kind: 'sub', subType: type || 'subagent', color: mix(a.color, '#ffffff', .35), home, parent: a, project: a.project, live: true, streak: 0, floor: fl });
   home.by = sub.id; sub.ws = home;
   if (instant) { sub.spot = home; sub.where = PLACE[home.type]; sub.g.position.set(home.x, 0, home.z); sub.yaw = sub.yawT = yawOf(home.face); }
   else { sub.spot = DOOR; sub.g.position.set(DOOR.x, 0, DOOR.z); sub.yaw = sub.yawT = -Math.PI / 2; sub.appear = 0; walkTo(sub, home).then(() => { sub.pose = poseFor(sub); }); }
@@ -2682,7 +2682,7 @@ function onLiveEvent(e, replay) {
   if (s.messages) { a.messages = s.messages; if (a === selected) detailDirty = true; }
   if ('merged' in s) a.merged = !!s.merged;
   a.permissionMode = s.permissionMode;
-  const who = e.agentId ? liveSub(a, e.agentId, e.agentType, replay) : a;
+  const who = e.agentId ? liveSub(a, e.agentId, e.agentType, replay, e.agentTask) : a;
   const label = `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}`;
   switch (e.type) {
     case 'SessionStart': emit(a, 'SessionStart', `${whereFrom(a)} · ${a.cwd}`, e.at); break;
@@ -2740,7 +2740,7 @@ function onSnapshot(msg) {
     a.merged = !!s.merged;
     if (s.messages) a.messages = s.messages;
     applyStatus(a, s.status, s.activity);
-    for (const sub of s.subagents || []) { const x = liveSub(a, sub.id, sub.type, true); applyStatus(x, sub.status, sub.activity); }
+    for (const sub of s.subagents || []) { const x = liveSub(a, sub.id, sub.type, true, sub.task); applyStatus(x, sub.status, sub.activity); }
   }
   for (const e of msg.recent || []) {                       // refill the feed without replaying movement
     const a = live.byId.get(e.sessionId); if (!a) continue;

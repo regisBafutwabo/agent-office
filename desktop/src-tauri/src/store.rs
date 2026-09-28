@@ -11,6 +11,7 @@ use crate::transcript::{read_transcript, Message, Transcript, MESSAGE_CHARS};
 const STALE_MS: u64 = 6 * 60 * 60 * 1000; // forget sessions that went silent (crashed without SessionEnd)
 const RECENT_MAX: usize = 200;
 const TRANSCRIPT_RECHECK_MS: u64 = 5_000; // between prompts and stops, re-read the transcript at most this often
+const TASK_WAIT_MS: u64 = 2 * 60 * 1000; // how long a launched Task/Agent call waits for its subagent to show up
 
 pub fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
@@ -133,6 +134,8 @@ pub struct Subagent {
     pub id: String,
     #[serde(rename = "type")]
     pub kind: String,
+    /// What the parent asked it to do (the Task/Agent call's description).
+    pub task: Option<String>,
     pub status: String,
     pub activity: String,
     pub started_at: u64,
@@ -172,6 +175,26 @@ pub struct Session {
     pub first_prompt: Option<String>,
     #[serde(skip)]
     pub transcript_checked_at: u64,
+    /// Task/Agent calls whose subagent hasn't started yet (see claim_task).
+    #[serde(skip)]
+    pub pending_tasks: Vec<PendingTask>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PendingTask {
+    kind: String,
+    task: String,
+    at: u64,
+}
+
+/// SubagentStart has no task description, but the parent's Task/Agent call just before it does.
+/// Hand each new subagent the oldest remembered call of its type.
+fn claim_task(s: &mut Session, kind: &str, now: u64) -> Option<String> {
+    s.pending_tasks.retain(|t| now - t.at < TASK_WAIT_MS);
+    let i = s.pending_tasks.iter().position(|t| !t.kind.is_empty() && t.kind == kind)
+        .or_else(|| s.pending_tasks.iter().position(|t| t.kind.is_empty() || kind.is_empty()))?;
+    let t = s.pending_tasks.remove(i);
+    if t.task.is_empty() { None } else { Some(t.task) }
 }
 
 /// Where a hook came from (headers sent by the hook scripts).
@@ -273,7 +296,7 @@ impl Store {
                     status: "idle".into(), activity: "Session started".into(),
                     permission_mode: if pm.is_empty() { "default".into() } else { pm.into() }, subagents: vec![], tool: None,
                     app: None, term: None, tty: None, chat: None,
-                    title: None, merged: false, messages: vec![], transcript_title: None, first_prompt: None, transcript_checked_at: 0,
+                    title: None, merged: false, messages: vec![], transcript_title: None, first_prompt: None, transcript_checked_at: 0, pending_tasks: vec![],
                 });
                 self.sessions.len() - 1
             }
@@ -339,14 +362,18 @@ impl Store {
             Some(match s.subagents.iter().position(|a| a.id == agent_id) {
                 Some(i) => i,
                 None => {
+                    let task = claim_task(s, agent_type, now);
                     s.subagents.push(Subagent {
-                        id: agent_id.into(), kind: if agent_type.is_empty() { "subagent".into() } else { agent_type.into() },
+                        id: agent_id.into(), kind: if agent_type.is_empty() { "subagent".into() } else { agent_type.into() }, task,
                         status: "thinking".into(), activity: "Starting".into(), started_at: now,
                     });
                     s.subagents.len() - 1
                 }
             })
         };
+        if let Some(i) = sub {
+            e.insert("agentTask".into(), s.subagents[i].task.clone().map_or(Value::Null, Value::from));
+        }
         let tool = str_of(p, "tool_name");
         let summary = summarize_tool(tool, p.get("tool_input").unwrap_or(&Value::Null), &cwd);
         let label = if summary.is_empty() { tool.to_string() } else { format!("{tool} {summary}") };
@@ -372,6 +399,11 @@ impl Store {
                 set_status(s, sub, "working", label);
                 if sub.is_none() {
                     s.tool = Some(tool.into());
+                    if tool == "Task" || tool == "Agent" {
+                        let input = p.get("tool_input").unwrap_or(&Value::Null);
+                        s.pending_tasks.retain(|t| now - t.at < TASK_WAIT_MS);
+                        s.pending_tasks.push(PendingTask { kind: str_of(input, "subagent_type").into(), task: clip(str_of(input, "description"), 40), at: now });
+                    }
                 }
             }
             "PostToolUse" | "PostToolUseFailure" => {
@@ -498,6 +530,20 @@ mod tests {
         assert_eq!(st.sessions[0].status, "idle");
         st.ingest(&base(json!({ "hook_event_name": "SubagentStop", "agent_id": "x1" })), None, None);
         assert!(st.sessions[0].subagents.is_empty());
+    }
+
+    #[test]
+    fn names_subagents_after_the_task_they_were_given() {
+        let mut st = Store::default();
+        let launch = |t: &str, d: &str| base(json!({ "hook_event_name": "PreToolUse", "tool_name": "Agent", "tool_input": { "subagent_type": t, "description": d } }));
+        st.ingest(&launch("Explore", "Find cart code"), None, None);
+        st.ingest(&launch("Plan", "Plan checkout"), None, None);
+        let e = st.ingest(&base(json!({ "hook_event_name": "SubagentStart", "agent_id": "p1", "agent_type": "Plan" })), None, None).unwrap();
+        assert_eq!(e["agentTask"], "Plan checkout");
+        st.ingest(&base(json!({ "hook_event_name": "SubagentStart", "agent_id": "x1", "agent_type": "Explore" })), None, None);
+        assert_eq!(st.sessions[0].subagents[1].task.as_deref(), Some("Find cart code"));
+        st.ingest(&base(json!({ "hook_event_name": "SubagentStart", "agent_id": "x2", "agent_type": "Explore" })), None, None);
+        assert_eq!(st.sessions[0].subagents[2].task, None);
     }
 
     #[test]
