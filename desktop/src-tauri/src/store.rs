@@ -6,8 +6,12 @@ use std::collections::VecDeque;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::transcript::{read_transcript, Message, Transcript, MESSAGE_CHARS};
+
 const STALE_MS: u64 = 6 * 60 * 60 * 1000; // forget sessions that went silent (crashed without SessionEnd)
 const RECENT_MAX: usize = 200;
+const TRANSCRIPT_RECHECK_MS: u64 = 5_000; // between prompts and stops, re-read the transcript at most this often
+const TASK_WAIT_MS: u64 = 2 * 60 * 1000; // how long a launched Task/Agent call waits for its subagent to show up
 
 pub fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
@@ -39,6 +43,44 @@ fn str_of<'a>(v: &'a Value, k: &str) -> &'a str {
 }
 
 /// A short human description of what a tool call is doing.
+/// A tool call that merges work: a PR merge (gh or a GitHub MCP tool), or merging a branch. Mirrors isMerge in bridge/store.js:
+/// pulling main into a branch is only syncing, and `gh pr merge --auto` merges later, so neither counts.
+pub fn is_merge(tool: &str, input: &Value) -> bool {
+    if tool.starts_with("mcp__") {
+        return tool.contains("merge_pull_request") || tool.ends_with("merge_pr");
+    }
+    if tool != "Bash" {
+        return false;
+    }
+    let is_sync = |r: &str| matches!(r, "main" | "master" | "trunk" | "develop") || r.starts_with("origin/") || r.starts_with("upstream/");
+    let cmd = str_of(input, "command").replace("&&", ";").replace("||", ";").replace(['|', '\n'], ";");
+    cmd.split(';').any(|part| {
+        let mut w: Vec<&str> = part.split_whitespace().collect();
+        while w.first().is_some_and(|t| t.split_once('=').is_some_and(|(k, _)| !k.is_empty() && k.chars().all(|c| c.is_alphanumeric() || c == '_'))) {
+            w.remove(0);
+        }
+        match w.first().copied() {
+            Some("gh") => w.get(1) == Some(&"pr") && w.get(2) == Some(&"merge") && !w.contains(&"--auto") && !w.contains(&"--disable-auto"),
+            Some("git") => {
+                let mut i = 1;
+                while i < w.len() && w[i].starts_with('-') {
+                    i += if w[i] == "-C" || w[i] == "-c" { 2 } else { 1 };
+                }
+                if w.get(i) != Some(&"merge") {
+                    return false;
+                }
+                let args = &w[i + 1..];
+                if args.contains(&"--abort") || args.contains(&"--quit") {
+                    return false;
+                }
+                let refs: Vec<&str> = args.iter().filter(|x| !x.starts_with('-')).map(|x| x.trim_matches(|c| c == '"' || c == '\'')).collect();
+                args.contains(&"--continue") || (!refs.is_empty() && !refs.iter().any(|r| is_sync(r)))
+            }
+            _ => false,
+        }
+    })
+}
+
 pub fn summarize_tool(name: &str, input: &Value, cwd: &str) -> String {
     let rel = |p: &str| -> String {
         if p.is_empty() {
@@ -92,6 +134,8 @@ pub struct Subagent {
     pub id: String,
     #[serde(rename = "type")]
     pub kind: String,
+    /// What the parent asked it to do (the Task/Agent call's description).
+    pub task: Option<String>,
     pub status: String,
     pub activity: String,
     pub started_at: u64,
@@ -119,6 +163,38 @@ pub struct Session {
     pub tty: Option<String>,
     /// The Claude desktop app's chat id, so "Open chat" lands on this exact conversation.
     pub chat: Option<String>,
+    /// The chat's title (from its transcript), or its first prompt until it has one.
+    pub title: Option<String>,
+    /// A merge ran since the last prompt (see is_merge).
+    pub merged: bool,
+    /// The chat's last few messages (see transcript.rs).
+    pub messages: Vec<Message>,
+    #[serde(skip)]
+    pub transcript_title: Option<String>,
+    #[serde(skip)]
+    pub first_prompt: Option<String>,
+    #[serde(skip)]
+    pub transcript_checked_at: u64,
+    /// Task/Agent calls whose subagent hasn't started yet (see claim_task).
+    #[serde(skip)]
+    pub pending_tasks: Vec<PendingTask>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PendingTask {
+    kind: String,
+    task: String,
+    at: u64,
+}
+
+/// SubagentStart has no task description, but the parent's Task/Agent call just before it does.
+/// Hand each new subagent the oldest remembered call of its type.
+fn claim_task(s: &mut Session, kind: &str, now: u64) -> Option<String> {
+    s.pending_tasks.retain(|t| now - t.at < TASK_WAIT_MS);
+    let i = s.pending_tasks.iter().position(|t| !t.kind.is_empty() && t.kind == kind)
+        .or_else(|| s.pending_tasks.iter().position(|t| t.kind.is_empty() || kind.is_empty()))?;
+    let t = s.pending_tasks.remove(i);
+    if t.task.is_empty() { None } else { Some(t.task) }
 }
 
 /// Where a hook came from (headers sent by the hook scripts).
@@ -134,6 +210,8 @@ pub struct Origin<'a> {
 pub struct Store {
     pub sessions: Vec<Session>,
     recent: VecDeque<Value>,
+    /// Reads a transcript's title and messages; tests swap in a fake.
+    pub read: Option<fn(&str) -> Option<Transcript>>,
 }
 
 fn set_status(s: &mut Session, sub: Option<usize>, status: &str, activity: String) {
@@ -182,7 +260,7 @@ impl Store {
         }
         let event = json!({
             "type": "PermissionResolved", "sessionId": session_id, "at": now_ms(), "agentId": agent_id, "agentType": null, "message": activity,
-            "session": { "id": s.id, "agent": s.agent, "cwd": s.cwd, "project": s.project, "entrypoint": s.entrypoint,
+            "session": { "id": s.id, "agent": s.agent, "cwd": s.cwd, "project": s.project, "title": s.title, "entrypoint": s.entrypoint,
                          "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity },
         });
         self.recent.push_back(event.clone());
@@ -218,12 +296,15 @@ impl Store {
                     status: "idle".into(), activity: "Session started".into(),
                     permission_mode: if pm.is_empty() { "default".into() } else { pm.into() }, subagents: vec![], tool: None,
                     app: None, term: None, tty: None, chat: None,
+                    title: None, merged: false, messages: vec![], transcript_title: None, first_prompt: None, transcript_checked_at: 0, pending_tasks: vec![],
                 });
                 self.sessions.len() - 1
             }
         };
         let agent_id = str_of(p, "agent_id");
         let agent_type = str_of(p, "agent_type");
+        let read = self.read.unwrap_or(read_transcript);
+        let chat_changed;
         {
             let s = &mut self.sessions[idx];
             s.last_event_at = now;
@@ -238,6 +319,28 @@ impl Store {
             if let Some(t) = origin.term.filter(|t| !t.is_empty()) { s.term = Some(t.into()); }
             if let Some(t) = origin.tty.filter(|t| crate::focus::valid_tty(t)) { s.tty = Some(t.into()); }
             if let Some(c) = origin.chat.filter(|c| crate::focus::valid_chat(c)) { s.chat = Some(c.into()); }
+            // The chat's title and last messages from its transcript; until it has a title, its first prompt stands in.
+            let before = s.messages.clone();
+            let prompt = str_of(p, "prompt");
+            if kind == "UserPromptSubmit" && !prompt.is_empty() {
+                if s.first_prompt.is_none() { s.first_prompt = Some(clip(prompt, 80)); }
+                // The hook can fire before the prompt reaches the transcript: show it right away.
+                let text = clip(prompt, MESSAGE_CHARS);
+                if s.messages.last().is_none_or(|m| m.role != "user" || m.text != text) {
+                    s.messages.push(Message { role: "user".into(), text });
+                }
+            }
+            let tp = str_of(p, "transcript_path");
+            let due = matches!(kind, "SessionStart" | "UserPromptSubmit" | "Stop") || now.saturating_sub(s.transcript_checked_at) > TRANSCRIPT_RECHECK_MS;
+            if !tp.is_empty() && due {
+                s.transcript_checked_at = now;
+                if let Some(t) = read(tp) {
+                    if t.title.is_some() { s.transcript_title = t.title; }
+                    if !t.messages.is_empty() && kind != "UserPromptSubmit" { s.messages = t.messages; }
+                }
+            }
+            s.title = s.transcript_title.clone().or_else(|| s.first_prompt.clone());
+            chat_changed = s.messages != before;
             // Internal helper agents (e.g. the desktop app's prompt suggestions) only report SubagentStop. They never did visible work, so skip them.
             if kind == "SubagentStop" && !agent_id.is_empty() && !s.subagents.iter().any(|a| a.id == agent_id) {
                 return None;
@@ -259,14 +362,18 @@ impl Store {
             Some(match s.subagents.iter().position(|a| a.id == agent_id) {
                 Some(i) => i,
                 None => {
+                    let task = claim_task(s, agent_type, now);
                     s.subagents.push(Subagent {
-                        id: agent_id.into(), kind: if agent_type.is_empty() { "subagent".into() } else { agent_type.into() },
+                        id: agent_id.into(), kind: if agent_type.is_empty() { "subagent".into() } else { agent_type.into() }, task,
                         status: "thinking".into(), activity: "Starting".into(), started_at: now,
                     });
                     s.subagents.len() - 1
                 }
             })
         };
+        if let Some(i) = sub {
+            e.insert("agentTask".into(), s.subagents[i].task.clone().map_or(Value::Null, Value::from));
+        }
         let tool = str_of(p, "tool_name");
         let summary = summarize_tool(tool, p.get("tool_input").unwrap_or(&Value::Null), &cwd);
         let label = if summary.is_empty() { tool.to_string() } else { format!("{tool} {summary}") };
@@ -281,6 +388,7 @@ impl Store {
             }
             "UserPromptSubmit" => {
                 let prompt = clip(str_of(p, "prompt"), 160);
+                s.merged = false;
                 s.status = "thinking".into();
                 s.activity = if prompt.is_empty() { "New prompt".into() } else { prompt.clone() };
                 e.insert("prompt".into(), prompt.into());
@@ -291,6 +399,11 @@ impl Store {
                 set_status(s, sub, "working", label);
                 if sub.is_none() {
                     s.tool = Some(tool.into());
+                    if tool == "Task" || tool == "Agent" {
+                        let input = p.get("tool_input").unwrap_or(&Value::Null);
+                        s.pending_tasks.retain(|t| now - t.at < TASK_WAIT_MS);
+                        s.pending_tasks.push(PendingTask { kind: str_of(input, "subagent_type").into(), task: clip(str_of(input, "description"), 40), at: now });
+                    }
                 }
             }
             "PostToolUse" | "PostToolUseFailure" => {
@@ -299,6 +412,10 @@ impl Store {
                 e.insert("summary".into(), summary.clone().into());
                 e.insert("failed".into(), failed.into());
                 set_status(s, sub, "thinking", if failed { format!("{tool} failed") } else { "Thinking".into() });
+                if !failed && is_merge(tool, p.get("tool_input").unwrap_or(&Value::Null)) {
+                    e.insert("merged".into(), true.into());
+                    s.merged = true;
+                }
                 if sub.is_none() {
                     s.tool = None;
                 }
@@ -323,7 +440,7 @@ impl Store {
             }
             "Stop" => {
                 s.status = "done".into();
-                s.activity = "Finished".into();
+                s.activity = if s.merged { "Finished · merged".into() } else { "Finished".into() };
                 s.tool = None;
             }
             "SubagentStart" => {
@@ -349,9 +466,12 @@ impl Store {
             _ => {}
         }
         e.insert("session".into(), json!({
-            "id": s.id, "agent": s.agent, "cwd": s.cwd, "project": s.project, "entrypoint": s.entrypoint,
+            "id": s.id, "agent": s.agent, "cwd": s.cwd, "project": s.project, "title": s.title, "merged": s.merged, "entrypoint": s.entrypoint,
             "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": s.app, "term": s.term, "chat": s.chat,
         }));
+        if chat_changed {
+            if let Some(Value::Object(o)) = e.get_mut("session") { o.insert("messages".into(), json!(s.messages)); }
+        }
         if remove_session {
             self.sessions.remove(idx);
         }
@@ -413,6 +533,20 @@ mod tests {
     }
 
     #[test]
+    fn names_subagents_after_the_task_they_were_given() {
+        let mut st = Store::default();
+        let launch = |t: &str, d: &str| base(json!({ "hook_event_name": "PreToolUse", "tool_name": "Agent", "tool_input": { "subagent_type": t, "description": d } }));
+        st.ingest(&launch("Explore", "Find cart code"), None, None);
+        st.ingest(&launch("Plan", "Plan checkout"), None, None);
+        let e = st.ingest(&base(json!({ "hook_event_name": "SubagentStart", "agent_id": "p1", "agent_type": "Plan" })), None, None).unwrap();
+        assert_eq!(e["agentTask"], "Plan checkout");
+        st.ingest(&base(json!({ "hook_event_name": "SubagentStart", "agent_id": "x1", "agent_type": "Explore" })), None, None);
+        assert_eq!(st.sessions[0].subagents[1].task.as_deref(), Some("Find cart code"));
+        st.ingest(&base(json!({ "hook_event_name": "SubagentStart", "agent_id": "x2", "agent_type": "Explore" })), None, None);
+        assert_eq!(st.sessions[0].subagents[2].task, None);
+    }
+
+    #[test]
     fn permission_prompts_count_as_waiting_and_session_end_forgets_the_session() {
         let mut st = Store::default();
         st.ingest(&base(json!({ "hook_event_name": "Notification", "notification_type": "permission_prompt", "message": "Claude needs your permission to use Bash" })), None, None);
@@ -433,5 +567,62 @@ mod tests {
         let mut st = Store::default();
         assert!(st.ingest(&base(json!({ "hook_event_name": "SubagentStop", "agent_id": "helper" })), None, None).is_none());
         assert!(st.ingest(&json!({ "hook_event_name": "Stop" }), None, None).is_none());
+    }
+
+    #[test]
+    fn names_a_session_after_its_chat_title_or_first_prompt() {
+        fn untitled(_: &str) -> Option<Transcript> { None }
+        fn titled(_: &str) -> Option<Transcript> { Some(Transcript { title: Some("Fix cart total rounding".into()), messages: vec![] }) }
+        let mut st = Store::default();
+        st.read = Some(untitled);
+        let tp = "/Users/me/.claude/projects/shop/s1.jsonl";
+        let e = st.ingest(&base(json!({ "hook_event_name": "UserPromptSubmit", "prompt": "fix the   cart total", "transcript_path": tp })), None, None).unwrap();
+        assert_eq!(e["session"]["title"], "fix the cart total");
+        st.read = Some(titled);
+        let e = st.ingest(&base(json!({ "hook_event_name": "Stop", "transcript_path": tp })), None, None).unwrap();
+        assert_eq!(e["session"]["title"], "Fix cart total rounding");
+    }
+
+    #[test]
+    fn spots_merges_but_not_syncing_with_main_or_auto_merge() {
+        let bash = |c: &str| is_merge("Bash", &json!({ "command": c }));
+        assert!(bash("gh pr merge 42 --squash --delete-branch"));
+        assert!(bash("cd repo && GH_PROMPT_DISABLED=1 gh pr merge --merge"));
+        assert!(bash("git merge --no-ff feature/cart"));
+        assert!(bash("git -C ../shop merge --continue"));
+        assert!(is_merge("mcp__github__merge_pull_request", &json!({})));
+        assert!(!bash("gh pr merge 42 --auto --squash"));
+        assert!(!bash("git merge origin/main"));
+        assert!(!bash("git merge main"));
+        assert!(!bash("git merge --abort"));
+        assert!(!bash("git merge-base HEAD main"));
+        assert!(!bash("echo \"gh pr merge\""));
+        assert!(!is_merge("Read", &json!({ "file_path": "merge.ts" })));
+    }
+
+    #[test]
+    fn marks_the_session_merged_until_the_next_prompt() {
+        fn untitled(_: &str) -> Option<Transcript> { None }
+        let mut st = Store::default();
+        st.read = Some(untitled);
+        let e = st.ingest(&base(json!({ "hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_input": { "command": "gh pr merge 7 --squash" } })), None, None).unwrap();
+        assert_eq!((e["merged"].clone(), e["session"]["merged"].clone()), (json!(true), json!(true)));
+        assert_eq!(st.ingest(&base(json!({ "hook_event_name": "Stop" })), None, None).unwrap()["session"]["activity"], "Finished · merged");
+        assert_eq!(st.ingest(&base(json!({ "hook_event_name": "UserPromptSubmit", "prompt": "next" })), None, None).unwrap()["session"]["merged"], false);
+    }
+
+    #[test]
+    fn sends_the_chat_only_when_it_changes_and_shows_a_new_prompt_right_away() {
+        fn hi(_: &str) -> Option<Transcript> { Some(Transcript { title: None, messages: vec![Message { role: "assistant".into(), text: "Hi".into() }] }) }
+        let mut st = Store::default();
+        st.read = Some(hi);
+        let tp = json!({ "transcript_path": "/Users/me/.claude/projects/shop/s1.jsonl" });
+        let with = |extra: Value| { let mut v = base(tp.clone()); v.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone()); v };
+        let e = st.ingest(&with(json!({ "hook_event_name": "SessionStart" })), None, None).unwrap();
+        assert_eq!(e["session"]["messages"][0]["text"], "Hi");
+        let e = st.ingest(&with(json!({ "hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {} })), None, None).unwrap();
+        assert!(e["session"].get("messages").is_none());
+        let e = st.ingest(&with(json!({ "hook_event_name": "UserPromptSubmit", "prompt": "next" })), None, None).unwrap();
+        assert_eq!(e["session"]["messages"][1], json!({ "role": "user", "text": "next" }));
     }
 }

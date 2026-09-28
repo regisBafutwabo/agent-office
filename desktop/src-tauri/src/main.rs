@@ -5,9 +5,11 @@
 
 mod adapters;
 mod focus;
+mod music;
 mod server;
 mod setup;
 mod store;
+mod transcript;
 
 use serde_json::Value;
 use std::collections::HashMap;

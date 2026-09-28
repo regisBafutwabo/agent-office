@@ -176,6 +176,12 @@ pre.json{margin:0 4px;padding:10px 12px;background:var(--panel-2);border:1px sol
 .perm-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .perm-actions small{color:var(--muted);font-size:11.5px;margin-left:auto;font-variant-numeric:tabular-nums}
 .log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+.d-tabs{margin:14px 0 10px;border:1px solid var(--line)}
+.chat{list-style:none;margin:0;padding:0 2px 0 0;display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto;overscroll-behavior:contain}
+.chat li{max-width:88%;padding:8px 11px;border-radius:13px;font-size:12.5px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
+.chat .user{align-self:flex-end;background:color-mix(in srgb,var(--accent) 16%,transparent);border-bottom-right-radius:4px}
+.chat .assistant{align-self:flex-start;background:var(--panel-2);border:1px solid var(--line);border-bottom-left-radius:4px}
+.chat .empty{align-self:stretch;max-width:none;padding:2px 0;color:var(--muted)}
 .log li{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:8px;align-items:center;font-size:12px}
 .log time{font:400 11px var(--font-m);color:var(--muted);font-variant-numeric:tabular-nums}
 .log .what{font:400 11.5px var(--font-m);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -215,6 +221,8 @@ pre.json{margin:0 4px;padding:10px 12px;background:var(--panel-2);border:1px sol
 .av-app.mono{display:grid;place-items:center;background:var(--ink);color:var(--panel);font:700 8px/1 var(--font-d)}
 .fl-num.wait{background:var(--s-wait);color:#1B1206;animation:flpulse 1.2s ease-in-out infinite}
 @keyframes flpulse{50%{filter:brightness(1.25)}}
+.fl-num.party{background:linear-gradient(120deg,#FF4FA3,#7C6CF2,#3DCBE0,#F5B342,#FF4FA3);background-size:300% 100%;color:#fff;animation:flparty 3s linear infinite}
+@keyframes flparty{to{background-position:-300% 0}}
 .fl-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
 .fl-dots{display:flex;gap:3px}
 .fl-dots i{width:8px;height:8px;border-radius:50%;background:var(--c)}
@@ -266,7 +274,7 @@ body.live .speed-top, body.live .demo-only{display:none}
   .detail{top:118px}
 }
 @media (prefers-reduced-motion: reduce){
-  .pill.s-waiting,.toast,.fl-num.wait,.fl-apps.wait{animation:none}
+  .pill.s-waiting,.toast,.fl-num.wait,.fl-num.party,.fl-apps.wait{animation:none}
 }
 </style>
 
@@ -379,8 +387,12 @@ body.live .speed-top, body.live .demo-only{display:none}
       </div>
     </div>
     <p class="d-note" id="d-note" hidden></p>
-    <p class="d-label">Recent hook events</p>
-    <ol class="log" id="d-log"></ol>
+    <div class="seg d-tabs" role="tablist" aria-label="Agent details">
+      <button role="tab" id="d-tab-chat" data-tab="chat" aria-controls="d-chat">Chat</button>
+      <button role="tab" id="d-tab-activity" data-tab="activity" aria-controls="d-log">Activity</button>
+    </div>
+    <ol class="chat" id="d-chat" role="tabpanel" aria-labelledby="d-tab-chat"></ol>
+    <ol class="log" id="d-log" role="tabpanel" aria-labelledby="d-tab-activity"></ol>
     <form class="d-form" id="d-form">
       <input type="text" id="d-prompt" autocomplete="off" placeholder="Give this agent a task">
       <button class="btn primary" type="submit">Send</button>
@@ -495,7 +507,7 @@ const SCENES = {
 const PLACE = { desk:'Desk', sofa:'Lounge sofa', armchair:'Lounge chair', pouf:'Pouf', stool:'Café counter', hightable:'Hot desk',
   booth:'Focus booth', meeting:'War room', library:'Library', coffee:'Coffee bar', hoops:'Basketball machine', beanbag:'Beanbag' };
 const LOUNGE_WORK = ['sofa','armchair','hightable','stool','booth'];
-Object.assign(PLACE, { roofsofa:'Sofa', roofchair:'Lounge chair', barstool:'Bar', firepit:'Fire pit', lounger:'Sun lounger', rail:'View' });
+Object.assign(PLACE, { roofsofa:'Sofa', roofchair:'Lounge chair', barstool:'Bar', firepit:'Fire pit', lounger:'Sun lounger', rail:'View', dance:'Dance floor' });
 const IDLE_ACTIVITY = { coffee:'Making a flat white', hoops:'Shooting hoops', beanbag:'Lounging on a beanbag', pouf:'Chatting in the lounge', sofa:'Relaxing on the sofa' };
 const PREFS = { anywhere:'Anywhere', desk:'Own desk', lounge:'Lounge first' };
 
@@ -670,6 +682,7 @@ curtainWall(14.1, 0, 18.4, false, fadeGlass, fadeFrame, shell);
 // It lives in roofGroup (on top of the highest floor) and has its own walkable grid.
 const ROOF_Y = 3.9;                                            // deck height inside roofGroup
 const ROOF_SPOTS = [], roofLights = [];
+const PARTY = { group: new THREE.Group(), booth: new THREE.Group(), fade: [], tiles: [], beams: [], decks: [] };   // after-dark extras, filled in below
 function roofSpot(type, x, z, face, o = {}) { const s = Object.assign({ type, x, z, face, by: null, from: 'back', y: 0, roof: true }, o); ROOF_SPOTS.push(s); return s; }
 const ROOF_LIFT = { x: 13.1, z: -1.8, face: [-1, 0], from: null, ax: 11.6, az: -1.8, roof: true };
 function RM(c, o = {}) { const m = M(c, Object.assign({ transparent: true, opacity: 0 }, o)); shellMats.push(m); return m; }
@@ -760,6 +773,67 @@ const rLine = new THREE.LineBasicMaterial({ color: '#2B3035', transparent: true,
   tree(-13.0, 8.2); tree(13.0, 8.2, .9); tree(-13.0, -1.2, .9); tree(-5.6, 2.2, .8); tree(12.9, -7.9, .8);
   box(7.2, .5, .7, rPlanter, 8.2, Y + .25, 8.6, R); block(8.2, 8.6, 7.2, .7, .1);
   for (let k = 0; k < 14; k++) { const l = box(.05, rand(.4, .7), .05, k % 2 ? rLeaf : rLeaf2, 4.9 + k * .48, Y + .7, 8.6 + rand(-.15, .15), R); l.rotation.z = rand(-.3, .3); }
+  // DJ booth with speakers, facing the dance floor. The decks sit idle by day; after dark a DJ plays (see updateParty).
+  const DJ = [-1.5, -3.1];
+  box(2.4, .95, .8, rMetal, DJ[0], Y + .48, DJ[1], R); box(2.5, .05, .9, rWood, DJ[0], Y + .98, DJ[1], R); block(DJ[0], DJ[1], 2.5, .9, .2);
+  PARTY.decks = [-.55, .55].map(dx => { const p = cyl(.32, .32, .04, rDoor, DJ[0] + dx, Y + 1.03, DJ[1], R, 24); box(.28, .012, .04, rTop, .14, .026, 0, p, false); return p; });
+  [-1, 1].forEach(s => { const x = DJ[0] + s * 1.75;
+    box(.7, 1.3, .6, rDoor, x, Y + .65, DJ[1] + .05, R); block(x, DJ[1] + .05, .7, .6, .1);
+    [[.95, .12], [.45, .21]].forEach(([h, r]) => { const c = cyl(r, r, .03, rStone, x, Y + h, DJ[1] + .36, R, 20); c.rotation.x = Math.PI / 2; }); });
+  // the party itself only shows after dark; the DJ and the booth screen also play by day while your music is on
+  const N = PARTY.group; R.add(N); N.visible = false;
+  const B = PARTY.booth; R.add(B); B.visible = false;
+  const glow = (c, op = 1) => { const m = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0, depthWrite: false }); PARTY.fade.push([m, op]); return m; };
+  { const s = canvasTex(512, 160), m = glow('#FFFFFF'); m.map = s.t; PARTY.screen = s;   // now playing, on the front of the booth
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(2.2, .69), m); p.position.set(DJ[0], Y + .5, DJ[1] + .41); B.add(p); }
+  // dance floor: a grid of light tiles in front of the booth, and spots to dance on. When it fills up it grows toward
+  // the loungers, two rows at a time; an extension only shows while someone dances on it (or on one past it).
+  const danceRows = (j0, parent) => { for (let i = 0; i < 5; i++) for (let j = j0; j < j0 + 2; j++) {
+    const m = new THREE.MeshBasicMaterial({ color: '#15191C', transparent: true, opacity: 0 }); shellMats.push(m);
+    PARTY.tiles.push(box(.76, .03, .76, m, DJ[0] - 1.6 + i * .8, Y + .015, -2.1 + j * .8, parent, false)); } };
+  danceRows(0, N); danceRows(2, N);
+  [[-3.0, -1.5], [-1.5, -1.5], [0, -1.5], [-2.25, .1], [-.75, .1]].forEach(([x, z]) => roofSpot('dance', x, z, [0, -1], { from: null, night: true }));
+  PARTY.more = [[[-3.0, 1.7], [-1.5, 1.7], [0, 1.7]], [[-2.25, 3.3], [-.75, 3.3]]].map((pts, k) => {
+    const g = new THREE.Group(); g.visible = false; N.add(g); danceRows(4 + k * 2, g);
+    return { g, spots: pts.map(([x, z]) => roofSpot('dance', x, z, [0, -1], { from: null, night: true, ext: k + 1 })) }; });
+  // light beams sweeping over the dance floor from the speakers, plus a coloured light
+  [-1, 1].forEach(s => { const yaw = new THREE.Group(); yaw.position.set(DJ[0] + s * 1.75, Y + 1.32, DJ[1] + .1); N.add(yaw);
+    const pitch = new THREE.Group(); pitch.rotation.x = -1.05; yaw.add(pitch);
+    const geo = new THREE.ConeGeometry(.55, 4, 16, 1, true); geo.translate(0, -2, 0);
+    const m = glow('#FF4FA3', .16); pitch.add(new THREE.Mesh(geo, m)); PARTY.beams.push({ yaw, m, s }); });
+  PARTY.disco = new THREE.PointLight('#FF4FA3', 0, 8, 1.6); PARTY.disco.position.set(DJ[0], Y + 2.3, -.5); N.add(PARTY.disco);
+  // fire pit flames
+  PARTY.flames = [['#FF6A1A', .42, .9], ['#FFA42E', .3, .7], ['#FFE27A', .16, .45]].map(([c, r, h]) => {
+    const f = new THREE.Mesh(new THREE.ConeGeometry(r, h, 10, 1, true), glow(c, .85)); f.geometry.translate(0, h / 2, 0); f.position.set(FP[0], Y + .4, FP[1]); N.add(f); return f; });
+  PARTY.fire = fire;
+  // the bar opens: neon sign on the pergola and a warm glow along the counter
+  { const s = canvasTex(256, 96); s.x.font = '700 64px "Bricolage Grotesque", sans-serif'; s.x.textAlign = 'center';
+    s.x.shadowColor = '#FF4FA3'; s.x.shadowBlur = 18; s.x.fillStyle = '#FFD6EA'; s.x.fillText('BAR', 128, 70); s.x.fillText('BAR', 128, 70);
+    const m = glow('#FFFFFF'); m.map = s.t; PARTY.sign = m;
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(1.5, .56), m); p.position.set(4.5, Y + 2.3, -3.22); N.add(p); }
+  box(5.6, .05, .04, glow('#FFB45E', .9), 4.5, Y + .12, -5.03, N, false);
+  // two robots on shift: the DJ behind the decks, a bartender behind the counter
+  const bot = (x, z, body, eye, parent = N) => {
+    const g = grp(x, z, 0, parent); g.position.y = Y;
+    const pivot = new THREE.Group(); g.add(pivot);
+    [-.13, .13].forEach(lx => cyl(.09, .11, .5, rMetal, lx, .25, 0, g, 10));
+    part(roundedBox(.62, .66, .42, .16), body, pivot, 0, .86, 0, false);
+    const head = new THREE.Group(); head.position.y = 1.44; pivot.add(head);
+    part(roundedBox(.62, .5, .5, .14), body, head, 0, 0, 0, false);
+    const f = canvasTex(128, 96); f.x.fillStyle = '#0E1A20'; rrect(f.x, 0, 0, 128, 96, 22); f.x.fill();
+    f.x.strokeStyle = eye; f.x.lineWidth = 9; f.x.lineCap = 'round'; f.x.shadowColor = eye; f.x.shadowBlur = 10;
+    [40, 88].forEach(ex => { f.x.beginPath(); f.x.arc(ex, 52, 13, Math.PI * 1.1, Math.PI * 1.9); f.x.stroke(); });
+    const fm = new THREE.MeshBasicMaterial({ map: f.t, transparent: true, opacity: 0 }); shellMats.push(fm);
+    part(new THREE.PlaneGeometry(.5, .36), fm, head, 0, 0, .3, false);
+    const arm = s => { const p = new THREE.Group(); p.position.set(s * .39, 1.12, 0); pivot.add(p); part(new THREE.BoxGeometry(.13, .5, .13), body, p, 0, -.22, 0, false); return p; };
+    return { pivot, head, armL: arm(-1), armR: arm(1) };
+  };
+  PARTY.dj = bot(DJ[0], DJ[1] - .75, rSage, '#8BE9F5', B);
+  { const h = PARTY.dj.head; part(new THREE.TorusGeometry(.36, .05, 8, 16, Math.PI), rDoor, h, 0, .02, 0, false);
+    [-1, 1].forEach(s => { const c = part(new THREE.CylinderGeometry(.13, .13, .1, 14), rAccent, h, s * .35, 0, 0, false); c.rotation.z = Math.PI / 2; }); }
+  PARTY.barkeep = bot(4.5, -6.05, rCushion, '#FFC867');
+  part(new THREE.BoxGeometry(.2, .1, .05), rAccent, PARTY.barkeep.head.parent, 0, 1.12, .22, false);
+  part(new THREE.CylinderGeometry(.07, .06, .24, 10), rTop, PARTY.barkeep.armR, 0, -.5, .04, false);
   blocked = blockedInterior;
 }
 [shell, roofGroup].forEach(g => { g.traverse(o => { if (o.isMesh) o.castShadow = false; }); g.visible = false; });
@@ -780,6 +854,59 @@ function updateShell() {
   const solid = t > .99;
   shellMats.forEach(m => { if (m.transparent === solid) { m.transparent = !solid; m.depthWrite = solid; m.needsUpdate = true; } });
   mats.window.opacity = .1 + .18 * t;
+}
+/* ---------- rooftop party: after dark a DJ plays, the fire pit burns and the bar opens ---------- */
+let nightT = 0;                                                  // 0 by day, 1 at night (set by applyScene)
+const isParty = () => nightT > .5;
+const BPM = 118, partyBeat = () => performance.now() / 1000 * BPM / 60;
+const PARTY_COLORS = ['#FF4FA3', '#7C6CF2', '#3DCBE0', '#F5B342', '#52C96F'];
+let partyBar = -1;
+// What the DJ plays: your Spotify song, else your Apple Music song (the server asks the apps on this Mac),
+// else plan B, DJ Bot's own office mix, a new made-up track every few minutes.
+let music = null;
+const DJ_MIX = ['Merge Conflict (Club Mix)', 'Green Checks', 'Rebase at Midnight', 'Hotfix Hustle', 'Standup Shuffle',
+  'Null Pointer Groove', 'Lint Free', 'Ship It Friday', '404 Love', 'Cache Me Outside', 'Works On My Machine', 'Deploy Disco'];
+const MUSIC_LOOK = { spotify: ['NOW PLAYING ON SPOTIFY', '#1ED760'], music: ['NOW PLAYING ON APPLE MUSIC', '#FA586A'], mix: ["DJ BOT'S OFFICE MIX", '#8BE9F5'] };
+const nowPlaying = () => music || { source: 'mix', title: DJ_MIX[Math.floor(Date.now() / 200_000) % DJ_MIX.length], artist: 'DJ Bot' };
+let screenKey = '';
+function drawDjScreen(np) {
+  const key = `${np.source}|${np.title}|${np.artist}`; if (key === screenKey) return; screenKey = key;
+  const { x, t } = PARTY.screen, [label, col] = MUSIC_LOOK[np.source] || MUSIC_LOOK.mix;
+  const fit = (text, w) => { if (x.measureText(text).width <= w) return text;
+    while (text.length > 1 && x.measureText(text + '…').width > w) text = text.slice(0, -1); return text.trimEnd() + '…'; };
+  x.clearRect(0, 0, 512, 160); x.fillStyle = '#0B1216'; rrect(x, 4, 4, 504, 152, 18); x.fill();
+  x.textAlign = 'center'; x.shadowColor = col; x.shadowBlur = 12; x.fillStyle = col;
+  x.font = '700 22px "Bricolage Grotesque", sans-serif'; x.fillText(`♪  ${label}  ♪`, 256, 40);
+  x.fillStyle = '#F4F7F8'; x.font = '700 46px "Bricolage Grotesque", sans-serif'; x.fillText(fit(np.title, 470), 256, 94);
+  x.shadowBlur = 0; x.fillStyle = '#AFC0C7'; x.font = '500 28px "Bricolage Grotesque", sans-serif'; x.fillText(fit(np.artist || '', 470), 256, 134);
+  t.needsUpdate = true;
+}
+function updateParty(dt) {
+  PARTY.group.visible = isParty(); PARTY.booth.visible = isParty() || !!music;
+  if (!roofGroup.visible || !PARTY.booth.visible) return;
+  const t = performance.now() / 1000, beat = partyBeat(), pulse = Math.pow(1 - beat % 1, 3), o = Math.max(0, shellT), n = Math.floor(beat);
+  PARTY.fade.forEach(([m, op]) => m.opacity = op * o);
+  drawDjScreen(nowPlaying());
+  PARTY.decks.forEach(d => d.rotation.y += dt * 3.5);
+  const dj = PARTY.dj, bar = Math.floor(beat / 4) % 2;             // the DJ nods, works the decks, and every other bar throws a hand up
+  dj.pivot.position.y = pulse * .04; dj.head.rotation.x = .18 * pulse - .05;
+  dj.armL.rotation.x = -1.15 + Math.sin(t * 9) * .12;
+  dj.armR.rotation.x = bar ? -2.8 + .35 * pulse : -1.15 + Math.sin(t * 7 + 1) * .1;
+  if (!PARTY.group.visible) return;                                // by day that's all: no lights, fire or bar
+  PARTY.more.forEach((m, k) => m.g.visible = PARTY.more.slice(k).some(x => x.spots.some(s => s.by)));
+  if (n !== partyBar) {                                            // new beat: the dance floor changes colour
+    partyBar = n;
+    PARTY.tiles.forEach((tile, i) => { const c = PARTY_COLORS[(i * 7 + n * 3) % PARTY_COLORS.length];
+      tile.material.color.set(((i * 13 + n * 5) % 3) ? mix(c, '#15191C', .7) : c); });
+  }
+  const col = PARTY_COLORS[Math.floor(beat / 4) % PARTY_COLORS.length];
+  PARTY.beams.forEach(b => { b.yaw.rotation.y = b.s * .25 + Math.sin(t * 1.3 + b.s) * .55; b.m.color.set(col); b.m.opacity = .24 * o * (.55 + .45 * pulse); });
+  PARTY.disco.color.set(col); PARTY.disco.intensity = (.7 + .8 * pulse) * o;
+  PARTY.flames.forEach((f, i) => { f.scale.set(1 + .08 * Math.sin(t * 11 + i), 1 + .22 * Math.sin(t * (13 + i * 4)) * Math.sin(t * 7.1 + i), 1 + .08 * Math.cos(t * 9 + i)); f.rotation.y += dt * (i % 2 ? 1.5 : -1.1); });
+  PARTY.fire.intensity = 2.4 * o * (.85 + .15 * Math.sin(t * 23) * Math.sin(t * 7.3));
+  PARTY.sign.opacity = o * (Math.sin(t * 31) * Math.sin(t * 3.7) > .96 ? .45 : 1);   // the odd neon flicker
+  const bk = PARTY.barkeep;                                        // the bartender shakes a cocktail and looks around
+  bk.armR.rotation.x = -1.6 + .35 * Math.sin(t * 14); bk.armL.rotation.x = -.2; bk.head.rotation.y = .35 * Math.sin(t * .6);
 }
 /* ---------- skyline ---------- */
 const skyTex = canvasTex(8, 512);
@@ -1196,7 +1323,20 @@ const floorLabels = [
 
 /* ---------- rooftop trips ---------- */
 const ROOF_ACTIVITY = { roofsofa: 'Chilling on the roof', roofchair: 'Chilling on the roof', barstool: 'At the rooftop bar',
-  firepit: 'By the fire pit', lounger: 'On a sun lounger', rail: 'Taking in the view' };
+  firepit: 'By the fire pit', lounger: 'On a sun lounger', rail: 'Taking in the view', dance: 'Dancing to the DJ' };
+// Free terrace spots; the dance floor only opens after dark. At the party 7 in 10 picks hit the dance floor
+// (while it has room), 2 in 10 the bar or fire pit, and the last 1 in 10 anywhere else.
+const PARTY_SPOTS = new Set(['barstool', 'firepit']);
+// A dance floor extension opens only once every dance spot before it is taken.
+const danceOpen = s => !s.ext || ROOF_SPOTS.every(o => o.type !== 'dance' || (o.ext || 0) >= s.ext || o.by);
+const roofFree = () => ROOF_SPOTS.filter(s => !s.by && (!s.night || isParty()) && danceOpen(s));
+function pickRoof() {
+  const f = roofFree(); if (!f.length) return null;
+  if (!isParty()) return pick(f);
+  const dance = f.filter(s => s.type === 'dance'), rest = f.filter(s => s.type !== 'dance'),
+    fun = rest.filter(s => PARTY_SPOTS.has(s.type)), r = Math.random();
+  return pick(dance.length && r < .7 ? dance : fun.length && r < .9 ? fun : rest.length ? rest : dance);
+}
 function roofWalkTo(a, s) {
   if (a.spot === s) return Promise.resolve();
   const from = a.spot;
@@ -1210,14 +1350,14 @@ function roofWalkTo(a, s) {
 }
 // Take the lift from the agent's own floor up to a free spot on the terrace.
 async function goRoof(a) {
-  const free = ROOF_SPOTS.filter(s => !s.by); if (!free.length || a.onRoof || a.kind !== 'main') return false;
-  const s = pick(free); s.by = a.id;
+  if (a.onRoof || a.kind !== 'main') return false;
+  const s = pickRoof(); if (!s) return false; s.by = a.id;
   setState(a, 'idle', 'Heading up to the roof');
   await walkTo(a, DOOR); a.leaving = true; await wait(.6);
   roofGroup.add(a.g); a.onRoof = true; a.spot = ROOF_LIFT; a.leaving = false; a.appear = 0;
   a.g.position.set(ROOF_LIFT.x, ROOF_Y, ROOF_LIFT.z); a.yaw = a.yawT = -Math.PI / 2;
   await roofWalkTo(a, s);
-  a.pose = 'idle'; setState(a, 'idle', ROOF_ACTIVITY[s.type]);
+  a.pose = poseFor(a); setState(a, 'idle', ROOF_ACTIVITY[s.type]);
   return true;
 }
 // Back down to the agent's floor, arriving through the lift.
@@ -1397,14 +1537,20 @@ function stepFlight(dt) {
     return;
   }
   if (F.rise && F.t < F.diveAt) setCamPose(F.from, F.heli, ease(F.t / F.rise));                 // 1. rise out beside the tower
-  if (!F.swapped && F.t >= F.travelAt) {                                                          // 2. behind the glass, switch floors…
-    F.swapped = true; F.y0 = yOff; curFloor = F.f; rebuildTower(); refreshFloorVisuals(); renderLift(); uiDirty = true;
+  /* 2. Behind the glass, switch floors, then travel. The furnished interior always sits at y = 0, so rather than
+     sliding the tower past it (every floor in between would pass right through it), the tower jumps at once so the
+     new floor lines up with the interior, and the camera (and sky) jump by the same amount so nothing seems to move.
+     Then the camera glides back down to the new floor. */
+  if (!F.swapped && F.t >= F.travelAt) {
+    F.swapped = true; F.y0 = yOff; yOff = yOffTarget = F.y1; curFloor = F.f; rebuildTower(); refreshFloorVisuals(); renderLift(); uiDirty = true;
   }
-  if (!F.same && F.t >= F.travelAt) { const u = smooth((F.t - F.travelAt) / F.travel); yOff = yOffTarget = lerpN(F.y0, F.y1, u); }  // …and travel
+  const camY0 = F.camY || 0;
+  F.camY = !F.same && F.t >= F.travelAt ? (F.y1 - F.y0) * (1 - smooth((F.t - F.travelAt) / F.travel)) : 0;
   if (F.t >= F.diveAt) {                                                                           // 3. dive in, toward the agent
-    if (!F.diveFrom) F.diveFrom = camPose();
+    if (!F.diveFrom) { F.diveFrom = camPose(); F.diveFrom.target.y -= camY0; }
     setCamPose(F.diveFrom, diveGoal(F), ease((F.t - F.diveAt) / F.dive));
   }
+  cam.target.y += F.camY; skyDome.position.y = F.camY;
   goal.theta = cam.theta; goal.phi = cam.phi; goal.radius = cam.radius; goal.target.copy(cam.target);   // no catch-up once we land
   if (F.t >= F.end) {
     flight = null; yOff = yOffTarget = F.y1; viewMode = 'floor'; renderLift(); uiDirty = true;
@@ -1462,10 +1608,10 @@ function renderLift() {
   }).join('');
   const up = roofAgents();
   const html = `<button class="lift-btn bld${viewMode === 'building' ? ' on' : ''}" data-floor="building"><span class="fl-num">${BUILDING_ICON}</span><span class="fl-name">Whole building</span></button>`
-    + `<button class="lift-btn roof${viewMode === 'roof' ? ' on' : ''}" data-floor="roof"><span class="fl-num">${ROOF_ICON}</span><span class="fl-name">Rooftop terrace</span><span class="fl-dots">${up.map(a => `<i style="--c:${a.color}"></i>`).join('')}</span></button>` + rows;
+    + `<button class="lift-btn roof${viewMode === 'roof' ? ' on' : ''}" data-floor="roof"><span class="fl-num${isParty() ? ' party' : ''}">${ROOF_ICON}</span><span class="fl-name">${isParty() ? 'Rooftop party' : 'Rooftop terrace'}</span><span class="fl-dots">${up.map(a => `<i style="--c:${a.color}"></i>`).join('')}</span></button>` + rows;
   if (html !== el._html) { el.innerHTML = html; el._html = html; }
   const cur = viewMode === 'building' ? `<span class="fl-num">${BUILDING_ICON}</span>Whole building`
-    : viewMode === 'roof' ? `<span class="fl-num">${ROOF_ICON}</span>Rooftop` : `${floorBadge(curFloor, false)}${esc(curFloor.name)}`;
+    : viewMode === 'roof' ? `<span class="fl-num${isParty() ? ' party' : ''}">${ROOF_ICON}</span>Rooftop` : `${floorBadge(curFloor, false)}${esc(curFloor.name)}`;
   const ce = $('#lift-current'); if (ce._html !== cur) { ce.innerHTML = cur; ce._html = cur; }
 }
 
@@ -1509,8 +1655,8 @@ setInterval(() => {                                                 // re-check 
 }, 60000);
 function applyScene(key) {
   sceneKey = key;
-  if (key === 'auto') { const h = clockHours(), r = autoScene(h); sceneT = r.T; autoSig = r.sig; placeSun(h, r.night); }
-  else { sceneT = SCENES[key]; sun.position.copy(SUN_POS); }
+  if (key === 'auto') { const h = clockHours(), r = autoScene(h); sceneT = r.T; autoSig = r.sig; placeSun(h, r.night); nightT = r.night; }
+  else { sceneT = SCENES[key]; sun.position.copy(SUN_POS); nightT = sceneT.dark ? 1 : 0; }
   const T = sceneT;
   scene.background = new THREE.Color(T.haze); drawSky(T); scene.fog.color.set(T.haze);
   cityMats.forEach((m, i) => { m.color.set(mix(CITY_TINTS[i], '#1E2636', T.cityDark)); m.emissiveIntensity = T.cityLit; });
@@ -1527,7 +1673,7 @@ function applyScene(key) {
   agents.forEach(a => { a.labelDirty = true; updateScreen(a); });
   floorLabels.forEach(l => l.draw()); drawNeon();
   document.querySelectorAll('.theme-card').forEach(b => b.setAttribute('aria-pressed', b.dataset.key === key));
-  renderJSON();
+  renderJSON(); renderLift();
 }
 
 /* ---------- agents ---------- */
@@ -1796,8 +1942,11 @@ function chooseWorkspot(a) {
   if (a.pref === 'lounge') return away() || a.home;
   return Math.random() < .5 ? a.home : (away() || a.home);
 }
+const IDLE_WEIGHT = { hoops: 4 };                                  // hoops is the fun one: pick it more often
 function chooseIdle(fl) {
-  const f = freeSpots(['coffee','hoops','beanbag','pouf','sofa'], fl); return f.length ? pick(f) : null;
+  const f = freeSpots(['coffee','hoops','beanbag','pouf','sofa'], fl); if (!f.length) return null;
+  let r = Math.random() * f.reduce((n, s) => n + (IDLE_WEIGHT[s.type] || 1), 0);
+  return f.find(s => (r -= IDLE_WEIGHT[s.type] || 1) < 0) || f[f.length - 1];
 }
 
 /* ---------- behaviour ---------- */
@@ -1847,7 +1996,7 @@ async function mainLoop(a) {
     const ws = chooseWorkspot(a);
     a.busy = true;
     if (a.spot !== ws) { setState(a, 'working', `Heading to the ${ws === a.home ? 'desk' : PLACE[ws.type].toLowerCase()}`); await walkTo(a, ws); }
-    a.pose = 'think'; emit(a, 'UserPromptSubmit', `"${prompt}"${fromUser ? ' · from you' : ''}`);
+    a.pose = 'think'; emit(a, 'UserPromptSubmit', `"${prompt}"${fromUser ? ' · from you' : ''}`); chatPush(a, 'user', prompt);
     setState(a, 'thinking', prompt); await wait(rand(2, 3.5));
     for (const st of makePlan(a.project)) {
       if (st.t === 'think') {
@@ -1870,7 +2019,7 @@ async function mainLoop(a) {
       }
       await doTool(a, ws, st.tool, st.arg);
     }
-    a.busy = false; a.pose = 'idle'; emit(a, 'Stop', `Finished: ${prompt}`); setState(a, 'done', `Finished: ${prompt}`);
+    a.busy = false; a.pose = 'idle'; emit(a, 'Stop', `Finished: ${prompt}`); setState(a, 'done', `Finished: ${prompt}`); chatPush(a, 'assistant', `Finished "${prompt}". The checks pass.`);
     await wait(3);
     if (a.pending.length) continue;
     if (Math.random() < .45 && await goRoof(a)) { await Promise.race([wait(rand(14, 26)), new Promise(r => a.wake = r)]); a.wake = null; continue; }
@@ -1928,7 +2077,7 @@ function updateAgent(a, dt, sdt) {
   g.scale.setScalar(a.scale * Math.max(.001, a.appear));
   a.animT += sdt; const t = a.animT; const moving = a.path.length > 0;
   let bob = 0, l = 0, r = 0, rz = 0, tilt = 0;
-  const pose = moving ? 'walk' : a.pose;
+  const pose = moving ? 'walk' : a.cheerUntil > performance.now() ? 'cheer' : a.pose;
   switch (pose) {
     case 'walk': bob = Math.abs(Math.sin(t * 9)) * .06; l = Math.sin(t * 9) * .6; r = -l; break;
     case 'type': l = -1.15 + Math.sin(t * 17) * .13; r = -1.15 + Math.sin(t * 17 + 1.7) * .13; tilt = .12; break;
@@ -1941,6 +2090,10 @@ function updateAgent(a, dt, sdt) {
       else if (u < .45) { const k = (u - .38) / .07; l = r = -2.8 - .3 * k; bob = .09 * (1 - k); tilt = -.25; }
       else { const k = (u - .45) / .55; l = r = -3.1 + 2.2 * k; tilt = -.25 * (1 - k); }
       break; }
+    case 'cheer': { const b = performance.now() / 1000 * Math.PI * 3;   // just merged: both arms up, hopping
+      bob = Math.abs(Math.sin(b)) * .16; l = r = -2.9 + Math.sin(b) * .18; rz = Math.sin(b) * .2; tilt = -.15; break; }
+    case 'dance': { const b = partyBeat() * Math.PI;             // on the beat with the DJ: bounce, arms up
+      bob = Math.abs(Math.sin(b)) * .09; l = -2.5 + Math.sin(b) * .5; r = -2.5 - Math.sin(b) * .5; rz = Math.sin(b / 2) * .4; tilt = Math.sin(b) * .08; break; }
     case 'play': r = -1.2 + Math.sin(t * 5.5) * .7; rz = Math.sin(t * 5.5) * .5; l = -.3; bob = Math.abs(Math.sin(t * 5.5)) * .04; break;
     default: bob = Math.sin(t * 2) * .015; l = r = -.06;
   }
@@ -2112,7 +2265,7 @@ function row(a) {
   const act = (a.where ? a.where + ' · ' : '') + a.activity + (a.pending.length ? ` · ${a.pending.length} queued` : '');
   return `<button class="agent-row${sub ? ' sub' : ''}${a === selected ? ' sel' : ''}" data-id="${a.id}">
     <span class="av" style="--c:${a.color}">${esc(a.name[0] || '?')}${a.live ? appBadge(a, 'av-app') : ''}</span>
-    <span class="who"><span class="nm">${esc(a.name)} <span class="proj">${sub ? 'subagent' : esc(a.project.key)}${a.live && !sub ? ` · <span class="entry">${whereFrom(a)}</span>` : ''}</span></span><span class="act">${esc(act)}</span></span>
+    <span class="who"><span class="nm">${esc(a.name)} <span class="proj">${sub ? esc(a.subType || 'subagent') : esc(a.project.key)}${a.live && !sub ? ` · <span class="entry">${whereFrom(a)}</span>` : ''}</span></span><span class="act">${esc(act)}</span></span>
     <span class="row-end">${!sub && a.live && hostName(a) ? `<span class="row-open" data-open="${a.id}" title="${esc(openLabel(a))}" aria-label="${esc(openLabel(a))}">${OPEN_ICON}</span>` : ''}<span class="pill s-${a.state}">${STATUS[a.state].label}</span></span></button>`;
 }
 function renderUI() {
@@ -2161,6 +2314,7 @@ function renderDetail() {
   const perm = $('#d-perm'); perm.hidden = !a.approval;
   if (a.approval) { $('#d-perm-tool').textContent = a.approval.tool; $('#d-perm-cmd').textContent = a.approval.cmd || a.approval.tool; }
   $('#d-defer').hidden = !(a.approval && a.approval.live);
+  renderChat(a);
   $('#d-log').innerHTML = a.log.map(e => `<li><time>${stamp(e)}</time><code class="hook${e.hook === 'Notification' ? ' warn' : ''}">${e.hook}</code><span class="what" title="${esc(e.detail)}">${esc(e.detail)}</span></li>`).join('');
   const main = a.kind === 'main';
   $('#d-form').hidden = !main || !!a.live; $('#d-spawn').hidden = !main || !!a.live;
@@ -2172,6 +2326,25 @@ function renderDetail() {
     note.textContent = w ? `Answer this in ${app}. Approving from the office comes next.`
                          : 'Watching this session live. Sending tasks from the office comes in a later step.'; }
 }
+// The card shows the agent's chat; its hook events sit one tab over, under Activity.
+let detailTab = 'chat';
+function showDetailTab(tab) {
+  detailTab = tab;
+  for (const b of document.querySelectorAll('.d-tabs button')) { const on = b.dataset.tab === tab; b.setAttribute('aria-selected', on); b.setAttribute('aria-pressed', on); }
+  $('#d-chat').hidden = tab !== 'chat'; $('#d-log').hidden = tab !== 'activity';
+  if (tab === 'chat') { const c = $('#d-chat'); c.scrollTop = c.scrollHeight; }
+}
+document.querySelectorAll('.d-tabs button').forEach(b => b.onclick = () => { showDetailTab(b.dataset.tab); uiPrefs.detailTab = b.dataset.tab; saveUi(); });
+function renderChat(a) {
+  const el = $('#d-chat'), m = a.messages || [], sig = a.id + ':' + m.length + ':' + (m.length ? m[m.length - 1].text.length : 0);
+  if (el.dataset.sig === sig) return;                       // unchanged: keep the reader's scroll position
+  el.dataset.sig = sig;
+  el.innerHTML = m.length ? m.map(x => `<li class="${x.role === 'user' ? 'user' : 'assistant'}">${esc(x.text)}</li>`).join('')
+    : `<li class="empty">${a.kind === 'sub' ? `Subagents work out of sight and report back to ${esc(a.parent.name)}. See Activity for what they did.` : 'The chat shows up here after the next message.'}</li>`;
+  el.scrollTop = el.scrollHeight;
+}
+// Demo agents keep a short chat of their own so the card looks the same as a live one.
+function chatPush(a, role, text) { (a.messages || (a.messages = [])).push({ role, text }); if (a.messages.length > 12) a.messages.shift(); if (a === selected) detailDirty = true; }
 $('#d-close').onclick = () => select(null);
 // Demo approvals resolve locally; live ones go back to the bridge, which answers Claude Code's permission hook.
 function decide(a, decision) {
@@ -2248,7 +2421,8 @@ $('#cust-agents').addEventListener('click', e => {
 $('#cust-agents').addEventListener('input', e => {
   if (e.target.dataset.field !== 'name') return;
   const a = agents.find(x => x.id === e.target.closest('details').dataset.id); if (!a) return;
-  a.name = e.target.value.trim() || a.project.agent; a.labelDirty = true; uiDirty = true; detailDirty = true;
+  a.customName = !!e.target.value.trim();
+  a.name = e.target.value.trim() || chatName(a.title) || a.project.agent; a.labelDirty = true; uiDirty = true; detailDirty = true;
   const d = e.target.closest('details'); d.querySelector('.av').textContent = a.name[0]; d.querySelector('.cust-name b').textContent = a.name;
   renderJSON(); saveAgentPrefs(a);
 });
@@ -2350,13 +2524,32 @@ const MIN_STAY_MS = FAST ? 4000 : 20000;                           // don't boun
 const IDLE_BREAK_MS = FAST ? 8000 : 45000;                         // finished for a while: take a break
 const IDLE_ROAM_MS = FAST ? [10000, 16000] : [50000, 90000];       // then drift between break spots every so often
 const THINK_WANDER_MS = FAST ? 8000 : 30000;                       // a long think: maybe go grab a coffee
+const IDLE_ROOF_MS = FAST ? 20000 : 300000;                        // idle this long without a merge: head up to the terrace and chill
 let MODE = params.has('demo') ? 'demo' : 'live';
 const live = { byId: new Map(), connected: false, everConnected: false, demoStarted: false, tickT: 0 };
 
 const hashStr = str => { let h = 0; for (const c of str) h = (h * 31 + c.charCodeAt(0)) | 0; return Math.abs(h); };
 const prefKey = cwd => 'agent-office:agent:' + cwd;
 function loadAgentPrefs(cwd) { try { return JSON.parse(localStorage.getItem(prefKey(cwd))) || {}; } catch (_) { return {}; } }
-function saveAgentPrefs(a) { if (!a.live || !a.cwd) return; try { localStorage.setItem(prefKey(a.cwd), JSON.stringify({ name: a.name, color: a.color, pref: a.pref, look: a.look })); } catch (_) {} }
+function saveAgentPrefs(a) { if (!a.live || !a.cwd) return; try { localStorage.setItem(prefKey(a.cwd), JSON.stringify({ name: a.customName ? a.name : undefined, customName: !!a.customName, color: a.color, pref: a.pref, look: a.look })); } catch (_) {} }
+// Agents are named after their chat's title, shortened to fit a name tag. A name you type in Customize wins.
+const NAME_MAX = 28;
+const chatName = t => { t = String(t || '').replace(/\s+/g, ' ').trim(); return !t ? '' : t.length > NAME_MAX ? t.slice(0, NAME_MAX - 1).trimEnd() + '…' : t; };
+// Older saves stored the automatic "project 2" name too; only a name that was typed counts.
+const autoName = (n, project) => n === project || (n.startsWith(project + ' ') && /^\d+$/.test(n.slice(project.length + 1)));
+const customName = (saved, project) => (saved.customName || (saved.customName === undefined && saved.name && !autoName(saved.name, project))) && saved.name || '';
+// Work got merged: the agent jumps for joy for a few seconds and the office hears about it.
+function celebrate(a) {
+  a.cheerUntil = performance.now() + 5000;
+  if (a.floor === curFloor) termPush(a, '🎉 merged', '#FFD166');
+  toast(`${a.name} got merged 🎉`, 'Show me', () => select(a, true));
+}
+function retitle(a, title) {
+  if (!title || title === a.title) return;
+  a.title = title;
+  if (a.customName) return;
+  a.name = chatName(title); a.labelDirty = true; uiDirty = true; detailDirty = true; buildCustomize(); renderJSON();
+}
 
 function setModeLine() {
   const el = $('#mode-line'), mains = agents.filter(a => a.kind === 'main').length;
@@ -2379,6 +2572,7 @@ function poseFor(a) {
   if (a.state === 'thinking') return 'think';
   if (a.state === 'working') return a.spot && a.spot.type === 'library' ? 'read' : 'type';
   if (a.spot && a.spot.type === 'hoops') return 'shoot';
+  if (a.spot && a.spot.type === 'dance') return 'dance';
   return 'idle';
 }
 function applyStatus(a, state, activity) {
@@ -2431,9 +2625,10 @@ function liveMain(s, instant) {
   const home = floor.deskSeats.find(d => !d.owner && !d.by) || freeSpots(['hightable', 'stool'], floor)[0] || floor.deskSeats[0];
   const saved = loadAgentPrefs(s.cwd);
   const same = agents.filter(x => x.kind === 'main' && x.project.key === s.project).length;
-  const name = saved.name || (s.project + (same ? ` ${same + 1}` : ''));
+  const fallback = s.project + (same ? ` ${same + 1}` : '');
+  const custom = customName(saved, s.project), name = custom || chatName(s.title) || fallback;
   const color = saved.color || PALETTE[hashStr(s.cwd || s.id) % PALETTE.length];
-  a = createAgent({ name, kind: 'main', color, home, project: { key: s.project, agent: name }, cwd: s.cwd, sessionId: s.id,
+  a = createAgent({ name, kind: 'main', color, home, project: { key: s.project, agent: fallback }, cwd: s.cwd, sessionId: s.id, title: s.title || null, customName: !!custom,
                     entrypoint: s.entrypoint, agentName: s.agent, hostApp: s.app, hostTerm: s.term, hostChat: s.chat, pref: saved.pref || 'anywhere', look: saved.look ? { ...saved.look, intern: false } : undefined, live: true, subs: new Map(), streak: 0, floor });
   if (isNew && !instant) toast(`${s.project} moved into floor ${floorNum(floor)}`, 'Go there', () => flyToFloor(floor.i));
   home.by = a.id; if (home.type === 'desk') { home.owner = a; if (floor === curFloor) home.chairMat.color.set(color); }
@@ -2445,13 +2640,13 @@ function liveMain(s, instant) {
   buildCustomize(); renderJSON(); setModeLine();
   return a;
 }
-function liveSub(a, id, type, instant) {
+function liveSub(a, id, type, instant, task) {
   let sub = a.subs.get(id); if (sub) return sub;
   const fl = a.floor;
   let home = type === 'Plan' ? freeSpots(['meeting'], fl)[0] : null;
   if (!home) home = fl.deskSeats.filter(d => !d.by).sort((p, q) => Math.hypot(p.x - a.home.x, p.z - a.home.z) - Math.hypot(q.x - a.home.x, q.z - a.home.z))[0]
                  || freeSpots(['hightable', 'stool', 'sofa'], fl)[0] || pick(fl.SPOTS.stool);
-  sub = createAgent({ name: type || 'Subagent', kind: 'sub', subType: type || 'subagent', color: mix(a.color, '#ffffff', .35), home, parent: a, project: a.project, live: true, streak: 0, floor: fl });
+  sub = createAgent({ name: task || type || 'Subagent', kind: 'sub', subType: type || 'subagent', color: mix(a.color, '#ffffff', .35), home, parent: a, project: a.project, live: true, streak: 0, floor: fl });
   home.by = sub.id; sub.ws = home;
   if (instant) { sub.spot = home; sub.where = PLACE[home.type]; sub.g.position.set(home.x, 0, home.z); sub.yaw = sub.yawT = yawOf(home.face); }
   else { sub.spot = DOOR; sub.g.position.set(DOOR.x, 0, DOOR.z); sub.yaw = sub.yawT = -Math.PI / 2; sub.appear = 0; walkTo(sub, home).then(() => { sub.pose = poseFor(sub); }); }
@@ -2483,8 +2678,11 @@ function onLiveEvent(e, replay) {
   if (s.app) a.hostApp = s.app;
   if (s.term) a.hostTerm = s.term;
   if (s.chat) a.hostChat = s.chat;
+  retitle(a, s.title);
+  if (s.messages) { a.messages = s.messages; if (a === selected) detailDirty = true; }
+  if ('merged' in s) a.merged = !!s.merged;
   a.permissionMode = s.permissionMode;
-  const who = e.agentId ? liveSub(a, e.agentId, e.agentType, replay) : a;
+  const who = e.agentId ? liveSub(a, e.agentId, e.agentType, replay, e.agentTask) : a;
   const label = `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}`;
   switch (e.type) {
     case 'SessionStart': emit(a, 'SessionStart', `${whereFrom(a)} · ${a.cwd}`, e.at); break;
@@ -2506,6 +2704,7 @@ function onLiveEvent(e, replay) {
       if (e.failed) emit(who, 'PostToolUseFailure', label, e.at);
       if (e.tool === 'Bash' && !replay) termPush(who, e.failed ? '✗ failed' : '✓ done', e.failed ? '#FF7B72' : '#6FD69A');
       if (who.state !== 'waiting') applyStatus(who, 'thinking', e.failed ? `${e.tool} failed, rethinking` : 'Thinking');
+      if (e.merged) { emit(who, 'Merged', label, e.at); if (!replay) celebrate(who); }
       break;
     case 'PermissionRequest': case 'Notification': {
       const perm = e.type === 'PermissionRequest' || e.notificationType === 'permission_prompt';
@@ -2516,7 +2715,7 @@ function onLiveEvent(e, replay) {
         if (!replay) toast(`${a.name} needs your permission in the ${whereFrom(a).toLowerCase()}`, 'Show me', () => select(who, true));
       } else if (e.notificationType === 'idle_prompt') applyStatus(a, 'idle', 'Waiting for your input');
       break; }
-    case 'Stop': emit(a, 'Stop', 'Finished responding', e.at); applyStatus(a, 'done', 'Finished');
+    case 'Stop': emit(a, 'Stop', 'Finished responding', e.at); applyStatus(a, 'done', a.merged ? 'Finished · merged' : 'Finished');
       if (!replay) toast(`${a.name} finished in ~/${a.project.key}`, hostName(a) ? [[opensChat(a) ? 'Open chat' : `Open in ${hostName(a)}`, () => openHost(a), true], ['Show me', () => select(a, true)]] : 'Show me', () => select(a, true));
       break;
     case 'SubagentStart': emit(who, 'SubagentStart', `${e.agentType || 'Subagent'} started`, e.at); break;
@@ -2529,6 +2728,7 @@ function onLiveEvent(e, replay) {
 }
 
 function onSnapshot(msg) {
+  music = msg.music || null;
   const ids = new Set(msg.sessions.map(s => s.id));
   for (const [id, a] of live.byId) if (!ids.has(id)) leaveOffice(a);
   feedEl.innerHTML = '';
@@ -2536,8 +2736,11 @@ function onSnapshot(msg) {
   for (const s of msg.sessions) {
     const a = liveMain(s, true);
     if (s.app) a.hostApp = s.app; if (s.term) a.hostTerm = s.term; if (s.chat) a.hostChat = s.chat;
+    retitle(a, s.title);
+    a.merged = !!s.merged;
+    if (s.messages) a.messages = s.messages;
     applyStatus(a, s.status, s.activity);
-    for (const sub of s.subagents || []) { const x = liveSub(a, sub.id, sub.type, true); applyStatus(x, sub.status, sub.activity); }
+    for (const sub of s.subagents || []) { const x = liveSub(a, sub.id, sub.type, true, sub.task); applyStatus(x, sub.status, sub.activity); }
   }
   for (const e of msg.recent || []) {                       // refill the feed without replaying movement
     const a = live.byId.get(e.sessionId); if (!a) continue;
@@ -2559,6 +2762,7 @@ function liveTick(dt) {
   for (const a of agents) {
     if (!a.live || a.kind !== 'main' || a.exiting || a.comingDown || a.path.length) continue;
     // finished: take a break, then drift between break spots (lounge, coffee, ping-pong, rooftop)
+    if (a.onRoof && a.spot && a.spot.night && !isParty()) { roam(a); continue; }
     if (a.idleSince) {
       if (!a.nextRoam) a.nextRoam = a.idleSince + IDLE_BREAK_MS;
       if (now >= a.nextRoam) { a.nextRoam = now + rand(IDLE_ROAM_MS[0], IDLE_ROAM_MS[1]); roam(a); }
@@ -2574,11 +2778,14 @@ function liveTick(dt) {
 }
 function roam(a) {
   if (a.onRoof) {                                           // already upstairs: maybe move to another spot on the terrace
-    const free = ROOF_SPOTS.filter(s => !s.by);
-    if (free.length && Math.random() < .6) { const s = pick(free); roofWalkTo(a, s).then(() => { a.pose = 'idle'; setState(a, 'idle', ROOF_ACTIVITY[s.type]); }); }
+    const closed = a.spot && a.spot.night && !isParty();    // the dance floor closed at dawn
+    const s = (closed || Math.random() < .6) && pickRoof();
+    if (s) { s.by = a.id; roofWalkTo(a, s).then(() => { a.pose = poseFor(a); setState(a, 'idle', ROOF_ACTIVITY[s.type]); }); }
     return;
   }
-  if (Math.random() < .3) { goRoof(a); return; }
+  // idle for a long while with nothing merged (still waiting on review), or it's party time: go up to the terrace; otherwise sometimes
+  const waitingOnMerge = !a.merged && performance.now() - a.idleSince > IDLE_ROOF_MS;
+  if ((isParty() || waitingOnMerge || Math.random() < .3) && roofFree().length) { goRoof(a); return; }
   const sp = chooseIdle(a.floor);
   if (sp && sp !== a.spot) { place(a, sp, true); setState(a, 'idle', IDLE_ACTIVITY[sp.type]); }
 }
@@ -2640,6 +2847,7 @@ function connectLive() {
   ws.onmessage = m => { let msg; try { msg = JSON.parse(m.data); } catch (_) { return; }
     if (msg.type === 'snapshot') onSnapshot(msg); else if (msg.type === 'event') onLiveEvent(msg.event, false);
     else if (msg.type === 'focus-result') toast(msg.message);
+    else if (msg.type === 'music') music = msg.music || null;
     else if (msg.type === 'setup') loadSetup();
     else if (msg.type === 'approval') onApproval(msg.approval, true); else if (msg.type === 'approval-resolved') onApprovalResolved(msg); };
   ws.onclose = () => {
@@ -2692,6 +2900,7 @@ document.addEventListener('visibilitychange', () => {
 window.agentOffice = { agents, SPOTS, DOOR };   // for debugging from the console
 curFloor = makeFloor('lobby', 'Your first project', true); rebuildTower();
 setLiftOpen(uiPrefs.lift !== false); if (uiPrefs.panel === false) setPanelOpen(false);
+showDetailTab(uiPrefs.detailTab === 'activity' ? 'activity' : 'chat');
 applyScene(uiPrefs.theme in SCENES ? uiPrefs.theme : 'auto'); buildCustomize(); renderJSON(); drawTerm(); drawBoard(); layout();
 setView('3d'); Object.assign(cam, { theta: goal.theta, phi: goal.phi, radius: goal.radius }); cam.target.copy(goal.target); applyCam();
 if (MODE === 'demo' || !/^https?:$/.test(location.protocol)) startDemo(); else connectLive();
@@ -2702,11 +2911,11 @@ function step(dt) {
   if (Math.abs(vo.x - vo.tx) > .3 || Math.abs(vo.y - vo.ty) > .3) { const k = 1 - Math.exp(-dt * 9); vo.x += (vo.tx - vo.x) * k; vo.y += (vo.ty - vo.y) * k; applyViewOffset(); }
   const sdt = dt * speed; simTime += sdt; tickTimers();
   if (MODE === 'live') liveTick(dt);
-  stepFlight(dt);
+  stepFlight(dt); if (!flight || flight.landing) skyDome.position.y = 0;
   yOff += (yOffTarget - yOff) * (reduced ? 1 : 1 - Math.exp(-dt * 5)); building.position.y = city.position.y = yOff;
   floorGlow();
   for (const a of agents.slice()) updateAgent(a, dt, sdt);
-  updateHoops(dt);
+  updateHoops(dt); updateParty(dt);
   { let want = 0; for (const a of agents) if (a.floor === curFloor && !a.onRoof && Math.hypot(a.g.position.x - 12.6, a.g.position.z + 1.8) < 1.9) want = 1;
     lift.open += (want - lift.open) * (1 - Math.exp(-dt * 6));
     lift.l.position.z = -1.8 - .275 - lift.open * .5; lift.r.position.z = -1.8 + .275 + lift.open * .5;

@@ -39,6 +39,17 @@ test('routes subagent tool calls to the subagent and removes it when it stops', 
   assert.equal(st.snapshot().sessions[0].subagents.length, 0);
 });
 
+test('names subagents after the task they were given', () => {
+  const st = new Store();
+  const launch = (t, d) => st.ingest({ ...base, hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_input: { subagent_type: t, description: d } });
+  launch('Explore', 'Find cart code'); launch('Plan', 'Plan checkout');
+  assert.equal(st.ingest({ ...base, hook_event_name: 'SubagentStart', agent_id: 'p1', agent_type: 'Plan' }).agentTask, 'Plan checkout');
+  st.ingest({ ...base, hook_event_name: 'SubagentStart', agent_id: 'x1', agent_type: 'Explore' });
+  st.ingest({ ...base, hook_event_name: 'SubagentStart', agent_id: 'x2', agent_type: 'Explore' });
+  const subs = st.snapshot().sessions[0].subagents;
+  assert.equal(subs[1].task, 'Find cart code'); assert.equal(subs[2].task, null);
+});
+
 test('permission prompts mark the session as waiting and SessionEnd forgets it', () => {
   const st = new Store();
   st.ingest({ ...base, hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'Claude needs your permission to use Bash' });
@@ -83,4 +94,78 @@ test('opens the exact chat in the Claude and Codex apps, and only there', () => 
 
 test('ignores payloads without a session or event name', () => {
   assert.equal(new Store().ingest({ hook_event_name: 'Stop' }), null);
+});
+
+test('names a session after its chat title, or its first prompt until there is one', () => {
+  let title = null;
+  const st = new Store(() => ({ title, messages: [] }));
+  const t = { ...base, transcript_path: '/Users/me/.claude/projects/shop/s1.jsonl' };
+  st.ingest({ ...t, hook_event_name: 'SessionStart' });
+  assert.equal(st.snapshot().sessions[0].title, null);
+  const e = st.ingest({ ...t, hook_event_name: 'UserPromptSubmit', prompt: 'fix the   cart total' });
+  assert.equal(e.session.title, 'fix the cart total');
+  title = 'Fix cart total rounding';
+  assert.equal(st.ingest({ ...t, hook_event_name: 'Stop' }).session.title, 'Fix cart total rounding');
+});
+
+test('reads the latest custom title, falling back to the AI title', async () => {
+  const { parseTranscript } = await import('./transcript.js');
+  const titleFromText = text => parseTranscript(text).title;
+  const ai = '{"type":"ai-title","aiTitle":"Locate storage"}', custom = n => `{"type":"custom-title","customTitle":"${n}"}`;
+  assert.equal(titleFromText(`half a line"}\n${ai}\n`), 'Locate storage');
+  assert.equal(titleFromText(`${custom('Old')}\n${ai}\n${custom('Checkout  bug')}\n`), 'Checkout bug');
+  assert.equal(titleFromText('{"type":"user"}\n'), null);
+});
+
+test('spots merges, but not syncing with main or auto-merge', async () => {
+  const { isMerge } = await import('./store.js');
+  const bash = command => isMerge('Bash', { command });
+  assert.ok(bash('gh pr merge 42 --squash --delete-branch'));
+  assert.ok(bash('cd repo && GH_PROMPT_DISABLED=1 gh pr merge --merge'));
+  assert.ok(bash('git merge --no-ff feature/cart'));
+  assert.ok(bash('git -C ../shop merge --continue'));
+  assert.ok(isMerge('mcp__github__merge_pull_request', {}));
+  assert.ok(!bash('gh pr merge 42 --auto --squash'));
+  assert.ok(!bash('git merge origin/main'));
+  assert.ok(!bash('git merge main'));
+  assert.ok(!bash('git merge --abort'));
+  assert.ok(!bash('git merge-base HEAD main'));
+  assert.ok(!bash('echo "gh pr merge"'));
+  assert.ok(!isMerge('Read', { file_path: 'merge.ts' }));
+});
+
+test('marks the session merged until the next prompt', () => {
+  const st = new Store(() => null);
+  const e = st.ingest({ ...base, hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: { command: 'gh pr merge 7 --squash' } });
+  assert.equal(e.merged, true); assert.equal(e.session.merged, true);
+  assert.equal(st.ingest({ ...base, hook_event_name: 'Stop' }).session.activity, 'Finished · merged');
+  assert.equal(st.ingest({ ...base, hook_event_name: 'UserPromptSubmit', prompt: 'next' }).session.merged, false);
+  assert.equal(st.ingest({ ...base, hook_event_name: 'PostToolUseFailure', tool_name: 'Bash', tool_input: { command: 'gh pr merge 7' } }).merged, undefined);
+});
+
+test('keeps the chat: prompts and text replies, not tools, thinking, subagents or system notes', async () => {
+  const { parseTranscript } = await import('./transcript.js');
+  const L = o => JSON.stringify(o);
+  const text = [
+    'cut in half"}',
+    L({ type: 'user', message: { content: 'fix the cart' } }),
+    L({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: 'hmm' }, { type: 'tool_use', name: 'Read' }] } }),
+    L({ type: 'user', message: { content: [{ type: 'tool_result', content: 'file' }] } }),
+    L({ type: 'user', isMeta: true, message: { content: 'meta' } }),
+    L({ type: 'user', message: { content: '<command-name>/clear</command-name>' } }),
+    L({ type: 'assistant', isSidechain: true, message: { content: [{ type: 'text', text: 'subagent talk' }] } }),
+    L({ type: 'assistant', message: { content: [{ type: 'text', text: 'Fixed it.\n\n\n\n- rounding' }] } }),
+  ].join('\n');
+  assert.deepEqual(parseTranscript(text).messages, [{ role: 'user', text: 'fix the cart' }, { role: 'assistant', text: 'Fixed it.\n\n- rounding' }]);
+});
+
+test('sends the chat only when it changes, and shows a new prompt right away', () => {
+  let messages = [{ role: 'assistant', text: 'Hi' }];
+  const st = new Store(() => ({ title: null, messages }));
+  const t = { ...base, transcript_path: '/Users/me/.claude/projects/shop/s1.jsonl' };
+  assert.deepEqual(st.ingest({ ...t, hook_event_name: 'SessionStart' }).session.messages, [{ role: 'assistant', text: 'Hi' }]);
+  assert.equal(st.ingest({ ...t, hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: {} }).session.messages, undefined);
+  assert.deepEqual(st.ingest({ ...t, hook_event_name: 'UserPromptSubmit', prompt: 'next' }).session.messages.at(-1), { role: 'user', text: 'next' });
+  messages = [...messages, { role: 'user', text: 'next' }, { role: 'assistant', text: 'Done' }];
+  assert.equal(st.ingest({ ...t, hook_event_name: 'Stop' }).session.messages.at(-1).text, 'Done');
 });

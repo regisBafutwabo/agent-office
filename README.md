@@ -81,6 +81,12 @@ Customize each agent in **Customize → Agents**: body shape, face style, colors
 
 The office follows your clock by default (**Customize → Office theme → Auto**): night until 5:00, dawn into daylight by 8:00, daylight until 17:00, then golden hour and night by 20:00. Colors and light blend through the transitions, the sun crosses the sky during the day, and the city lights come on at dusk. Pick any other theme to keep it fixed; your choice is remembered.
 
+## Rooftop DJ
+
+The rooftop DJ plays what you're listening to. On a Mac, the office asks the Spotify app for its current song, then Apple Music, and shows it on the front of the DJ booth. With your music on, the DJ plays by day too; the full party (lights, fire, bar) still waits for dark. With nothing playing, the DJ spins its own office mix of made-up tracks.
+
+It only checks while an office page is open, never opens Spotify or Music, and nothing leaves your machine. macOS asks once whether Agent Office (or your terminal, with `npm start`) may control Spotify or Music; to change that later, go to **System Settings → Privacy & Security → Automation**. The dance floor keeps its own beat, because Spotify no longer shares a song's tempo.
+
 ## Jumping to an agent's chat
 
 Every live agent has an **↗** button in the agent list, and an **Open chat** / **Open in …** button on its card. When an agent finishes, a toast pops up with the same button, so one click takes you back to it.
