@@ -1046,7 +1046,7 @@ async function setCity(id) {
   } catch (err) {
     if (request !== cityRequest) return false;
     clearCity(); buildGenericCity(); batchGenericCity(); cityKey = 'generic'; $('#city-credit').hidden = true; buildCityChoices();
-    const message = 'Couldn’t load that city. Showing Generic city.'; toast(message);
+    const message = location.protocol === 'file:' ? 'Open the office through its local server to load real cities.' : 'Couldn’t load that city. Showing Generic city.'; toast(message);
     $('#city-status').textContent = message; $('#city-status').hidden = false; return false;
   } finally { clearTimeout(timeout); }
 }
