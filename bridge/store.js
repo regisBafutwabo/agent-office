@@ -1,11 +1,11 @@
 // Turns raw Claude Code hook payloads into a small, UI-friendly model of sessions and subagents.
 import path from 'node:path';
 import { validTty, validChat } from './focus.js';
-import { transcriptTitle } from './title.js';
+import { readTranscript, MESSAGE_CHARS } from './transcript.js';
 
 const STALE_MS = 6 * 60 * 60 * 1000;   // forget sessions that went silent (crashed without SessionEnd)
 const RECENT_MAX = 200;
-const TITLE_RECHECK_MS = 10_000;        // while a chat has no title yet, look again at most this often
+const TRANSCRIPT_RECHECK_MS = 5_000;    // between prompts and stops, re-read the transcript at most this often
 
 const clip = (s, n = 140) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 
@@ -54,15 +54,27 @@ export function isMerge(tool, input = {}) {
 }
 
 export class Store {
-  constructor(readTitle = transcriptTitle) { this.sessions = new Map(); this.recent = []; this.readTitle = readTitle; this.titleChecks = new Map(); }
+  constructor(read = readTranscript) { this.sessions = new Map(); this.recent = []; this.read = read; this.transcriptChecks = new Map(); }
 
-  // The chat's title from its transcript; until there is one, its first prompt stands in.
-  refreshTitle(s, p, type) {
-    if (type === 'UserPromptSubmit' && !s.firstPrompt && p.prompt) s.firstPrompt = clip(p.prompt, 80);
-    const now = Date.now(), last = this.titleChecks.get(s.id) || 0;
-    const due = ['SessionStart', 'UserPromptSubmit', 'Stop'].includes(type) || (!s.transcriptTitle && now - last > TITLE_RECHECK_MS);
-    if (p.transcript_path && due) { this.titleChecks.set(s.id, now); s.transcriptTitle = this.readTitle(p.transcript_path) || s.transcriptTitle || null; }
+  // The chat's title and last messages from its transcript; until it has a title, its first prompt stands in.
+  // Returns true when the messages changed, so only those events carry them.
+  refreshTranscript(s, p, type) {
+    const before = JSON.stringify(s.messages || []);
+    if (type === 'UserPromptSubmit' && p.prompt) {
+      if (!s.firstPrompt) s.firstPrompt = clip(p.prompt, 80);
+      // The hook can fire before the prompt reaches the transcript: show it right away.
+      const text = clip(p.prompt, MESSAGE_CHARS), m = s.messages || (s.messages = []);
+      if (!m.length || m[m.length - 1].role !== 'user' || m[m.length - 1].text !== text) m.push({ role: 'user', text });
+    }
+    const now = Date.now(), last = this.transcriptChecks.get(s.id) || 0;
+    const due = ['SessionStart', 'UserPromptSubmit', 'Stop'].includes(type) || now - last > TRANSCRIPT_RECHECK_MS;
+    if (p.transcript_path && due) {
+      this.transcriptChecks.set(s.id, now);
+      const t = this.read(p.transcript_path);
+      if (t) { if (t.title) s.transcriptTitle = t.title; if (t.messages.length && type !== 'UserPromptSubmit') s.messages = t.messages; }
+    }
     s.title = s.transcriptTitle || s.firstPrompt || null;
+    return JSON.stringify(s.messages || []) !== before;
   }
 
   snapshot() {
@@ -72,7 +84,7 @@ export class Store {
 
   prune() {
     const now = Date.now();
-    for (const [id, s] of this.sessions) if (now - s.lastEventAt > STALE_MS) { this.sessions.delete(id); this.titleChecks.delete(id); }
+    for (const [id, s] of this.sessions) if (now - s.lastEventAt > STALE_MS) { this.sessions.delete(id); this.transcriptChecks.delete(id); }
   }
 
   // A permission request answered from the office: the session (or subagent) stops waiting.
@@ -108,7 +120,7 @@ export class Store {
     if (origin.term) s.term = origin.term;
     if (validTty(origin.tty)) s.tty = origin.tty;
     if (validChat(origin.chat)) s.chat = origin.chat;
-    this.refreshTitle(s, p, type);
+    const chatChanged = this.refreshTranscript(s, p, type);
 
     const e = { type, sessionId: sid, at: now, agentId: p.agent_id || null, agentType: p.agent_type || null };
     // Internal helper agents (e.g. the desktop app's prompt suggestions) only report SubagentStop. They never did visible work, so skip them.
@@ -139,10 +151,11 @@ export class Store {
       case 'SubagentStart': if (sub) { sub.status = 'thinking'; sub.activity = 'Starting'; } break;
       case 'SubagentStop': if (sub) { sub.status = 'done'; sub.activity = 'Reported back'; e.message = clip(p.last_assistant_message, 160); delete s.subagents[e.agentId]; } break;
       case 'PreCompact': s.status = 'working'; s.activity = 'Compacting context'; break;
-      case 'SessionEnd': e.reason = p.reason; this.sessions.delete(sid); this.titleChecks.delete(sid); break;
+      case 'SessionEnd': e.reason = p.reason; this.sessions.delete(sid); this.transcriptChecks.delete(sid); break;
       default: break;
     }
     e.session = { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, cwd: s.cwd, project: s.project, title: s.title || null, merged: !!s.merged, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity };
+    if (chatChanged) e.session.messages = s.messages;
     this.recent.push(e); if (this.recent.length > RECENT_MAX) this.recent.shift();
     return e;
   }

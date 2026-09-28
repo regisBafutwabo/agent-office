@@ -87,7 +87,7 @@ test('ignores payloads without a session or event name', () => {
 
 test('names a session after its chat title, or its first prompt until there is one', () => {
   let title = null;
-  const st = new Store(() => title);
+  const st = new Store(() => ({ title, messages: [] }));
   const t = { ...base, transcript_path: '/Users/me/.claude/projects/shop/s1.jsonl' };
   st.ingest({ ...t, hook_event_name: 'SessionStart' });
   assert.equal(st.snapshot().sessions[0].title, null);
@@ -98,7 +98,8 @@ test('names a session after its chat title, or its first prompt until there is o
 });
 
 test('reads the latest custom title, falling back to the AI title', async () => {
-  const { titleFromText } = await import('./title.js');
+  const { parseTranscript } = await import('./transcript.js');
+  const titleFromText = text => parseTranscript(text).title;
   const ai = '{"type":"ai-title","aiTitle":"Locate storage"}', custom = n => `{"type":"custom-title","customTitle":"${n}"}`;
   assert.equal(titleFromText(`half a line"}\n${ai}\n`), 'Locate storage');
   assert.equal(titleFromText(`${custom('Old')}\n${ai}\n${custom('Checkout  bug')}\n`), 'Checkout bug');
@@ -129,4 +130,31 @@ test('marks the session merged until the next prompt', () => {
   assert.equal(st.ingest({ ...base, hook_event_name: 'Stop' }).session.activity, 'Finished · merged');
   assert.equal(st.ingest({ ...base, hook_event_name: 'UserPromptSubmit', prompt: 'next' }).session.merged, false);
   assert.equal(st.ingest({ ...base, hook_event_name: 'PostToolUseFailure', tool_name: 'Bash', tool_input: { command: 'gh pr merge 7' } }).merged, undefined);
+});
+
+test('keeps the chat: prompts and text replies, not tools, thinking, subagents or system notes', async () => {
+  const { parseTranscript } = await import('./transcript.js');
+  const L = o => JSON.stringify(o);
+  const text = [
+    'cut in half"}',
+    L({ type: 'user', message: { content: 'fix the cart' } }),
+    L({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: 'hmm' }, { type: 'tool_use', name: 'Read' }] } }),
+    L({ type: 'user', message: { content: [{ type: 'tool_result', content: 'file' }] } }),
+    L({ type: 'user', isMeta: true, message: { content: 'meta' } }),
+    L({ type: 'user', message: { content: '<command-name>/clear</command-name>' } }),
+    L({ type: 'assistant', isSidechain: true, message: { content: [{ type: 'text', text: 'subagent talk' }] } }),
+    L({ type: 'assistant', message: { content: [{ type: 'text', text: 'Fixed it.\n\n\n\n- rounding' }] } }),
+  ].join('\n');
+  assert.deepEqual(parseTranscript(text).messages, [{ role: 'user', text: 'fix the cart' }, { role: 'assistant', text: 'Fixed it.\n\n- rounding' }]);
+});
+
+test('sends the chat only when it changes, and shows a new prompt right away', () => {
+  let messages = [{ role: 'assistant', text: 'Hi' }];
+  const st = new Store(() => ({ title: null, messages }));
+  const t = { ...base, transcript_path: '/Users/me/.claude/projects/shop/s1.jsonl' };
+  assert.deepEqual(st.ingest({ ...t, hook_event_name: 'SessionStart' }).session.messages, [{ role: 'assistant', text: 'Hi' }]);
+  assert.equal(st.ingest({ ...t, hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: {} }).session.messages, undefined);
+  assert.deepEqual(st.ingest({ ...t, hook_event_name: 'UserPromptSubmit', prompt: 'next' }).session.messages.at(-1), { role: 'user', text: 'next' });
+  messages = [...messages, { role: 'user', text: 'next' }, { role: 'assistant', text: 'Done' }];
+  assert.equal(st.ingest({ ...t, hook_event_name: 'Stop' }).session.messages.at(-1).text, 'Done');
 });

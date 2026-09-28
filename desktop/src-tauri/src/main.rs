@@ -8,7 +8,7 @@ mod focus;
 mod server;
 mod setup;
 mod store;
-mod title;
+mod transcript;
 
 use serde_json::Value;
 use std::collections::HashMap;

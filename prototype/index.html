@@ -176,6 +176,12 @@ pre.json{margin:0 4px;padding:10px 12px;background:var(--panel-2);border:1px sol
 .perm-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .perm-actions small{color:var(--muted);font-size:11.5px;margin-left:auto;font-variant-numeric:tabular-nums}
 .log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+.d-tabs{margin:14px 0 10px;border:1px solid var(--line)}
+.chat{list-style:none;margin:0;padding:0 2px 0 0;display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto;overscroll-behavior:contain}
+.chat li{max-width:88%;padding:8px 11px;border-radius:13px;font-size:12.5px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
+.chat .user{align-self:flex-end;background:color-mix(in srgb,var(--accent) 16%,transparent);border-bottom-right-radius:4px}
+.chat .assistant{align-self:flex-start;background:var(--panel-2);border:1px solid var(--line);border-bottom-left-radius:4px}
+.chat .empty{align-self:stretch;max-width:none;padding:2px 0;color:var(--muted)}
 .log li{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:8px;align-items:center;font-size:12px}
 .log time{font:400 11px var(--font-m);color:var(--muted);font-variant-numeric:tabular-nums}
 .log .what{font:400 11.5px var(--font-m);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -379,8 +385,12 @@ body.live .speed-top, body.live .demo-only{display:none}
       </div>
     </div>
     <p class="d-note" id="d-note" hidden></p>
-    <p class="d-label">Recent hook events</p>
-    <ol class="log" id="d-log"></ol>
+    <div class="seg d-tabs" role="tablist" aria-label="Agent details">
+      <button role="tab" id="d-tab-chat" data-tab="chat" aria-controls="d-chat">Chat</button>
+      <button role="tab" id="d-tab-activity" data-tab="activity" aria-controls="d-log">Activity</button>
+    </div>
+    <ol class="chat" id="d-chat" role="tabpanel" aria-labelledby="d-tab-chat"></ol>
+    <ol class="log" id="d-log" role="tabpanel" aria-labelledby="d-tab-activity"></ol>
     <form class="d-form" id="d-form">
       <input type="text" id="d-prompt" autocomplete="off" placeholder="Give this agent a task">
       <button class="btn primary" type="submit">Send</button>
@@ -1938,7 +1948,7 @@ async function mainLoop(a) {
     const ws = chooseWorkspot(a);
     a.busy = true;
     if (a.spot !== ws) { setState(a, 'working', `Heading to the ${ws === a.home ? 'desk' : PLACE[ws.type].toLowerCase()}`); await walkTo(a, ws); }
-    a.pose = 'think'; emit(a, 'UserPromptSubmit', `"${prompt}"${fromUser ? ' · from you' : ''}`);
+    a.pose = 'think'; emit(a, 'UserPromptSubmit', `"${prompt}"${fromUser ? ' · from you' : ''}`); chatPush(a, 'user', prompt);
     setState(a, 'thinking', prompt); await wait(rand(2, 3.5));
     for (const st of makePlan(a.project)) {
       if (st.t === 'think') {
@@ -1961,7 +1971,7 @@ async function mainLoop(a) {
       }
       await doTool(a, ws, st.tool, st.arg);
     }
-    a.busy = false; a.pose = 'idle'; emit(a, 'Stop', `Finished: ${prompt}`); setState(a, 'done', `Finished: ${prompt}`);
+    a.busy = false; a.pose = 'idle'; emit(a, 'Stop', `Finished: ${prompt}`); setState(a, 'done', `Finished: ${prompt}`); chatPush(a, 'assistant', `Finished "${prompt}". The checks pass.`);
     await wait(3);
     if (a.pending.length) continue;
     if (Math.random() < .45 && await goRoof(a)) { await Promise.race([wait(rand(14, 26)), new Promise(r => a.wake = r)]); a.wake = null; continue; }
@@ -2256,6 +2266,7 @@ function renderDetail() {
   const perm = $('#d-perm'); perm.hidden = !a.approval;
   if (a.approval) { $('#d-perm-tool').textContent = a.approval.tool; $('#d-perm-cmd').textContent = a.approval.cmd || a.approval.tool; }
   $('#d-defer').hidden = !(a.approval && a.approval.live);
+  renderChat(a);
   $('#d-log').innerHTML = a.log.map(e => `<li><time>${stamp(e)}</time><code class="hook${e.hook === 'Notification' ? ' warn' : ''}">${e.hook}</code><span class="what" title="${esc(e.detail)}">${esc(e.detail)}</span></li>`).join('');
   const main = a.kind === 'main';
   $('#d-form').hidden = !main || !!a.live; $('#d-spawn').hidden = !main || !!a.live;
@@ -2267,6 +2278,25 @@ function renderDetail() {
     note.textContent = w ? `Answer this in ${app}. Approving from the office comes next.`
                          : 'Watching this session live. Sending tasks from the office comes in a later step.'; }
 }
+// The card shows the agent's chat; its hook events sit one tab over, under Activity.
+let detailTab = 'chat';
+function showDetailTab(tab) {
+  detailTab = tab;
+  for (const b of document.querySelectorAll('.d-tabs button')) { const on = b.dataset.tab === tab; b.setAttribute('aria-selected', on); b.setAttribute('aria-pressed', on); }
+  $('#d-chat').hidden = tab !== 'chat'; $('#d-log').hidden = tab !== 'activity';
+  if (tab === 'chat') { const c = $('#d-chat'); c.scrollTop = c.scrollHeight; }
+}
+document.querySelectorAll('.d-tabs button').forEach(b => b.onclick = () => { showDetailTab(b.dataset.tab); uiPrefs.detailTab = b.dataset.tab; saveUi(); });
+function renderChat(a) {
+  const el = $('#d-chat'), m = a.messages || [], sig = a.id + ':' + m.length + ':' + (m.length ? m[m.length - 1].text.length : 0);
+  if (el.dataset.sig === sig) return;                       // unchanged: keep the reader's scroll position
+  el.dataset.sig = sig;
+  el.innerHTML = m.length ? m.map(x => `<li class="${x.role === 'user' ? 'user' : 'assistant'}">${esc(x.text)}</li>`).join('')
+    : `<li class="empty">${a.kind === 'sub' ? `Subagents work out of sight and report back to ${esc(a.parent.name)}. See Activity for what they did.` : 'The chat shows up here after the next message.'}</li>`;
+  el.scrollTop = el.scrollHeight;
+}
+// Demo agents keep a short chat of their own so the card looks the same as a live one.
+function chatPush(a, role, text) { (a.messages || (a.messages = [])).push({ role, text }); if (a.messages.length > 12) a.messages.shift(); if (a === selected) detailDirty = true; }
 $('#d-close').onclick = () => select(null);
 // Demo approvals resolve locally; live ones go back to the bridge, which answers Claude Code's permission hook.
 function decide(a, decision) {
@@ -2601,6 +2631,7 @@ function onLiveEvent(e, replay) {
   if (s.term) a.hostTerm = s.term;
   if (s.chat) a.hostChat = s.chat;
   retitle(a, s.title);
+  if (s.messages) { a.messages = s.messages; if (a === selected) detailDirty = true; }
   if ('merged' in s) a.merged = !!s.merged;
   a.permissionMode = s.permissionMode;
   const who = e.agentId ? liveSub(a, e.agentId, e.agentType, replay) : a;
@@ -2658,6 +2689,7 @@ function onSnapshot(msg) {
     if (s.app) a.hostApp = s.app; if (s.term) a.hostTerm = s.term; if (s.chat) a.hostChat = s.chat;
     retitle(a, s.title);
     a.merged = !!s.merged;
+    if (s.messages) a.messages = s.messages;
     applyStatus(a, s.status, s.activity);
     for (const sub of s.subagents || []) { const x = liveSub(a, sub.id, sub.type, true); applyStatus(x, sub.status, sub.activity); }
   }
@@ -2818,6 +2850,7 @@ document.addEventListener('visibilitychange', () => {
 window.agentOffice = { agents, SPOTS, DOOR };   // for debugging from the console
 curFloor = makeFloor('lobby', 'Your first project', true); rebuildTower();
 setLiftOpen(uiPrefs.lift !== false); if (uiPrefs.panel === false) setPanelOpen(false);
+showDetailTab(uiPrefs.detailTab === 'activity' ? 'activity' : 'chat');
 applyScene(uiPrefs.theme in SCENES ? uiPrefs.theme : 'auto'); buildCustomize(); renderJSON(); drawTerm(); drawBoard(); layout();
 setView('3d'); Object.assign(cam, { theta: goal.theta, phi: goal.phi, radius: goal.radius }); cam.target.copy(goal.target); applyCam();
 if (MODE === 'demo' || !/^https?:$/.test(location.protocol)) startDemo(); else connectLive();
