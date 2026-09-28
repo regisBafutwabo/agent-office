@@ -878,6 +878,7 @@ function updateShell() {
 /* ---------- rooftop party: after dark a DJ plays, the fire pit burns and the bar opens ---------- */
 let nightT = 0;                                                  // 0 by day, 1 at night (set by applyScene)
 const isParty = () => nightT > .5;
+const canDance = a => isParty() && a.onRoof && a.spot?.type === 'dance';
 const BPM = 118, partyBeat = () => performance.now() / 1000 * BPM / 60;
 const PARTY_COLORS = ['#FF4FA3', '#7C6CF2', '#3DCBE0', '#F5B342', '#52C96F'];
 let partyBar = -1;
@@ -907,12 +908,16 @@ function updateParty(dt) {
   const t = performance.now() / 1000, beat = partyBeat(), pulse = Math.pow(1 - beat % 1, 3), o = Math.max(0, shellT), n = Math.floor(beat);
   PARTY.fade.forEach(([m, op]) => m.opacity = op * o);
   drawDjScreen(nowPlaying());
+  if (!isParty()) {
+    const dj = PARTY.dj; dj.pivot.position.y = 0; dj.head.rotation.x = 0;
+    dj.armL.rotation.x = dj.armR.rotation.x = -1.15;
+    return;
+  }
   PARTY.decks.forEach(d => d.rotation.y += dt * 3.5);
   const dj = PARTY.dj, bar = Math.floor(beat / 4) % 2;             // the DJ nods, works the decks, and every other bar throws a hand up
   dj.pivot.position.y = pulse * .04; dj.head.rotation.x = .18 * pulse - .05;
   dj.armL.rotation.x = -1.15 + Math.sin(t * 9) * .12;
   dj.armR.rotation.x = bar ? -2.8 + .35 * pulse : -1.15 + Math.sin(t * 7 + 1) * .1;
-  if (!PARTY.group.visible) return;                                // by day that's all: no lights, fire or bar
   PARTY.more.forEach((m, k) => m.g.visible = PARTY.more.slice(k).some(x => x.spots.some(s => s.by)));
   if (n !== partyBar) {                                            // new beat: the dance floor changes colour
     partyBar = n;
@@ -2612,6 +2617,11 @@ function removeAgent(a) {
 
 /* ---------- per-frame agent update ---------- */
 const lerpAngle = (a, b, t) => { let d = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI; if (d < -Math.PI) d += Math.PI * 2; return a + d * t; };
+function animationPose(a, moving) {
+  if (moving) return 'walk';
+  if (a.cheerUntil > performance.now()) return 'cheer';
+  return a.pose === 'dance' && !canDance(a) ? 'idle' : a.pose;
+}
 function updateAgent(a, dt, sdt) {
   const g = a.g;
   g.visible = a.onRoof ? roofGroup.visible : a.floor === curFloor;
@@ -2625,7 +2635,7 @@ function updateAgent(a, dt, sdt) {
   g.scale.setScalar(a.scale * Math.max(.001, a.appear));
   a.animT += sdt; const t = a.animT; const moving = a.path.length > 0;
   let bob = 0, l = 0, r = 0, rz = 0, tilt = 0;
-  const pose = moving ? 'walk' : a.cheerUntil > performance.now() ? 'cheer' : a.pose;
+  const pose = animationPose(a, moving);
   switch (pose) {
     case 'walk': bob = Math.abs(Math.sin(t * 9)) * .06; l = Math.sin(t * 9) * .6; r = -l; break;
     case 'type': l = -1.15 + Math.sin(t * 17) * .13; r = -1.15 + Math.sin(t * 17 + 1.7) * .13; tilt = .12; break;
@@ -3140,7 +3150,7 @@ function poseFor(a) {
   if (a.state === 'thinking') return 'think';
   if (a.state === 'working') return a.spot && a.spot.type === 'library' ? 'read' : 'type';
   if (a.spot && a.spot.type === 'hoops') return 'shoot';
-  if (a.spot && a.spot.type === 'dance') return 'dance';
+  if (canDance(a)) return 'dance';
   return 'idle';
 }
 function applyStatus(a, state, activity) {
