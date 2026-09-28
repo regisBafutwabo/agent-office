@@ -355,6 +355,7 @@ body.live .speed-top, body.live .demo-only{display:none}
       <h3>City</h3>
       <div class="themes" id="cities"></div>
       <button class="theme-card" id="sf-skyline" hidden>View SF skyline</button>
+      <button class="theme-card" id="sf-bridge" hidden>View Golden Gate</button>
       <h3>Agents</h3>
       <div id="cust-agents"></div>
       <h3 id="connect-title" hidden>Connect agents</h3>
@@ -987,6 +988,15 @@ function mergeCityGeometry(parts) {
     for (const g of parts) { array.set(g.attributes[name].array, offset); offset += g.attributes[name].array.length; }
     merged.setAttribute(name, new THREE.BufferAttribute(array, size));
   }
+  if (parts.some(g => g.attributes.color)) {
+    const colors = new Float32Array(merged.attributes.position.count * 3); let offset = 0;
+    for (const g of parts) {
+      const length = g.attributes.position.count * 3;
+      if (g.attributes.color) colors.set(g.attributes.color.array, offset); else colors.fill(1, offset, offset + length);
+      offset += length;
+    }
+    merged.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  }
   parts.forEach(g => g.dispose()); merged.computeBoundingSphere(); return merged;
 }
 function batchGenericCity() {
@@ -1051,7 +1061,7 @@ const landmarkFacade = canvasTex(768, 1024), landmarkLights = canvasTex(768, 102
   });
 }
 const landmarkMat = new THREE.MeshLambertMaterial({ map: landmarkFacade.t, emissiveMap: landmarkLights.t, emissive: '#FFFFFF', emissiveIntensity: 0 });
-const landmarkTrimMat = new THREE.MeshLambertMaterial({ color: '#C8CFCD' });
+const landmarkTrimMat = new THREE.MeshLambertMaterial({ color: '#FFFFFF', vertexColors: true });
 // Rings are clockwise in the ground plane. Each quarter uses one complete facade tile.
 function landmarkLoft(rings, tile, height) {
   const positions = [], uvs = [], n = rings[0].length;
@@ -1066,6 +1076,66 @@ function landmarkLoft(rings, tile, height) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); g.computeVertexNormals(); return g;
 }
+// A scenic reconstruction: actual NW bearing, compressed distance and span for readability.
+const SF_BRIDGE = { center: [37.8199, -122.4783], distance: 1500, span: 704, tower: 227, deck: 80, angle: 1.75 };
+function buildSFBridge() {
+  const parts = [], orange = '#BC492D', water = '#6E9AA6', hills = '#778C79';
+  const colorize = (g, color) => {
+    const c = new THREE.Color(color), colors = new Float32Array(g.attributes.position.count * 3);
+    for (let i = 0; i < colors.length; i += 3) { colors[i] = c.r; colors[i+1] = c.g; colors[i+2] = c.b; }
+    g.setAttribute('color', new THREE.BufferAttribute(colors, 3)); parts.push(g);
+  };
+  const beam = (a,b,width,depth=width,color=orange) => {
+    const start = new THREE.Vector3(...a), end = new THREE.Vector3(...b), delta = end.clone().sub(start);
+    const g = new THREE.BoxGeometry(width, delta.length(), depth).toNonIndexed();
+    g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), delta.clone().normalize())));
+    g.translate(...start.add(end).multiplyScalar(.5).toArray()); colorize(g,color);
+  };
+  const half = SF_BRIDGE.span / 2, deck = SF_BRIDGE.deck, top = SF_BRIDGE.tower, end = half + 205;
+  // Two Art Deco towers, open portals and stepped crossbeams.
+  for (const x of [-half,half]) {
+    for (const z of [-18,18]) {
+      beam([x,0,z],[x,top,z],9,10);
+      beam([x,top-14,z],[x,top+3,z],7,8);
+    }
+    for (const y of [deck-12,deck+25,deck+69,deck+107,top-4]) beam([x,y,-18],[x,y,18],7,7);
+    beam([x,3,-25],[x,3,25],22,12,'#A7AAA0');
+  }
+  const road = new THREE.BoxGeometry(end*2,5,34).toNonIndexed(); road.translate(0,deck,0); colorize(road,'#596469');
+  for (const z of [-19,19]) {
+    beam([-end,deck-5,z],[end,deck-5,z],4,4);
+    beam([-end,deck+3,z],[end,deck+3,z],1.3);
+    // The parabolic main cable meets the tower tops and descends to the anchorages.
+    const cableY = x => Math.abs(x) <= half ? deck + 16 + (top - deck - 16) * (x / half) ** 2
+      : top + (deck + 5 - top) * (Math.abs(x) - half) / (end - half);
+    const xs = Array.from({length:65},(_,i) => -half + SF_BRIDGE.span*i/64);
+    xs.unshift(-end); xs.push(end);
+    for (let i=0;i<xs.length-1;i++) beam([xs[i],cableY(xs[i]),z],[xs[i+1],cableY(xs[i+1]),z],2.2);
+    for (let i=1;i<64;i+=2) { const x=-half+SF_BRIDGE.span*i/64; beam([x,deck,z],[x,cableY(x),z],.9); }
+    for (let x=-end;x<end-20;x+=32) {
+      beam([x,deck-12,z],[Math.min(x+32,end),deck-5,z],1.1);
+      beam([x,deck-5,z],[Math.min(x+32,end),deck-12,z],1.1);
+    }
+  }
+  // Illustrative water and low shores give the span context; these are not terrain data.
+  const sea = new THREE.PlaneGeometry(1700,1050).toNonIndexed(); sea.rotateX(-Math.PI/2); sea.translate(0,.4,0); colorize(sea,water);
+  for (const side of [-1,1]) {
+    const profile = [[0,12],[90,42],[180,73],[290,87],[420,65]];
+    const p = [], uv = [];
+    for (let i=0;i<profile.length-1;i++) {
+      const [a,h] = profile[i], [b,k] = profile[i+1];
+      for (const v of [[side*(end+a),0,-220],[side*(end+a),h,-220],[side*(end+b),k,-220],
+        [side*(end+a),0,-220],[side*(end+b),k,-220],[side*(end+b),0,-220]]) { p.push(...v); uv.push(0,0); }
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(p,3)); g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+    if (side > 0) { const a=g.attributes.position.array; for(let i=0;i<a.length;i+=9) for(let j=0;j<3;j++) { const v=a[i+3+j];a[i+3+j]=a[i+6+j];a[i+6+j]=v; } }
+    g.computeVertexNormals(); colorize(g,hills);
+  }
+  const [dx,dz] = cityPoint(SF_BRIDGE.center,SF_VIEW_CENTER), distance = Math.hypot(dx,dz);
+  parts.forEach(g => { g.rotateY(SF_BRIDGE.angle); g.translate(dx/distance*SF_BRIDGE.distance, GROUND_Y, dz/distance*SF_BRIDGE.distance); });
+  return parts;
+}
+
 function buildSFLandmarks() {
   const bodies = [], trims = [];
   SF_LANDMARKS.forEach((landmark, index) => {
@@ -1115,10 +1185,11 @@ function buildSFLandmarks() {
       g.rotateY(-.66); g.translate(x, GROUND_Y, z); target.push(g);
     });
   });
+  trims.push(...buildSFBridge());
   [[bodies,landmarkMat],[trims,landmarkTrimMat]].forEach(([parts,material]) => skyline.add(new THREE.Mesh(mergeCityGeometry(parts), material)));
 }
 function setCityAtmosphere(id) {
-  const sf = id === 'sf'; scene.fog.near = sf ? 400 : 120; scene.fog.far = sf ? 1800 : 420;
+  const sf = id === 'sf'; scene.fog.near = sf ? 400 : 120; scene.fog.far = sf ? 3000 : 420;
   camera.fov = 40; camera.far = sf ? 2600 : 900; camera.updateProjectionMatrix(); skyDome.scale.setScalar(sf ? 4 : 1);
   city.children[1].scale.setScalar(sf ? 2 : 1);
   $('#city-credit').textContent = sf ? 'Stylized landmarks · © OpenStreetMap contributors' : '© OpenStreetMap contributors';
@@ -1881,7 +1952,7 @@ function applyScene(key) {
   const T = sceneT;
   scene.background = new THREE.Color(T.haze); drawSky(T); scene.fog.color.set(T.haze);
   landmarkMat.color.set(mix('#FFFFFF', '#26354C', T.cityDark)); landmarkMat.emissiveIntensity = T.cityLit;
-  landmarkTrimMat.color.set(mix('#C8CFCD', '#273348', T.cityDark));
+  landmarkTrimMat.color.set(mix('#FFFFFF', '#596C83', T.cityDark));
   cityMats.forEach((m, i) => { m.color.set(mix(CITY_TINTS[i], '#1E2636', T.cityDark)); m.emissiveIntensity = T.cityLit; });
   beaconMat.color.set(T.dark ? '#FF3B30' : '#C8453C'); mats.window.color.set(T.skyMid); fadeGlass.color.set(T.skyMid); fadeFrame.color.set(T.black); shellT = -1;
   ['floor','wall','oak','white','black','fabric','fabric2','leather','felt1','felt2','rug','rug2','cabinet','tile','chair'].forEach(k => mats[k].color.set(T[k]));
@@ -2607,13 +2678,16 @@ function toast(msg, action, fn) {
 
 /* customize */
 function buildCityChoices() {
-  $('#sf-skyline').hidden = cityKey !== 'sf';
+  $('#sf-skyline').hidden = $('#sf-bridge').hidden = cityKey !== 'sf';
   for (const selector of ['#cities', '#city-choices']) {
     if (!$(selector).children.length) $(selector).innerHTML = Object.entries(CITIES).map(([id, label]) => `<button class="theme-card city-card" data-city="${id}">${label}</button>`).join('');
     $(selector).querySelectorAll('[data-city]').forEach(b => { b.setAttribute('aria-pressed', b.dataset.city === cityKey); b.onclick = () => setCity(b.dataset.city); });
   }
 }
 $('#city-picker').addEventListener('cancel', e => e.preventDefault());
+$('#sf-bridge').onclick = () => {
+  setFollow(false); goRoofView(); camera.fov = 55; camera.updateProjectionMatrix(); goal.phi = 1.50; goal.theta = 1.05; goal.radius = 65; goal.target.x = -10; goal.target.z = 17;
+};
 $('#sf-skyline').onclick = () => {
   setFollow(false); goRoofView(); camera.fov = 55; camera.updateProjectionMatrix(); goal.phi = 1.54; goal.theta = -.14; goal.radius = 55;
 };

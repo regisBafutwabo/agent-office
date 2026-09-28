@@ -28,7 +28,9 @@ test('landmarks render in r128 with finite geometry, outward walls and bounded a
     assert.ok(mesh.geometry.attributes.uv.array.every(v => v >= 0 && v <= 1));
     vertices += mesh.geometry.attributes.position.count;
   }
-  assert.ok(vertices < 30000, `${vertices} vertices exceeds landmark budget`);
+  assert.equal(skyline.children[1].geometry.attributes.color.count, skyline.children[1].geometry.attributes.position.count);
+  assert.ok(skyline.children[1].geometry.attributes.color.array.some(v => v < .5));
+  assert.ok(vertices < 50000, `${vertices} vertices exceeds landmark budget`);
   const firstNormal = new THREE.Vector3().fromBufferAttribute(skyline.children[0].geometry.attributes.normal, 0);
   assert.ok(firstNormal.dot(new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0), -.66)) > .8);
   for (const landmark of run('SF_LANDMARKS')) {
@@ -57,4 +59,22 @@ test('office clearance checks enclosing polygons and edges, including repeated c
   assert.equal(run('footprintNear([[-50,-50],[50,-50],[50,50],[-50,50],[-50,-50]], [0,0], 25)'), true);
   assert.equal(run('footprintNear([[24,-50],[40,-50],[40,50],[24,50]], [0,0], 25)'), true);
   assert.equal(run('footprintNear([[30,-50],[40,-50],[40,50],[30,50]], [0,0], 25)'), false);
+});
+
+
+test('Golden Gate keeps its NW bearing, finite colored geometry and suspended cable silhouette', () => {
+  const { run } = setup();
+  const parts = run('buildSFBridge()');
+  const box = new THREE.Box3();
+  for (const g of parts) {
+    g.computeBoundingBox(); box.union(g.boundingBox);
+    for (const attribute of Object.values(g.attributes)) assert.ok(attribute.array.every(Number.isFinite));
+    assert.equal(g.attributes.color.count, g.attributes.position.count);
+  }
+  const towers = new THREE.Box3(); parts.slice(0,20).forEach(g => towers.union(g.boundingBox));
+  const center = towers.getCenter(new THREE.Vector3());
+  assert.ok(center.x < 0 && center.z < 0);
+  assert.ok(Math.abs(Math.hypot(center.x,center.z) - 1500) < 1);
+  assert.ok(Math.abs(box.max.y - (-150 + 230)) < .1);
+  assert.ok(parts.length > 200);
 });
