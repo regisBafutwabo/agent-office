@@ -1318,12 +1318,16 @@ const floorLabels = [
 /* ---------- rooftop trips ---------- */
 const ROOF_ACTIVITY = { roofsofa: 'Chilling on the roof', roofchair: 'Chilling on the roof', barstool: 'At the rooftop bar',
   firepit: 'By the fire pit', lounger: 'On a sun lounger', rail: 'Taking in the view', dance: 'Dancing to the DJ' };
-// Free terrace spots; the dance floor only opens after dark, and at night the party spots come first.
-const PARTY_SPOTS = new Set(['dance', 'barstool', 'firepit']);
+// Free terrace spots; the dance floor only opens after dark. At the party 7 in 10 picks hit the dance floor
+// (while it has room), 2 in 10 the bar or fire pit, and the last 1 in 10 anywhere else.
+const PARTY_SPOTS = new Set(['barstool', 'firepit']);
 const roofFree = () => ROOF_SPOTS.filter(s => !s.by && (!s.night || isParty()));
 function pickRoof() {
-  const f = roofFree(), fun = isParty() ? f.filter(s => PARTY_SPOTS.has(s.type)) : [];
-  return f.length ? pick(fun.length && Math.random() < .75 ? fun : f) : null;
+  const f = roofFree(); if (!f.length) return null;
+  if (!isParty()) return pick(f);
+  const dance = f.filter(s => s.type === 'dance'), rest = f.filter(s => s.type !== 'dance'),
+    fun = rest.filter(s => PARTY_SPOTS.has(s.type)), r = Math.random();
+  return pick(dance.length && r < .7 ? dance : fun.length && r < .9 ? fun : rest.length ? rest : dance);
 }
 function roofWalkTo(a, s) {
   if (a.spot === s) return Promise.resolve();
