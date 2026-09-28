@@ -354,6 +354,7 @@ body.live .speed-top, body.live .demo-only{display:none}
       <div class="themes" id="themes"></div>
       <h3>City</h3>
       <div class="themes" id="cities"></div>
+      <button class="theme-card" id="sf-skyline" hidden>View SF skyline</button>
       <h3>Agents</h3>
       <div id="cust-agents"></div>
       <h3 id="connect-title" hidden>Connect agents</h3>
@@ -1003,18 +1004,142 @@ const cityUV = {
     return [a, b, c, d].map(i => new THREE.Vector2(((v[i * 3] - v[a * 3]) * dx + (v[i * 3 + 1] - v[a * 3 + 1]) * dy) / length / 12, v[i * 3 + 2] / 12));
   }
 };
+// Hand-built interpretations, not survey meshes. Coordinates/heights and references: cities/README.md.
+const SF_VIEW_CENTER = [37.7843, -122.3995];
+const SF_LANDMARKS = [
+  { name: 'Salesforce Tower', center: [37.7897, -122.3972], height: 326.1 },
+  { name: 'Transamerica Pyramid', center: [37.795169, -122.402602], height: 260 },
+  { name: '181 Fremont', center: [37.789788, -122.395356], height: 250.1 }
+];
+function cityPoint(center, origin) {
+  return [(center[1] - origin[1]) * Math.PI / 180 * 6371000 * Math.cos(origin[0] * Math.PI / 180),
+    (origin[0] - center[0]) * Math.PI / 180 * 6371000];
+}
+function footprintNear(ring, point, radius) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [ax, az] = ring[j], [bx, bz] = ring[i], [x, z] = point;
+    if ((az > z) !== (bz > z) && x < (bx - ax) * (z - az) / (bz - az) + ax) inside = !inside;
+    const dx = bx - ax, dz = bz - az, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
+    if (Math.hypot(x - ax - t * dx, z - az - t * dz) < radius) return true;
+  }
+  return inside;
+}
+// Three original facade drawings share one atlas and one draw call. No downloaded imagery.
+const landmarkFacade = canvasTex(768, 1024), landmarkLights = canvasTex(768, 1024);
+{
+  const f = landmarkFacade.x, l = landmarkLights.x;
+  l.fillStyle = '#000'; l.fillRect(0, 0, 768, 1024);
+  ['#7496A6', '#DED9CB', '#7095A4'].forEach((base, tile) => {
+    const X = tile * 256; f.fillStyle = base; f.fillRect(X, 0, 256, 1024);
+    const floors = [70, 64, 56];
+    for (let row = 0; row < floors[tile]; row++) {
+      const y = row * 1024 / floors[tile], height = 1024 / floors[tile];
+      for (let col = 0; col < 16; col++) {
+        const x = X + col * 16;
+        const crown = tile === 0 && row < 9, spire = tile === 1 && row < 16;
+        if (spire) continue;
+        f.fillStyle = tile === 1 ? '#68757B' : ['#719CB0','#7EA9BC','#8DB6C6','#9FC1CE'][Math.min(3, Math.floor(col / 4))];
+        f.fillRect(x + (tile === 1 ? 4 : 1), y + 2, tile === 1 ? 8 : 14, height - 4);
+        f.fillStyle = crown ? '#BECFD7' : 'rgba(232,245,248,.45)'; f.fillRect(x, y, 1.5, height);
+        if (crown || (row * 13 + col * 7 + tile * 11) % 17 < 5) {
+          l.fillStyle = crown ? '#B1D7F5' : (row + col) % 3 ? '#F1D8A7' : '#BFD8E2';
+          l.fillRect(x + 3, y + 3, 10, height - 5);
+        }
+      }
+    }
+  });
+}
+const landmarkMat = new THREE.MeshLambertMaterial({ map: landmarkFacade.t, emissiveMap: landmarkLights.t, emissive: '#FFFFFF', emissiveIntensity: 0 });
+const landmarkTrimMat = new THREE.MeshLambertMaterial({ color: '#C8CFCD' });
+// Rings are clockwise in the ground plane. Each quarter uses one complete facade tile.
+function landmarkLoft(rings, tile, height) {
+  const positions = [], uvs = [], n = rings[0].length;
+  const vertex = (p, u, y) => { positions.push(...p); uvs.push((tile + .008 + u * .984) / 3, Math.max(.001, Math.min(.999, y / height))); };
+  for (let r = 0; r < rings.length - 1; r++) for (let j = 0; j < n; j++) {
+    const k = (j + 1) % n, a = rings[r][j], b = rings[r][k], c = rings[r + 1][k], d = rings[r + 1][j];
+    const u = j % (n / 4) / (n / 4), v = u + 4 / n;
+    [[a,u],[d,u],[c,v],[a,u],[c,v],[b,v]].forEach(([p,s]) => vertex(p, s, p[1]));
+  }
+  const roof = rings[rings.length - 1], center = roof.reduce((a,p) => a.map((v,i) => v + p[i] / n), [0,0,0]);
+  for (let j = 0; j < n; j++) [center, roof[(j + 1) % n], roof[j]].forEach(p => vertex(p, .5, height));
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); g.computeVertexNormals(); return g;
+}
+function buildSFLandmarks() {
+  const bodies = [], trims = [];
+  SF_LANDMARKS.forEach((landmark, index) => {
+    const localBody = [], localTrim = [];
+    const beam = (a, b, width = .6) => {
+      const start = new THREE.Vector3(...a), end = new THREE.Vector3(...b), delta = end.clone().sub(start);
+      const g = new THREE.CylinderGeometry(width, width, delta.length(), 4).toNonIndexed();
+      g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0), delta.clone().normalize())));
+      g.translate(...start.add(end).multiplyScalar(.5).toArray()); localTrim.push(g);
+    };
+    if (index === 0) {
+      const profiles = [[0,27],[24,28],[100,27.7],[200,25.5],[260,22.5],[289,19],[308,14],[320,8],[326.1,.6]];
+      const rings = profiles.map(([y,r]) => Array.from({length:64}, (_,j) => {
+        const a = j / 64 * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
+        return [Math.sign(c) * Math.abs(c) ** .65 * r, y, Math.sign(s) * Math.abs(s) ** .65 * r];
+      }));
+      localBody.push(landmarkLoft(rings, index, landmark.height));
+      for (let j = 0; j < 64; j += 2) for (let r = 4; r < rings.length - 1; r++) beam(rings[r][j], rings[r + 1][j], .23);
+      for (const r of [4,5,6,7]) for (let j = 0; j < 64; j++) beam(rings[r][j], rings[r][(j+1)%64], .18);
+    } else if (index === 1) {
+      const ring = (y,r) => [[r,y,r],[-r,y,r],[-r,y,-r],[r,y,-r]];
+      localBody.push(landmarkLoft([[13,25],[174,9.5],[210,5.5],[260,.15]].map(([y,r]) => ring(y,r)), index, landmark.height));
+      // Open concrete base with its characteristic V braces, and the two elevator wings.
+      for (let side = 0; side < 4; side++) {
+        const lower = ring(0,25), upper = ring(13,25), a = upper[side], b = upper[(side+1)%4];
+        for (let k = 0; k < 3; k++) {
+          const t = (k + .5) / 3, foot = lower[side].map((v,i) => v * (1-t) + lower[(side+1)%4][i] * t);
+          beam(foot, a.map((v,i) => v * (1-k/3) + b[i] * k/3), .95);
+          beam(foot, a.map((v,i) => v * (1-(k+1)/3) + b[i] * (k+1)/3), .95);
+        }
+      }
+      [-1,1].forEach(s => { const g = new THREE.BoxGeometry(7,80,7).toNonIndexed(); g.translate(s*12,155,0); localTrim.push(g); });
+    } else {
+      const ring = (y,w,d,shift=0) => [[w+shift,y,d],[-w+shift,y,d],[-w+shift,y,-d],[w+shift,y,-d]];
+      const rings = [ring(0,15,21), ring(70,14,20,1), ring(140,12.5,18,2), ring(209,11,16,3)];
+      const roof = ring(229,10.5,15.5,3); roof[0][1] = roof[3][1] = 218; rings.push(roof);
+      localBody.push(landmarkLoft(rings, index, 229));
+      for (let r = 0; r < rings.length-1; r++) for (let j = 0; j < 4; j++) {
+        beam(rings[r][j], rings[r+1][j], .65);
+        beam(rings[r][j], rings[r+1][(j+1)%4], .75);
+        beam(rings[r][(j+1)%4], rings[r+1][j], .75);
+      }
+      beam([-7.5,229,-15.5],[-7.5,250.1,-15.5],.5);
+    }
+    const [x,z] = cityPoint(landmark.center, SF_VIEW_CENTER);
+    for (const [parts,target] of [[localBody,bodies],[localTrim,trims]]) parts.forEach(g => {
+      g.rotateY(-.66); g.translate(x, GROUND_Y, z); target.push(g);
+    });
+  });
+  [[bodies,landmarkMat],[trims,landmarkTrimMat]].forEach(([parts,material]) => skyline.add(new THREE.Mesh(mergeCityGeometry(parts), material)));
+}
+function setCityAtmosphere(id) {
+  const sf = id === 'sf'; scene.fog.near = sf ? 400 : 120; scene.fog.far = sf ? 1800 : 420;
+  camera.fov = 40; camera.far = sf ? 2600 : 900; camera.updateProjectionMatrix(); skyDome.scale.setScalar(sf ? 4 : 1);
+  city.children[1].scale.setScalar(sf ? 2 : 1);
+  $('#city-credit').textContent = sf ? 'Stylized landmarks · © OpenStreetMap contributors' : '© OpenStreetMap contributors';
+}
+
 function buildRealCity(data) {
   if (!data.buildings?.length) throw new Error('Empty city');
   const batches = cityMats.map(() => []);
+  const offset = data.id === 'sf' ? cityPoint(data.center, SF_VIEW_CENTER) : [0,0];
   try {
     data.buildings.forEach((b, i) => {
       if (!Number.isFinite(b.h) || b.h <= 0 || !b.rings?.length || b.rings.some(r => r.length < 3 || r.some(p => p.length !== 2 || !p.every(Number.isFinite)))) throw new Error('Invalid building');
-      const paths = b.rings.map(r => r.map(([x, z]) => new THREE.Vector2(x, -z)));
+      if (data.id === 'sf' && (footprintNear(b.rings[0], offset.map(v => -v), 25) ||
+        SF_LANDMARKS.some(l => footprintNear(b.rings[0], cityPoint(l.center, data.center), 0)))) return;
+      const paths = b.rings.map(r => r.map(([x, z]) => new THREE.Vector2(x + offset[0], -z - offset[1])));
       const shape = new THREE.Shape(paths[0]); shape.holes = paths.slice(1).map(p => new THREE.Path(p));
       const geo = new THREE.ExtrudeGeometry(shape, { depth: b.h, bevelEnabled: false, steps: 1, UVGenerator: cityUV });
       geo.rotateX(-Math.PI / 2); geo.translate(0, GROUND_Y, 0); batches[i % cityMats.length].push(geo);
     });
     batches.forEach((parts, i) => { if (parts.length) skyline.add(new THREE.Mesh(mergeCityGeometry(parts), cityMats[i])); });
+    if (data.id === 'sf') buildSFLandmarks();
     if (data.id === 'gangnam') {
       const dx = (127.1025 - data.center[1]) * Math.cos(data.center[0] * Math.PI / 180), dz = data.center[0] - 37.5126, distance = Math.hypot(dx, dz);
       const h = 330; // the real tower is 555 m; compress it with the distance so its tip stays visible in the fog
@@ -1041,11 +1166,11 @@ async function setCity(id) {
     }
     if (request !== cityRequest) return false;
     clearCity(); if (data) buildRealCity(data); else { buildGenericCity(); batchGenericCity(); }
-    cityKey = id; uiPrefs.city = id; saveUi(); $('#city-credit').hidden = id === 'generic';
+    setCityAtmosphere(id); cityKey = id; uiPrefs.city = id; saveUi(); $('#city-credit').hidden = id === 'generic';
     $('#city-picker').close(); $('#city-status').hidden = true; buildCityChoices(); return true;
   } catch (err) {
     if (request !== cityRequest) return false;
-    clearCity(); buildGenericCity(); batchGenericCity(); cityKey = 'generic'; $('#city-credit').hidden = true; buildCityChoices();
+    clearCity(); buildGenericCity(); batchGenericCity(); cityKey = 'generic'; setCityAtmosphere('generic'); $('#city-credit').hidden = true; buildCityChoices();
     const message = location.protocol === 'file:' ? 'Open the office through its local server to load real cities.' : 'Couldn’t load that city. Showing Generic city.'; toast(message);
     $('#city-status').textContent = message; $('#city-status').hidden = false; return false;
   } finally { clearTimeout(timeout); }
@@ -1755,6 +1880,8 @@ function applyScene(key) {
   else { sceneT = SCENES[key]; sun.position.copy(SUN_POS); nightT = sceneT.dark ? 1 : 0; }
   const T = sceneT;
   scene.background = new THREE.Color(T.haze); drawSky(T); scene.fog.color.set(T.haze);
+  landmarkMat.color.set(mix('#FFFFFF', '#26354C', T.cityDark)); landmarkMat.emissiveIntensity = T.cityLit;
+  landmarkTrimMat.color.set(mix('#C8CFCD', '#273348', T.cityDark));
   cityMats.forEach((m, i) => { m.color.set(mix(CITY_TINTS[i], '#1E2636', T.cityDark)); m.emissiveIntensity = T.cityLit; });
   beaconMat.color.set(T.dark ? '#FF3B30' : '#C8453C'); mats.window.color.set(T.skyMid); fadeGlass.color.set(T.skyMid); fadeFrame.color.set(T.black); shellT = -1;
   ['floor','wall','oak','white','black','fabric','fabric2','leather','felt1','felt2','rug','rug2','cabinet','tile','chair'].forEach(k => mats[k].color.set(T[k]));
@@ -2248,6 +2375,7 @@ const viewAspect = () => { const w = stage.clientWidth, h = stage.clientHeight |
 const defaultRadius = () => { const a = viewAspect(); return a < .8 ? 44 : a < 1.3 ? 35 : 29; };
 const planRadius = () => { const a = viewAspect(); return a < .8 ? 52 : a < 1.3 ? 40 : 32; };
 function setView(v) {
+  camera.fov = 40; camera.updateProjectionMatrix();
   viewMode = 'floor'; renderLift();
   view = v; $('#view-3d').setAttribute('aria-pressed', v === '3d'); $('#view-plan').setAttribute('aria-pressed', v === 'plan');
   if (v === 'plan') { goal.phi = .02; goal.theta = 0; goal.radius = planRadius(); goal.target.set(0, 0, 0); }
@@ -2299,7 +2427,7 @@ canvas.addEventListener('pointermove', e => {
   if (!p) { const now = performance.now(); if (e.pointerType === 'mouse' && now - hoverT > 80) { hoverT = now; canvas.style.cursor = agentAt(e.clientX, e.clientY) ? 'pointer' : 'grab'; } return; }
   const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
   if (ptrs.size === 1) {
-    if (panMode) pan(dx, dy); else { goal.theta -= dx * .006; goal.phi = clamp(goal.phi - dy * .005, .3, 1.38); }
+    if (panMode) pan(dx, dy); else { goal.theta -= dx * .006; goal.phi = clamp(goal.phi - dy * .005, .3, cityKey === 'sf' ? 1.54 : 1.38); }
   } else if (ptrs.size === 2 && pinch) {
     const [a, b] = [...ptrs.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
     goal.radius = clamp(goal.radius * pinch.d / Math.max(d, 1), 7, 150); pan(mx - pinch.mx, my - pinch.my);
@@ -2479,12 +2607,16 @@ function toast(msg, action, fn) {
 
 /* customize */
 function buildCityChoices() {
+  $('#sf-skyline').hidden = cityKey !== 'sf';
   for (const selector of ['#cities', '#city-choices']) {
     if (!$(selector).children.length) $(selector).innerHTML = Object.entries(CITIES).map(([id, label]) => `<button class="theme-card city-card" data-city="${id}">${label}</button>`).join('');
     $(selector).querySelectorAll('[data-city]').forEach(b => { b.setAttribute('aria-pressed', b.dataset.city === cityKey); b.onclick = () => setCity(b.dataset.city); });
   }
 }
 $('#city-picker').addEventListener('cancel', e => e.preventDefault());
+$('#sf-skyline').onclick = () => {
+  setFollow(false); goRoofView(); camera.fov = 55; camera.updateProjectionMatrix(); goal.phi = 1.54; goal.theta = -.14; goal.radius = 55;
+};
 function buildCustomize() {
   const autoCard = `<button class="theme-card" data-key="auto" aria-pressed="${sceneKey === 'auto'}" title="Follows your clock: daylight from 8 to 17, golden hour at dawn and dusk, night from 20"><span class="sw">${['loft', 'golden', 'night'].map(k => `<i style="background:${SCENES[k].skyTop}"></i>`).join('')}</span>Auto (your time)</button>`;
   $('#themes').innerHTML = autoCard + Object.entries(SCENES).map(([k, T]) => `<button class="theme-card" data-key="${k}" aria-pressed="${k === sceneKey}"><span class="sw"><i style="background:${T.floor}"></i><i style="background:${T.fabric}"></i><i style="background:${T.fabric2}"></i><i style="background:${T.felt1}"></i></span>${T.label}</button>`).join('');
