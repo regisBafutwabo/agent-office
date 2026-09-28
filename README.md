@@ -4,11 +4,11 @@ A 3D office where your Claude Code agents work. Every session you run in the **C
 
 Works in any browser on your computer. Phone and VR headset support comes next (see the roadmap).
 
-> **Preview.** Agent Office is early and Mac-first. The desktop app isn't code-signed yet, so macOS asks you to allow it once (see [INSTALL.md](INSTALL.md)). **Open chat** relies on how the Claude and Codex apps open their chats today; that isn't documented by either app and could change, in which case the button still brings the app forward. Issues and ideas are welcome.
+> **Preview.** Agent Office is early and Mac-first. The desktop app is ad-hoc signed and not notarized, so macOS may ask you to allow it once (see [first-launch instructions](INSTALL.md#allow-the-first-launch)). **Open chat** relies on how the Claude and Codex apps open their chats today; that isn't documented by either app and could change, in which case the button still brings the app forward. Issues and ideas are welcome.
 
 ## Quick start
 
-**On a Mac:** download the app from the [latest release](https://github.com/regisBafutwabo/agent-office/releases/latest), open it, and click **Connect Claude Code**. That's it.
+**On a Mac:** download the DMG from the [latest release](https://github.com/regisBafutwabo/agent-office/releases/latest) and drag **Agent Office** to **Applications**. Open it once. If macOS blocks it, go to **System Settings → Privacy & Security → Security → Open Anyway**, then confirm **Open**. Click **Connect Claude Code** in the app. See the [step-by-step first-launch instructions](INSTALL.md#allow-the-first-launch).
 
 Full setup, including building from source and troubleshooting, is in **[INSTALL.md](INSTALL.md)**. From source, the short version is:
 
@@ -52,7 +52,7 @@ npm run dev      # run it
 npm run build    # Agent Office.app and a .dmg in src-tauri/target/release/bundle/
 ```
 
-The app isn't code-signed yet, so other Macs will warn that the developer can't be verified.
+The app is ad-hoc signed and not notarized, so other Macs may warn that the developer can't be verified. Follow the [first-launch instructions](INSTALL.md#allow-the-first-launch).
 
 ## How it works
 

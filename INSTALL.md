@@ -20,13 +20,27 @@ You also need [Claude Code](https://claude.com/claude-code) itself, either the C
 
 1. **Download** `Agent-Office_<version>_aarch64.dmg` from the [latest release](https://github.com/regisBafutwabo/agent-office/releases/latest).
 2. **Install:** open the .dmg and drag **Agent Office** to Applications.
-3. **Open it.** The app isn't code-signed yet, so macOS blocks it the first time. Go to **System Settings → Privacy & Security** and click **Open Anyway**.
+3. **Open it from Applications.** If macOS blocks it, follow [Allow the first launch](#allow-the-first-launch) below.
 4. **Connect your agents.** The office opens with a **Connect your coding agents** card. Click **Connect Claude Code**, plus **Connect Codex** or **Connect Cursor** if you use them.
 5. **Start a new Claude Code session** and send a prompt. Its agent rides up in the lift and takes a desk on its project's floor.
 
 You can also connect agents later from the menu-bar icon (**Connect agents**) or in the office's **Customize → Connect agents**.
 
 To start the app automatically, add it in **System Settings → General → Login Items**.
+
+### Allow the first launch
+
+The app is ad-hoc signed, without Apple Developer ID signing or notarization, so macOS may say Apple cannot verify it. For the app downloaded from this repository's releases:
+
+1. Open **Finder → Applications → Agent Office** once to trigger the warning, then dismiss it with **Done** or **Cancel**.
+2. Open **Apple menu → System Settings → Privacy & Security**.
+3. Scroll down to **Security**. Find the message about **Agent Office** being blocked and click **Open Anyway**.
+4. Authenticate if prompted, then click **Open** in the confirmation dialog.
+5. When the office opens, click **Connect Claude Code** (and **Connect Codex** or **Connect Cursor** if needed), then start a new agent session.
+
+If **Open Anyway** is missing, try opening Agent Office from Applications again, then return to Privacy & Security. Once approved, you can open the app normally from Applications.
+
+On macOS Monterey or Big Sur, use **System Preferences → Security & Privacy → General** instead. See [Apple's first-launch instructions](https://support.apple.com/en-us/102445).
 
 ### What Connect does
 
