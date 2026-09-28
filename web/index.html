@@ -786,11 +786,16 @@ const rLine = new THREE.LineBasicMaterial({ color: '#2B3035', transparent: true,
   const glow = (c, op = 1) => { const m = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0, depthWrite: false }); PARTY.fade.push([m, op]); return m; };
   { const s = canvasTex(512, 160), m = glow('#FFFFFF'); m.map = s.t; PARTY.screen = s;   // now playing, on the front of the booth
     const p = new THREE.Mesh(new THREE.PlaneGeometry(2.2, .69), m); p.position.set(DJ[0], Y + .5, DJ[1] + .41); B.add(p); }
-  // dance floor: a grid of light tiles in front of the booth, and spots to dance on
-  for (let i = 0; i < 5; i++) for (let j = 0; j < 4; j++) {
+  // dance floor: a grid of light tiles in front of the booth, and spots to dance on. When it fills up it grows toward
+  // the loungers, two rows at a time; an extension only shows while someone dances on it (or on one past it).
+  const danceRows = (j0, parent) => { for (let i = 0; i < 5; i++) for (let j = j0; j < j0 + 2; j++) {
     const m = new THREE.MeshBasicMaterial({ color: '#15191C', transparent: true, opacity: 0 }); shellMats.push(m);
-    PARTY.tiles.push(box(.76, .03, .76, m, DJ[0] - 1.6 + i * .8, Y + .015, -2.1 + j * .8, N, false)); }
+    PARTY.tiles.push(box(.76, .03, .76, m, DJ[0] - 1.6 + i * .8, Y + .015, -2.1 + j * .8, parent, false)); } };
+  danceRows(0, N); danceRows(2, N);
   [[-3.0, -1.5], [-1.5, -1.5], [0, -1.5], [-2.25, .1], [-.75, .1]].forEach(([x, z]) => roofSpot('dance', x, z, [0, -1], { from: null, night: true }));
+  PARTY.more = [[[-3.0, 1.7], [-1.5, 1.7], [0, 1.7]], [[-2.25, 3.3], [-.75, 3.3]]].map((pts, k) => {
+    const g = new THREE.Group(); g.visible = false; N.add(g); danceRows(4 + k * 2, g);
+    return { g, spots: pts.map(([x, z]) => roofSpot('dance', x, z, [0, -1], { from: null, night: true, ext: k + 1 })) }; });
   // light beams sweeping over the dance floor from the speakers, plus a coloured light
   [-1, 1].forEach(s => { const yaw = new THREE.Group(); yaw.position.set(DJ[0] + s * 1.75, Y + 1.32, DJ[1] + .1); N.add(yaw);
     const pitch = new THREE.Group(); pitch.rotation.x = -1.05; yaw.add(pitch);
@@ -888,6 +893,7 @@ function updateParty(dt) {
   dj.armL.rotation.x = -1.15 + Math.sin(t * 9) * .12;
   dj.armR.rotation.x = bar ? -2.8 + .35 * pulse : -1.15 + Math.sin(t * 7 + 1) * .1;
   if (!PARTY.group.visible) return;                                // by day that's all: no lights, fire or bar
+  PARTY.more.forEach((m, k) => m.g.visible = PARTY.more.slice(k).some(x => x.spots.some(s => s.by)));
   if (n !== partyBar) {                                            // new beat: the dance floor changes colour
     partyBar = n;
     PARTY.tiles.forEach((tile, i) => { const c = PARTY_COLORS[(i * 7 + n * 3) % PARTY_COLORS.length];
@@ -1321,7 +1327,9 @@ const ROOF_ACTIVITY = { roofsofa: 'Chilling on the roof', roofchair: 'Chilling o
 // Free terrace spots; the dance floor only opens after dark. At the party 7 in 10 picks hit the dance floor
 // (while it has room), 2 in 10 the bar or fire pit, and the last 1 in 10 anywhere else.
 const PARTY_SPOTS = new Set(['barstool', 'firepit']);
-const roofFree = () => ROOF_SPOTS.filter(s => !s.by && (!s.night || isParty()));
+// A dance floor extension opens only once every dance spot before it is taken.
+const danceOpen = s => !s.ext || ROOF_SPOTS.every(o => o.type !== 'dance' || (o.ext || 0) >= s.ext || o.by);
+const roofFree = () => ROOF_SPOTS.filter(s => !s.by && (!s.night || isParty()) && danceOpen(s));
 function pickRoof() {
   const f = roofFree(); if (!f.length) return null;
   if (!isParty()) return pick(f);
