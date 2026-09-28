@@ -1537,14 +1537,20 @@ function stepFlight(dt) {
     return;
   }
   if (F.rise && F.t < F.diveAt) setCamPose(F.from, F.heli, ease(F.t / F.rise));                 // 1. rise out beside the tower
-  if (!F.swapped && F.t >= F.travelAt) {                                                          // 2. behind the glass, switch floors…
-    F.swapped = true; F.y0 = yOff; curFloor = F.f; rebuildTower(); refreshFloorVisuals(); renderLift(); uiDirty = true;
+  /* 2. Behind the glass, switch floors, then travel. The furnished interior always sits at y = 0, so rather than
+     sliding the tower past it (every floor in between would pass right through it), the tower jumps at once so the
+     new floor lines up with the interior, and the camera (and sky) jump by the same amount so nothing seems to move.
+     Then the camera glides back down to the new floor. */
+  if (!F.swapped && F.t >= F.travelAt) {
+    F.swapped = true; F.y0 = yOff; yOff = yOffTarget = F.y1; curFloor = F.f; rebuildTower(); refreshFloorVisuals(); renderLift(); uiDirty = true;
   }
-  if (!F.same && F.t >= F.travelAt) { const u = smooth((F.t - F.travelAt) / F.travel); yOff = yOffTarget = lerpN(F.y0, F.y1, u); }  // …and travel
+  const camY0 = F.camY || 0;
+  F.camY = !F.same && F.t >= F.travelAt ? (F.y1 - F.y0) * (1 - smooth((F.t - F.travelAt) / F.travel)) : 0;
   if (F.t >= F.diveAt) {                                                                           // 3. dive in, toward the agent
-    if (!F.diveFrom) F.diveFrom = camPose();
+    if (!F.diveFrom) { F.diveFrom = camPose(); F.diveFrom.target.y -= camY0; }
     setCamPose(F.diveFrom, diveGoal(F), ease((F.t - F.diveAt) / F.dive));
   }
+  cam.target.y += F.camY; skyDome.position.y = F.camY;
   goal.theta = cam.theta; goal.phi = cam.phi; goal.radius = cam.radius; goal.target.copy(cam.target);   // no catch-up once we land
   if (F.t >= F.end) {
     flight = null; yOff = yOffTarget = F.y1; viewMode = 'floor'; renderLift(); uiDirty = true;
@@ -2905,7 +2911,7 @@ function step(dt) {
   if (Math.abs(vo.x - vo.tx) > .3 || Math.abs(vo.y - vo.ty) > .3) { const k = 1 - Math.exp(-dt * 9); vo.x += (vo.tx - vo.x) * k; vo.y += (vo.ty - vo.y) * k; applyViewOffset(); }
   const sdt = dt * speed; simTime += sdt; tickTimers();
   if (MODE === 'live') liveTick(dt);
-  stepFlight(dt);
+  stepFlight(dt); if (!flight || flight.landing) skyDome.position.y = 0;
   yOff += (yOffTarget - yOff) * (reduced ? 1 : 1 - Math.exp(-dt * 5)); building.position.y = city.position.y = yOff;
   floorGlow();
   for (const a of agents.slice()) updateAgent(a, dt, sdt);
