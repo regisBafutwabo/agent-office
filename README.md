@@ -4,9 +4,9 @@ A 3D office where your Claude Code agents work. Every session you run in the **C
 
 Works in any browser on your computer. Phone and VR headset support comes next (see the roadmap).
 
-![Agent Office demo: agents working on a sunlit office floor overlooking Seoul](docs/images/office-seoul.jpg)
+![Agent Office demo: agents working on a sunlit office floor overlooking Seoul](docs/images/office-seoul.png)
 
-*The office in demo mode, with fictional projects and the artistic Seoul skyline.*
+*The actual demo scene, exported at 3000 × 1800 with fictional projects and the artistic Seoul skyline. City footprints © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright). Click the image for full resolution.*
 
 > **Preview.** Agent Office is early and Mac-first. The desktop app is ad-hoc signed and not notarized, so macOS may ask you to allow it once (see [first-launch instructions](INSTALL.md#allow-the-first-launch)). **Open chat** relies on how the Claude and Codex apps open their chats today; that isn't documented by either app and could change, in which case the button still brings the app forward. Issues and ideas are welcome.
 
@@ -14,9 +14,7 @@ Works in any browser on your computer. Phone and VR headset support comes next (
 
 **On a Mac:** download the DMG from the [latest release](https://github.com/regisBafutwabo/agent-office/releases/latest) and drag **Agent Office** to **Applications**. Open it once. If macOS blocks it, go to **System Settings → Privacy & Security → Security → Open Anyway**, then confirm **Open**. Click **Connect Claude Code** in the app. See the [step-by-step first-launch instructions](INSTALL.md#allow-the-first-launch).
 
-<img src="docs/images/connect-agents.jpg" alt="Connect agents settings showing Claude Code, Codex, and Cursor connected" width="332">
-
-*Customize → Connect agents after setup. Each Connect button installs that tool's hooks; start a new agent session afterward.*
+In **Customize → Connect agents**, each **Connect** button installs that tool's hooks. Start a new agent session afterward.
 
 Full setup, including building from source and troubleshooting, is in **[INSTALL.md](INSTALL.md)**. From source, the short version is:
 
@@ -93,7 +91,9 @@ Choose **Seoul**, **San Francisco**, or **Generic city** on your first visit, or
 
 ## Rooftop DJ
 
-<img src="docs/images/rooftop-party.jpg" alt="Rooftop party in demo mode with a robot DJ, illuminated dance floor, bar, and fire pit" width="640">
+[![Rooftop party in demo mode with a robot DJ, illuminated dance floor, bar, and fire pit](docs/images/rooftop-party.png)](docs/images/rooftop-party.png)
+
+*A lossless export of the demo's night scene. City footprints © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).*
 
 The rooftop DJ plays what you're listening to. On a Mac, the office asks the Spotify app for its current song, then Apple Music, and shows it on the front of the DJ booth. With your music on, the DJ plays by day too; the full party (lights, fire, bar) still waits for dark. With nothing playing, the DJ spins its own office mix of made-up tracks.
 
