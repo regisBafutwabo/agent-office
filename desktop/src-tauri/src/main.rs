@@ -97,26 +97,55 @@ fn refresh_connect_menu(items: &[MenuItem<Wry>]) {
     }
 }
 
-/// Native notification when an agent needs permission (once per session per 10 seconds, since
+/// Native notification when an agent needs permission or finishes (once per session per 10 seconds, since
 /// Claude Code reports the same prompt as both PermissionRequest and Notification).
+/// Nothing while you're looking at the office. With the window open, the office plays each agent's own
+/// tune, so the banner stays quiet; with it closed, macOS plays a sound instead.
+/// The banner shows the agent's face when the office has sent a picture of it.
 fn maybe_notify(app: &AppHandle, recent: &Mutex<HashMap<String, u64>>, e: &Value) {
     let kind = e["type"].as_str().unwrap_or("");
     let needs_you = kind == "PermissionRequest" || (kind == "Notification" && e["notificationType"].as_str() == Some("permission_prompt"));
-    if !needs_you {
+    let done = kind == "Stop";
+    if !needs_you && !done {
+        return;
+    }
+    let window = app.get_webview_window(WINDOW_ID);
+    if done && window.as_ref().is_some_and(|w| w.is_focused().unwrap_or(false)) {
         return;
     }
     let sid = e["sessionId"].as_str().unwrap_or("").to_string();
     let now = store::now_ms();
     {
         let mut seen = recent.lock().unwrap();
-        if seen.get(&sid).is_some_and(|&t| now.saturating_sub(t) < 10_000) {
+        let key = format!("{}:{sid}", if done { "done" } else { "needs" });
+        if seen.get(&key).is_some_and(|&t| now.saturating_sub(t) < 10_000) {
             return;
         }
-        seen.insert(sid, now);
+        seen.insert(key, now);
     }
     let project = e["session"]["project"].as_str().unwrap_or("A session");
-    let detail = e["session"]["activity"].as_str().unwrap_or("Needs your permission");
-    let _ = app.notification().builder().title(format!("{project} needs you")).body(detail).show();
+    let (title, body, sound) = if done {
+        let what = e["session"]["title"].as_str().filter(|t| !t.is_empty()).unwrap_or("Finished responding");
+        (format!("✓ {project} is done"), what.to_string(), "Glass")
+    } else {
+        (format!("{project} needs you"), e["session"]["activity"].as_str().unwrap_or("Needs your permission").to_string(), "Submarine")
+    };
+    let sound = (!window.as_ref().is_some_and(|w| w.is_visible().unwrap_or(false))).then_some(sound);
+    let face = server::face_path(&sid, if done { "done" } else { "waiting" }).filter(|p| p.exists());
+    // notify-rust directly, since the notification plugin can't put a picture on a macOS banner.
+    #[cfg(target_os = "macos")]
+    let _ = notify_rust::set_application(if tauri::is_dev() { "com.apple.Terminal" } else { &app.config().identifier });
+    std::thread::spawn(move || {
+        let mut note = notify_rust::Notification::new();
+        note.summary(&title).body(&body);
+        if let Some(path) = face.as_ref().and_then(|p| p.to_str()) {
+            note.image_path(path);
+        }
+        if let Some(sound) = sound {
+            note.sound_name(sound);
+        }
+        let _ = note.show();
+    });
 }
 
 fn main() {

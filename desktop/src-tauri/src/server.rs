@@ -18,6 +18,7 @@ use axum::{
 use rust_embed::RustEmbed;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -80,11 +81,27 @@ pub fn router(port: u16, on_change: OnChange) -> Router {
         .route("/api/app-icon/{file}", get(app_icon))
         .route("/api/setup", get(setup_status))
         .route("/api/setup/{tool}", post(setup_connect))
+        .route("/api/face/{session}/{mood}", post(save_face))
         .route("/ws", get(ws))
         .route("/vendor/three.min.js", get(three))
         .fallback(get(asset))
         .layer(middleware::from_fn_with_state(state.clone(), check_origin))
         .with_state(state)
+}
+
+/// Where the office's picture of an agent's face is kept, for the "done" and "needs you" banners.
+pub fn face_path(session: &str, mood: &str) -> Option<PathBuf> {
+    let safe = !session.is_empty() && session.len() <= 128 && session.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    (safe && matches!(mood, "done" | "waiting")).then(|| std::env::temp_dir().join("agent-office-faces").join(format!("{session}-{mood}.png")))
+}
+
+async fn save_face(Path((session, mood)): Path<(String, String)>, body: Bytes) -> StatusCode {
+    let Some(path) = face_path(&session, &mood) else { return StatusCode::BAD_REQUEST };
+    if body.len() > 512 * 1024 || !body.starts_with(b"\x89PNG") {
+        return StatusCode::BAD_REQUEST;
+    }
+    let saved = path.parent().is_some_and(|dir| std::fs::create_dir_all(dir).is_ok()) && std::fs::write(&path, &body).is_ok();
+    if saved { StatusCode::NO_CONTENT } else { StatusCode::INTERNAL_SERVER_ERROR }
 }
 
 /// Serve on 127.0.0.1 (and ::1, so http://localhost works everywhere). If the port is taken by another

@@ -14,6 +14,7 @@ version = "0.4.0"
 dependencies = [
  "axum",
  "mime_guess",
+ "notify-rust",
  "rust-embed",
  "serde",
  "serde_json",

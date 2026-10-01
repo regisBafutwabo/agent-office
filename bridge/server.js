@@ -97,6 +97,7 @@ const server = http.createServer(async (req, res) => {
     try { console.error('[office page]', (await readBody(req)).slice(0, 2000)); } catch {}
     res.writeHead(204); res.end(); return;
   }
+  if (req.method === 'POST' && url.pathname.startsWith('/api/face/')) { req.resume(); res.writeHead(204); res.end(); return; }   // only the desktop app's banners use faces
   if (req.method !== 'GET') { res.writeHead(405); res.end(); return; }
   if (url.pathname === '/api/state') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(snapshot())); return; }
   if (url.pathname === '/vendor/three.min.js') return sendFile(res, THREE_JS);
