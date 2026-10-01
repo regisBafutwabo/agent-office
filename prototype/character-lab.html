@@ -1,4 +1,7 @@
+<!doctype html>
+<html lang="en">
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Character Lab</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,6 +35,14 @@ button,input{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .wrap{max-width:1360px;margin:0 auto;padding-block:20px 32px;padding-inline:16px;display:flex;flex-direction:column;gap:16px}
 header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+.edition{font:500 11px var(--font-m);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+.intent{padding:14px 16px;border:1px solid var(--line);border-left:3px solid var(--intent-color,var(--accent));border-radius:12px;background:var(--panel)}
+.intent strong{font:700 16px var(--font-d)}
+.intent p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.crew-story{margin:0;color:var(--muted);font-size:13px}
+.collection{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+.collection strong{font:700 18px var(--font-d)}
+.collection p{margin:3px 0 0;color:var(--muted);font-size:12px}
 header h1{margin:0;font:700 30px/1.05 var(--font-d);letter-spacing:-.02em}
 header p{margin:6px 0 0;color:var(--muted);max-width:62ch;text-wrap:pretty}
 .main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
@@ -86,45 +97,52 @@ pre{margin:0;background:var(--panel-2);border:1px solid var(--line);border-radiu
 <div class="wrap">
   <header>
     <div>
+      <div class="edition">Collection 03 / Creature comforts</div>
       <h1>Character Lab</h1>
-      <p>New looks for your agents. Their screen faces show what each agent is doing, so the office reads at a glance. Click a character to customize it, then try the statuses and poses below.</p>
+      <p>Every state has a little ritual. Watch the crew think, focus, ask for help, and recharge — or direct an action yourself.</p>
     </div>
     <label class="check"><input type="checkbox" id="spin" checked> Turntables sway</label>
   </header>
 
+  <div class="bar"><span class="lbl">Choose your crew</span><div class="seg" id="crews" role="group" aria-label="Character collection"></div><span class="note">Two styles, the same expressive actions. Your edits stay with each crew while this page is open.</span></div>
   <div class="main">
     <div class="stage-col">
+      <div class="collection"><div><strong id="collection-title">Creature comforts</strong><p>Thinking, making, asking, recovering. A crew with a little more life.</p></div><button class="btn" id="restore">Restore collection</button></div>
       <div class="stage" id="stage">
         <div class="tags" id="tags"></div>
         <div class="stage-hint">Drag to look around · scroll to zoom</div>
       </div>
       <div class="bar">
         <div class="grp"><span class="lbl">Status</span><div class="seg" id="states" role="group" aria-label="Status"></div></div>
-        <div class="grp"><span class="lbl">Pose</span><div class="seg" id="poses" role="group" aria-label="Pose"></div></div>
+        <div class="grp"><span class="lbl">Action</span><div class="seg" id="poses" role="group" aria-label="Action"></div></div>
         <label class="check"><input type="checkbox" id="all"> Apply to everyone</label>
       </div>
+      <div class="intent" aria-live="polite"><strong id="intent-title"></strong><p id="intent-copy"></p></div>
       <ul class="legend">
-        <li><span class="pill s-thinking">Thinking</span><span>Eyes look up while <b>“…”</b> cycles</span></li>
-        <li><span class="pill s-working">Working</span><span>Focused, narrowed eyes that scan</span></li>
-        <li><span class="pill s-waiting">Needs you</span><span>Wide eyes and a big <b>!</b></span></li>
-        <li><span class="pill s-done">Done</span><span>Happy <b>^ ^</b> eyes and a smile</span></li>
-        <li><span class="pill s-idle">Idle</span><span>Sleepy eyes, then <b>zZ</b></span></li>
-        <li><span class="pill s-error">Error</span><span>A worried frown and a sweat drop</span></li>
+        <li><span class="pill s-thinking">Thinking</span><span>Ponder a map of possibilities</span></li>
+        <li><span class="pill s-working">Working</span><span>Protect focus. Work at the keyboard.</span></li>
+        <li><span class="pill s-waiting">Needs you</span><span>Raise a hand. Make the question visible.</span></li>
+        <li><span class="pill s-done">Done</span><span>A little celebration, then a handoff.</span></li>
+        <li><span class="pill s-idle">Idle</span><span>Rest on a charging dock.</span></li>
+        <li><span class="pill s-error">Error</span><span>Inspect the problem. Try a repair.</span></li>
       </ul>
     </div>
 
     <aside class="panel" aria-label="Character creator">
       <div class="who"><span class="chip" id="chip"></span><input type="text" id="name" aria-label="Name" maxlength="16"></div>
+      <p class="crew-story" id="crew-story"></p>
       <div class="row"><span class="lbl">Body</span><div class="seg" id="bodies" role="group" aria-label="Body shape"></div></div>
-      <div class="row"><span class="lbl">Face</span><div class="seg" id="faces" role="group" aria-label="Face style"></div></div>
-      <div class="row"><span class="lbl">Body color</span><div class="sw" id="sw-color"></div></div>
+      <div class="row" id="species-row"><span class="lbl">Animal</span><div class="seg" id="species" role="group" aria-label="Animal species"></div></div>
+      <div class="row" id="head-row"><span class="lbl">Head</span><div class="seg" id="heads" role="group" aria-label="Head shape"></div></div>
+      <div class="row" id="face-row"><span class="lbl">Face</span><div class="seg" id="faces" role="group" aria-label="Face style"></div></div>
+      <div class="row"><span class="lbl">Body / outfit color</span><div class="sw" id="sw-color"></div></div>
       <div class="row"><span class="lbl">Trim</span><div class="sw" id="sw-trim"></div></div>
       <div class="row"><span class="lbl">Accessory color</span><div class="sw" id="sw-accent"></div></div>
       <div class="row"><span class="lbl">Accessories</span><div class="chips" id="accs"></div></div>
       <label class="check"><input type="checkbox" id="intern"> Subagent (smaller, with a lanyard)</label>
       <div class="btns"><button class="btn primary" id="rand">Randomize</button><button class="btn" id="rand-all">Randomize everyone</button></div>
-      <div class="row"><span class="lbl">Saved as</span><pre id="json"></pre></div>
-      <p class="note">In the office this is saved per project in office.json. Subagents get a smaller version of their parent's look automatically.</p>
+      <div class="row"><span class="lbl">Look configuration</span><pre id="json"></pre></div>
+      <p class="note">A playground for trying looks. Changes here stay in this preview until you reload; they do not change your office agents.</p>
     </aside>
   </div>
 </div>
@@ -148,21 +166,51 @@ const STATUS = {
   idle:     { label: 'Idle', color: '#8A979C', face: '#AEBFC6' },
   error:    { label: 'Error', color: '#E5534B', face: '#FF9C94' },
 };
-const POSES = { idle: 'Stand', walk: 'Walk', type: 'Type', sit: 'Sit', wave: 'Wave', shoot: 'Shoot' };
+const POSES = { auto: 'Follow state', ponder: 'Ponder', research: 'Research', present: 'Ask / present', celebrate: 'Celebrate', recharge: 'Recharge', repair: 'Repair', stretch: 'Stretch', sip: 'Tea break', idle: 'Stand', walk: 'Walk', type: 'Type', sit: 'Sit', wave: 'Wave', shoot: 'Shoot' };
+const STATE_ACTION = { thinking: 'ponder', working: 'type', waiting: 'present', done: 'celebrate', idle: 'recharge', error: 'repair' };
+const NEEDS = {
+  thinking: ['Space to think', 'A small idea map, a thoughtful pause, and time to compare possibilities.'],
+  working: ['Room to focus', 'Eyes on the work, hands on the keyboard. Quiet concentration beats constant alerts.'],
+  waiting: ['One clear decision', 'A raised hand and a question card: a visible request for your next instruction.'],
+  done: ['A moment to celebrate', 'A small victory bounce. The result is ready for a human to review.'],
+  idle: ['Permission to rest', 'A charging dock and a slow breath while waiting for the next task.'],
+  error: ['A path to recovery', 'Inspect the diagnostic panel and reach for a tool. A setback is something to investigate.'],
+};
+const HEADS = { monitor: 'Monitor', capsule: 'Capsule', pebble: 'Pebble' };
 const BODIES = { round: { label: 'Round', R: .40, h: .78, taper: .72 }, tall: { label: 'Tall', R: .31, h: 1.0, taper: .8 }, compact: { label: 'Compact', R: .46, h: .62, taper: .7 } };
 const FACES = { classic: 'Classic', pixel: 'Pixel', anime: 'Big eyes', minimal: 'Minimal' };
 const ACCESSORIES = { headphones: 'Headphones', beanie: 'Beanie', cap: 'Cap', glasses: 'Glasses', antenna: 'Antenna', scarf: 'Scarf', backpack: 'Backpack', mug: 'Mug' };
 const HATS = ['beanie', 'cap'];
-const BODY_COLORS = ['#3FA7D6', '#F25F5C', '#59CD90', '#FAC05E', '#A78BFA', '#EE6C9F', '#2EC4B6', '#F79D65', '#E9E5DC', '#3D454C'];
-const TRIM_COLORS = ['#15212A', '#F4F1EA', '#FFB400', '#2B59C3', '#E4572E', '#98A4AA'];
-const ACCENT_COLORS = ['#E4572E', '#2B59C3', '#FFB400', '#15212A', '#F4F1EA', '#6CB26B', '#B16AD9', '#FF7EB6'];
+const BODY_COLORS = ['#587C73', '#E8AA72', '#C5B4E3', '#E9E5DC', '#456079', '#E6BE54', '#3FA7D6', '#F25F5C', '#59CD90', '#FAC05E', '#A78BFA', '#EE6C9F', '#2EC4B6', '#F79D65', '#3D454C'];
+const TRIM_COLORS = ['#456079', '#202E35', '#F4F1EA', '#15212A', '#FFB400', '#2B59C3', '#E4572E', '#98A4AA'];
+const ACCENT_COLORS = ['#E8AA72', '#587C73', '#D9EF91', '#C5B4E3', '#E4572E', '#2B59C3', '#FFB400', '#15212A', '#F4F1EA', '#6CB26B', '#B16AD9', '#FF7EB6'];
 const PRESETS = [
-  { name: 'Ada', body: 'round', color: '#3FA7D6', trim: '#15212A', accent: '#E4572E', face: 'classic', accessories: ['headphones'], intern: false, state: 'thinking', pose: 'idle' },
-  { name: 'Kit', body: 'tall', color: '#F25F5C', trim: '#F4F1EA', accent: '#15212A', face: 'pixel', accessories: ['cap'], intern: false, state: 'working', pose: 'type' },
-  { name: 'Nova', body: 'compact', color: '#59CD90', trim: '#15212A', accent: '#B16AD9', face: 'anime', accessories: ['beanie', 'scarf'], intern: false, state: 'waiting', pose: 'wave' },
-  { name: 'Reno', body: 'round', color: '#FAC05E', trim: '#15212A', accent: '#F4F1EA', face: 'minimal', accessories: ['glasses', 'mug'], intern: false, state: 'done', pose: 'idle' },
-  { name: 'Iris', body: 'tall', color: '#A78BFA', trim: '#F4F1EA', accent: '#FFB400', face: 'anime', accessories: ['antenna', 'backpack'], intern: false, state: 'idle', pose: 'sit' },
-  { name: 'Explore', body: 'round', color: '#8CCBE8', trim: '#15212A', accent: '#E4572E', face: 'classic', accessories: ['antenna'], intern: true, state: 'error', pose: 'walk' },
+  { name: 'Moss', head: 'pebble', body: 'round', color: '#587C73', trim: '#F4F1EA', accent: '#E8AA72', face: 'classic', accessories: ['beanie', 'scarf'], intern: false, state: 'thinking', pose: 'auto' },
+  { name: 'Chai', head: 'capsule', body: 'compact', color: '#E8AA72', trim: '#202E35', accent: '#587C73', face: 'minimal', accessories: ['glasses', 'mug'], intern: false, state: 'done', pose: 'auto' },
+  { name: 'Echo', head: 'monitor', body: 'tall', color: '#C5B4E3', trim: '#202E35', accent: '#D9EF91', face: 'pixel', accessories: ['headphones'], intern: false, state: 'working', pose: 'auto' },
+  { name: 'Lumi', head: 'pebble', body: 'round', color: '#E9E5DC', trim: '#456079', accent: '#C5B4E3', face: 'anime', accessories: ['antenna', 'scarf'], intern: false, state: 'waiting', pose: 'auto' },
+  { name: 'Orbit', head: 'monitor', body: 'tall', color: '#456079', trim: '#F4F1EA', accent: '#E8AA72', face: 'classic', accessories: ['cap', 'backpack'], intern: false, state: 'idle', pose: 'auto' },
+  { name: 'Pip', head: 'capsule', body: 'compact', color: '#E6BE54', trim: '#202E35', accent: '#587C73', face: 'pixel', accessories: ['antenna', 'backpack'], intern: true, state: 'error', pose: 'auto' },
+];
+const ANIMALS = { bear: {label:'Bear', fur:'#A57A55', muzzle:'#E5C7A1'}, cat: {label:'Cat', fur:'#DDA66C', muzzle:'#FFE8C8'}, rabbit: {label:'Rabbit', fur:'#C3BBC9', muzzle:'#F7EBEE'}, maltese: {label:'Maltese', fur:'#FFF9EF', muzzle:'#FFFFFF'}, raccoon: {label:'Raccoon', fur:'#9296A2', muzzle:'#E7E5E1'}, duck: {label:'Duck', fur:'#F6DE83', muzzle:'#E9A044'} };
+const ANIMAL_PRESETS = PRESETS.map((p,i) => ({...p, species:['bear','cat','rabbit','maltese','raccoon','duck'][i], accessories:[['scarf'],['mug'],['headphones'],['scarf'],['backpack'],[]][i]}));
+const ANIMAL_STORIES = [
+  'Moss the bear. A soft sage sweater, round ears, and a patient way of untangling big ideas.',
+  'Chai the cat. Apricot fur, a favorite mug, and a tail that gives away every little victory.',
+  'Echo the rabbit. Long listening ears, lime headphones, and lilac sleeves rolled up for work.',
+  'Lumi the Maltese. A neatly trimmed white face, soft floppy ears, a lavender scarf, and a paw ready to help.',
+  'Orbit the raccoon. A midnight-blue outfit, striped tail, and a backpack full of possibilities.',
+  'Pip the duckling. Webbed feet, a tiny sweater, and the courage to try again.',
+];
+let crew = 'animals';
+const crewLooks = {};
+const STORIES = [
+  'The quiet thinker. Sage enamel, apricot knitwear, and a plan worth staying up for.',
+  'The resident optimist. Milky chai tones, round glasses, and a mug that is always full.',
+  'The midnight maker. Lilac shell, lime headphones, and a perfectly looping playlist.',
+  'The bright idea. Porcelain white, a lavender scarf, and a hand forever in the air.',
+  'The off-duty explorer. Ink-blue shell, peach cap, and tomorrow packed in a backpack.',
+  'The new recruit. Mustard yellow, forest-green gear, and very small, very busy feet.',
 ];
 
 /* ---------- renderer ---------- */
@@ -253,7 +301,7 @@ class Character {
   constructor(cfg) {
     this.cfg = { ...cfg, accessories: [...cfg.accessories] };
     this.state = cfg.state; this.pose = cfg.pose;
-    this.t = Math.random() * 10; this.blink = 0; this.blinkIn = rand(1.5, 4);
+    this.t = reduced ? 1 : Math.random() * 10; this.blink = 0; this.blinkIn = rand(1.5, 4);
     this.cur = { pelvis: LEG, lean: 0, hipL: 0, hipR: 0, armL: 0, armR: 0, armLz: -.12, armRz: .12, tilt: 0, yaw: 0 };
     this.root = new THREE.Group(); this.turn = new THREE.Group(); this.root.add(this.turn);
     const fc = document.createElement('canvas'); fc.width = 256; fc.height = 200; this.faceCtx = fc.getContext('2d');
@@ -261,13 +309,28 @@ class Character {
     this.build();
   }
   build() {
-    if (this.rig) { this.turn.remove(this.rig); this.rig.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material !== DARK && !o.material.map) o.material.dispose(); }); }
+    if (this.rig) {
+      this.turn.remove(this.rig); const materials = new Set();
+      this.rig.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material !== DARK) materials.add(o.material); });
+      materials.forEach(m => m.dispose());
+    }
     const c = this.cfg, S = BODIES[c.body], rig = this.rig = new THREE.Group(); this.turn.add(rig);
     rig.scale.setScalar(c.intern ? .78 : 1);
-    const mBody = std(c.color, .5), mTrim = std(c.trim, .45), mAcc = std(c.accent, .75);
+    const animal = ANIMALS[c.species];
+    const fur = animal ? std(animal.fur, .95) : null;
+    const mBody = std(c.color, animal ? .9 : .32, { metalness: animal ? 0 : .12 }), mTrim = std(c.trim, .45), mAcc = std(c.accent, .75);
     this.pelvis = new THREE.Group(); this.pelvis.position.y = LEG; rig.add(this.pelvis);
     const pts = []; for (let i = 0; i <= 28; i++) { const t = i / 28; pts.push(new THREE.Vector2(Math.max(profile(S, t), .001), t * S.h)); }
     mesh(new THREE.LatheGeometry(pts, 36), mBody, this.pelvis);
+    // Enamel seams, tiny shoulder rivets, and a service panel give the shells a crafted feel.
+    if (!animal) {
+    const seam = mesh(new THREE.TorusGeometry(profile(S, .24), .014, 6, 40), mTrim, this.pelvis, 0, S.h * .24, 0); seam.rotation.x = Math.PI / 2;
+    [-1, 1].forEach(side => mesh(new THREE.SphereGeometry(.025, 8, 6), mTrim, this.pelvis, side * .15, S.h * .72, profile(S, .72) - .015));
+    for (let i = 0; i < 3; i++) mesh(new THREE.BoxGeometry(.075, .012, .015), mTrim, this.pelvis, .13, S.h * .4 - i * .035, profile(S, .4) - .01);
+    } else {
+      mesh(new THREE.BoxGeometry(.025, S.h * .55, .025), mTrim, this.pelvis, 0, S.h*.68, profile(S,.68));
+      for (let i=0;i<3;i++) mesh(new THREE.SphereGeometry(.019,8,6), mAcc, this.pelvis, -.06, S.h*.78-i*.095, profile(S,.65)+.008);
+    }
     // chest status light
     const zc = profile(S, .55);
     const badge = mesh(new THREE.CylinderGeometry(.085, .085, .03, 24), mTrim, this.pelvis, 0, S.h * .55, zc - .005); badge.rotation.x = Math.PI / 2;
@@ -275,39 +338,48 @@ class Character {
     const light = mesh(new THREE.CylinderGeometry(.05, .05, .034, 20), this.lightMat, this.pelvis, 0, S.h * .55, zc + .002); light.rotation.x = Math.PI / 2; light.castShadow = false;
     // legs
     this.hips = [-1, 1].map(s => { const hip = new THREE.Group(); hip.position.set(s * S.R * .42, .06, 0); this.pelvis.add(hip);
-      mesh(new THREE.CylinderGeometry(.075, .068, LEG - .06, 14), DARK, hip, 0, -(LEG - .06) / 2);
-      const foot = mesh(new THREE.SphereGeometry(.095, 16, 12), mTrim, hip, 0, -LEG + .07, .04); foot.scale.set(1, .6, 1.45); return hip; });
+      mesh(new THREE.CylinderGeometry(.075, .068, LEG - .06, 14), fur || DARK, hip, 0, -(LEG - .06) / 2);
+      const foot = mesh(new THREE.SphereGeometry(animal ? .12 : .095, 16, 12), c.species === 'duck' ? std(animal.muzzle) : fur || mTrim, hip, 0, -LEG + .07, .04); foot.scale.set(1, .6, 1.45); return hip; });
     // arms
     const sx = profile(S, .72) + .045;
     this.arms = [-1, 1].map(s => { const sh = new THREE.Group(); sh.position.set(s * sx, S.h * .72, 0); this.pelvis.add(sh);
       mesh(new THREE.SphereGeometry(.07, 14, 10), mBody, sh);
       mesh(new THREE.CylinderGeometry(.055, .048, .32, 12), mBody, sh, 0, -.17);
-      const hand = new THREE.Group(); hand.position.y = -.36; sh.add(hand); mesh(new THREE.SphereGeometry(.072, 14, 10), mTrim, hand);
+      const hand = new THREE.Group(); hand.position.y = -.36; sh.add(hand); mesh(new THREE.SphereGeometry(animal ? .09 : .072, 14, 10), fur || mTrim, hand);
       sh.userData.hand = hand; return sh; });
     // neck + screen head
     mesh(new THREE.CylinderGeometry(.075, .085, .09, 16), DARK, this.pelvis, 0, S.h + .02);
     this.head = new THREE.Group(); this.head.position.y = S.h + .07 + .27; this.pelvis.add(this.head);
-    mesh(roundedBox(.56, .44, .3, .13, .05), mBody, this.head);
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(.54, .42), new THREE.MeshBasicMaterial({ map: this.faceTex })); screen.position.z = .204; this.head.add(screen);
+    this.animalEyes = null; this.ears = []; this.tail = null;
+    if (animal) this.buildAnimal(animal, fur);
+    else {
+    const shell = new THREE.Group(); this.head.add(shell);
+    const headShape = c.head || 'monitor';
+    shell.scale.set(headShape === 'capsule' ? 1.16 : headShape === 'pebble' ? .96 : 1, headShape === 'capsule' ? .84 : headShape === 'pebble' ? 1.12 : 1, 1);
+    mesh(roundedBox(.56, .44, .3, headShape === 'monitor' ? .08 : .18, .05), mBody, shell);
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(.54, .42), new THREE.MeshBasicMaterial({ map: this.faceTex })); screen.position.z = .204; shell.add(screen);
     if (!c.accessories.includes('headphones')) [-1, 1].forEach(s => { const b = mesh(new THREE.CylinderGeometry(.05, .05, .05, 16), mTrim, this.head, s * .34, 0, 0); b.rotation.z = Math.PI / 2; });
+    }
     // accessories
     const A = c.accessories;
-    this.antennaTip = null;
+    this.antennaTip = null; this.antennaMat = null;
     if (A.includes('headphones')) { const band = mesh(new THREE.TorusGeometry(.37, .03, 8, 28, Math.PI), DARK, this.head, 0, .02, 0);
       [-1, 1].forEach(s => { const cup = mesh(new THREE.CylinderGeometry(.11, .11, .1, 20), mAcc, this.head, s * .37, .02, 0); cup.rotation.z = Math.PI / 2; }); }
     if (A.includes('beanie')) { const d = mesh(new THREE.SphereGeometry(.36, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), mAcc, this.head, 0, .2, 0); d.scale.set(1, .8, 1.02);
       mesh(new THREE.CylinderGeometry(.37, .375, .1, 24), mAcc, this.head, 0, .22, 0); mesh(new THREE.SphereGeometry(.075, 12, 10), mTrim, this.head, 0, .5, 0); }
     if (A.includes('cap')) { const d = mesh(new THREE.SphereGeometry(.35, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), mAcc, this.head, 0, .24, 0); d.scale.set(1, .6, 1.02);
       const brim = mesh(new THREE.CylinderGeometry(.24, .24, .03, 24), mAcc, this.head, 0, .25, .3); brim.scale.set(1.25, 1, 1.4); mesh(new THREE.SphereGeometry(.03, 8, 6), mTrim, this.head, 0, .45, 0); }
-    if (A.includes('glasses')) { [-1, 1].forEach(s => mesh(new THREE.TorusGeometry(.085, .016, 8, 22), DARK, this.head, s * .125, .03, .232)); mesh(new THREE.BoxGeometry(.07, .016, .016), DARK, this.head, 0, .05, .232); }
+    if (A.includes('glasses')) { const z = animal ? .325 : .232; [-1, 1].forEach(s => mesh(new THREE.TorusGeometry(.085, .016, 8, 22), DARK, this.head, s * .125, .03, z)); mesh(new THREE.BoxGeometry(.07, .016, .016), DARK, this.head, 0, .05, z); }
     if (A.includes('antenna') && !A.some(h => HATS.includes(h))) { mesh(new THREE.CylinderGeometry(.014, .014, .26, 8), DARK, this.head, .14, .4, 0);
       this.antennaMat = new THREE.MeshBasicMaterial({ color: STATUS[this.state].color }); this.antennaTip = mesh(new THREE.SphereGeometry(.05, 14, 10), this.antennaMat, this.head, .14, .55, 0); }
     if (A.includes('scarf')) { const sc = mesh(new THREE.TorusGeometry(.16, .06, 10, 24), mAcc, this.pelvis, 0, S.h + .01, 0); sc.rotation.x = Math.PI / 2;
       const tail = mesh(new THREE.BoxGeometry(.1, .26, .05), mAcc, this.pelvis, .1, S.h - .13, profile(S, .86) + .06); tail.rotation.z = .15; }
     if (A.includes('backpack')) { mesh(roundedBox(.34, .34, .1, .08, .03), mAcc, this.pelvis, 0, S.h * .55, -(profile(S, .55) + .06));
       mesh(new THREE.BoxGeometry(.24, .08, .02), mTrim, this.pelvis, 0, S.h * .5, -(profile(S, .55) + .13)); }
-    if (A.includes('mug')) { const hand = this.arms[0].userData.hand; const mug = mesh(new THREE.CylinderGeometry(.05, .045, .11, 16), std('#F4F4F2', .4), hand, 0, .0, .08);
-      mesh(new THREE.TorusGeometry(.03, .01, 6, 12), std('#F4F4F2', .4), hand, .055, 0, .08); }
+    this.cup = new THREE.Group(); this.arms[0].userData.hand.add(this.cup);
+    mesh(new THREE.CylinderGeometry(.065, .055, .13, 20), mAcc, this.cup, 0, .015, .08);
+    mesh(new THREE.CylinderGeometry(.052, .052, .005, 20), std('#553C2C'), this.cup, 0, .083, .08);
+    mesh(new THREE.TorusGeometry(.038, .012, 6, 16), mAcc, this.cup, -.066, .015, .08);
     if (c.intern) { const ly = mesh(new THREE.TorusGeometry(.13, .012, 6, 24), mAcc, this.pelvis, 0, S.h - .02, .02); ly.rotation.x = Math.PI / 2 - .35;
       mesh(new THREE.BoxGeometry(.1, .13, .012), std('#FFFFFF', .5), this.pelvis, 0, S.h * .62, profile(S, .62) + .02);
       mesh(new THREE.BoxGeometry(.1, .03, .014), mAcc, this.pelvis, 0, S.h * .62 + .045, profile(S, .62) + .021); }
@@ -321,15 +393,86 @@ class Character {
     this.lapMat = new THREE.MeshBasicMaterial({ color: STATUS[this.state].color }); const ls = mesh(new THREE.PlaneGeometry(.3, .18), this.lapMat, desk, 0, .86, .692); ls.rotation.x = .25; ls.rotation.y = Math.PI;
     this.props.desk = desk;
     this.ball = mesh(new THREE.SphereGeometry(.11, 16, 12), std('#E8742A', .6), rig, 0, 1, .3); this.props.ball = this.ball;
+    // State props are deliberately symbolic, not a live progress or battery reading.
+    const board = new THREE.Group(); rig.add(board); board.position.set(0, LEG + S.h * .7, .67);
+    mesh(roundedBox(.56, .38, .025, .04, .01), DARK, board);
+    this.signalMat = new THREE.MeshBasicMaterial({ color: STATUS[this.state].face });
+    this.map = new THREE.Group(); board.add(this.map);
+    [[-.17, .08], [0, -.06], [.17, .08]].forEach(([x,y]) => mesh(new THREE.SphereGeometry(.032, 10, 8), this.signalMat, this.map, x, y, .04));
+    [-1,1].forEach(side => { const link = mesh(new THREE.BoxGeometry(.2, .012, .012), this.signalMat, this.map, side * .085, .01, .04); link.rotation.z = side * .65; });
+    this.question = new THREE.Group(); board.add(this.question);
+    mesh(new THREE.TorusGeometry(.055, .014, 8, 20, Math.PI * 1.6), this.signalMat, this.question, 0, .065, .04);
+    mesh(new THREE.BoxGeometry(.025, .065, .015), this.signalMat, this.question, 0, -.015, .04);
+    mesh(new THREE.SphereGeometry(.017, 8, 8), this.signalMat, this.question, 0, -.1, .04);
+    this.diagnostics = new THREE.Group(); board.add(this.diagnostics);
+    for (let i=0;i<3;i++) mesh(new THREE.BoxGeometry(.3-i*.06, .018, .015), this.signalMat, this.diagnostics, -.03, .09-i*.085, .04);
+    this.props.board = board;
+    const dock = new THREE.Group(); rig.add(dock);
+    mesh(new THREE.CylinderGeometry(.5, .53, .055, 40), mTrim, dock, 0, -.005, 0);
+    const glow = mesh(new THREE.TorusGeometry(.44, .018, 8, 40), this.signalMat, dock, 0, .025, 0); glow.rotation.x = Math.PI/2;
+    this.props.dock = dock;
+    this.wrench = new THREE.Group(); this.arms[1].userData.hand.add(this.wrench);
+    mesh(new THREE.BoxGeometry(.035, .23, .025), mTrim, this.wrench, 0, -.025, .07);
+    mesh(new THREE.TorusGeometry(.052, .018, 6, 16, Math.PI*1.5), mTrim, this.wrench, 0, .12, .07);
+    this.sparks = new THREE.Group(); rig.add(this.sparks);
+    for (let i=0; i<7; i++) { const spark = mesh(new THREE.OctahedronGeometry(.035), i%2 ? mAcc : mTrim, this.sparks); spark.userData.phase = i * Math.PI*2/7; }
     this.hit = new THREE.Mesh(new THREE.CylinderGeometry(.6, .6, 2.2, 8), new THREE.MeshBasicMaterial({ visible: false })); this.hit.position.y = 1.1; this.hit.userData.ch = this; rig.add(this.hit);
-    this.topY = (LEG + S.h + .07 + .54 + (A.includes('beanie') || A.includes('antenna') ? .2 : 0)) * (c.intern ? .78 : 1);
+    this.topY = (LEG + S.h + .07 + (animal ? (c.species === 'rabbit' ? 1.04 : .72) : .54) + (A.includes('beanie') || A.includes('antenna') ? .2 : 0)) * (c.intern ? .78 : 1);
   }
-  setState(s) { this.state = s; this.lightMat.color.set(STATUS[s].color); this.lapMat.color.set(STATUS[s].color); if (this.antennaMat) this.antennaMat.color.set(STATUS[s].color); }
+  buildAnimal(animal, fur) {
+    const species = this.cfg.species, pale = std(animal.muzzle, .95), pink = std('#DCA7A1', .95), ink = std('#25202A', .65);
+    const oval = (parent, material, x,y,z, sx,sy,sz) => { const o = mesh(new THREE.SphereGeometry(1,24,18), material,parent,x,y,z); o.scale.set(sx,sy,sz); return o; };
+    const trimmed = species === 'maltese';
+    oval(this.head,fur,0,.015,0,trimmed ? .32 : .37,trimmed ? .30 : .33,.28);
+    // A low, swept fringe softens Lumi's crown without adding bulk around the eyes.
+    if (trimmed) {
+      [-1, 0, 1].forEach(i => {
+        const tuft = oval(this.head,fur,i*.065,.285-Math.abs(i)*.012,.025,.06,.055,.13);
+        tuft.rotation.z = -.25 + i*.12;
+      });
+    }
+    [-1,1].forEach(side => {
+      const ear = new THREE.Group(); this.head.add(ear); this.ears.push(ear);
+      ear.position.set(side*.29, species==='maltese' ? .07 : .24, -.035);
+      if(species==='rabbit') { oval(ear,fur,side*.035,.25,0,.095,.32,.075); oval(ear,pink,side*.035,.25,.063,.052,.23,.018); }
+      else if(species==='maltese') { oval(ear,fur,side*.055,-.12,.005,.115,.22,.09); oval(ear,pale,side*.06,-.15,.045,.09,.18,.055); }
+      else if(species==='cat'||species==='raccoon') { const outer=mesh(new THREE.ConeGeometry(.14,.27,3),fur,ear,0,.075,0); outer.rotation.y=Math.PI; const inner=mesh(new THREE.ConeGeometry(.075,.16,3),pink,ear,0,.08,.066); inner.rotation.y=Math.PI; }
+      else if(species==='bear') { oval(ear,fur,0,.035,0,.14,.14,.075); oval(ear,pink,0,.035,.063,.085,.085,.018); }
+      else { oval(this.head,fur,side*.06,.32,-.02,.06,.13,.06); }
+    });
+    if(species==='raccoon') [-1,1].forEach(side => { const mask=oval(this.head,ink,side*.14,.04,.245,.15,.105,.055); mask.rotation.z=side*.2; });
+    this.animalEyes = [-1,1].map(side => {
+      const eye = new THREE.Group(); this.head.add(eye); eye.position.set(side*.135,.055,.263);
+      oval(eye,std('#FFFDF8'),0,0,0,.07,.088,.035); oval(eye,ink,side*-.005,0,.032,.045,.064,.023); oval(eye,std('#FFFFFF'),-.013,.026,.052,.014,.019,.01);
+      return eye;
+    });
+    if(species==='duck') { oval(this.head,pale,0,-.1,.3,.19,.062,.15); }
+    else { [-1,1].forEach(side=>oval(this.head,pale,side*(trimmed ? .045 : .065),-.09,.255,trimmed ? .078 : .108,trimmed ? .06 : .083,trimmed ? .06 : .075)); oval(this.head,ink,0,-.065,trimmed ? .32 : .334,.045,.032,.026); }
+    // A small curved mouth changes with the state, independently of the robot screen faces.
+    const curve=new THREE.QuadraticBezierCurve3(new THREE.Vector3(-.045,0,0),new THREE.Vector3(0,-.035,0),new THREE.Vector3(.045,0,0));
+    this.animalMouth=mesh(new THREE.TubeGeometry(curve,12,.009,6,false),ink,this.head,0,-.165,species==='duck'?.38:.306);
+    if(species==='cat') [-1,1].forEach(side=> { for(let i=0;i<2;i++){const w=mesh(new THREE.BoxGeometry(.14,.006,.006),ink,this.head,side*.24,-.09-i*.04,.265);w.rotation.z=side*(i?.15:-.15);} });
+    this.tail=new THREE.Group(); this.tail.position.set(0,.18,-.18); this.pelvis.add(this.tail);
+    if(species==='cat'||species==='raccoon') {
+      for(let i=0;i<7;i++) oval(this.tail,species==='raccoon'&&i%2?ink:fur,.08+i*.055,i*.075,-.12-i*.055,species==='raccoon'?.1:.05,.075,.075);
+    } else if(species==='maltese') { for(let i=0;i<6;i++) {const a=i*.45;oval(this.tail,fur,.12+Math.sin(a)*.12,.04+i*.04,-.15-Math.cos(a)*.12,.095,.08,.08);} }
+    else oval(this.tail,fur,0,.03,-.15,.13,.12,.12);
+  }
+  action() { return this.pose === 'auto' ? STATE_ACTION[this.state] : this.pose; }
+  setState(s) { this.state = s; this.signalMat.color.set(STATUS[s].face); this.lightMat.color.set(STATUS[s].color); this.lapMat.color.set(STATUS[s].color); if (this.antennaMat) this.antennaMat.color.set(STATUS[s].color); }
   update(dt) {
-    this.t += dt; const t = this.t, p = this.pose;
-    this.blinkIn -= dt; if (this.blinkIn <= 0) { this.blink = .13; this.blinkIn = rand(2.2, 5); } this.blink = Math.max(0, this.blink - dt);
+    if (!reduced) this.t += dt; const t = this.t, p = this.action();
+    this.blinkIn -= reduced ? 0 : dt; if (this.blinkIn <= 0) { this.blink = .13; this.blinkIn = rand(2.2, 5); } this.blink = Math.max(0, this.blink - dt);
     const seated = p === 'sit' || p === 'type';
     this.props.stool.visible = seated; this.props.desk.visible = p === 'type'; this.ball.visible = p === 'shoot';
+    this.props.board.visible = ['ponder', 'research', 'present', 'repair'].includes(p);
+    this.map.visible = p === 'ponder' || p === 'research'; this.question.visible = p === 'present'; this.diagnostics.visible = p === 'repair';
+    this.props.board.position.y = LEG + BODIES[this.cfg.body].h * .7 + Math.sin(t * 1.4) * .02;
+    this.props.board.rotation.y = Math.sin(t * .7) * .08;
+    this.props.dock.visible = p === 'recharge'; this.wrench.visible = p === 'repair';
+    this.cup.visible = p === 'sip' || (this.cfg.accessories.includes('mug') && ['idle','sit','walk'].includes(p));
+    this.sparks.visible = p === 'celebrate';
+    this.sparks.children.forEach((spark, i) => { const a = spark.userData.phase, u = (t * .45 + i/7) % 1; spark.position.set(Math.cos(a)*(.3+u*.3), 1.1 + u*.8, Math.sin(a)*.4); spark.rotation.set(t, a+t, 0); spark.scale.setScalar(Math.sin(u*Math.PI)); });
     const g = { pelvis: LEG, lean: 0, hipL: 0, hipR: 0, armL: 0, armR: 0, armLz: -.12, armRz: .12, tilt: 0, yaw: 0 };
     let bob = 0;
     if (p === 'idle') { bob = Math.sin(t * 2) * .012; g.armL = Math.sin(t * 1.4) * .05; g.armR = -g.armL; g.yaw = Math.sin(t * .6) * .18; }
@@ -337,6 +480,14 @@ class Character {
     if (p === 'type') { g.pelvis = .41; g.hipL = g.hipR = -1.45; g.armL = -1.15 + Math.sin(t * 16) * .1; g.armR = -1.15 + Math.sin(t * 16 + 1.8) * .1; g.tilt = .16; g.lean = .05; }
     if (p === 'sit') { g.pelvis = .41; g.hipL = g.hipR = -1.45; g.armL = g.armR = -.5; g.yaw = Math.sin(t * .5) * .22; bob = Math.sin(t * 1.6) * .008; }
     if (p === 'wave') { g.armRz = 2.5 + Math.sin(t * 9) * .35; g.armL = Math.sin(t * 1.4) * .05; g.tilt = -.08; g.yaw = -.12; bob = Math.sin(t * 2) * .01; }
+    if (p === 'ponder') { g.armR = -2.5; g.armRz = -.45; g.tilt = -.13; g.yaw = Math.sin(t*.6)*.25; g.armL = -.7; }
+    if (p === 'research') { g.armL = -1.15; g.armR = -1.25 + Math.sin(t*2)*.2; g.tilt = .18; g.yaw = Math.sin(t)*.18; }
+    if (p === 'present') { g.armRz = 2.5 + Math.sin(t*2)*.08; g.armL = -1; g.tilt = -.06; }
+    if (p === 'celebrate') { bob = Math.abs(Math.sin(t*3))*.12; g.armLz = -2.25 + Math.sin(t*3)*.2; g.armRz = -g.armLz; g.yaw = Math.sin(t*2)*.18; }
+    if (p === 'recharge') { g.tilt = .22; g.armL = g.armR = -.2; bob = Math.sin(t*1.2)*.018; }
+    if (p === 'repair') { g.armL = -1.05; g.armR = -1.7 + Math.sin(t*4)*.25; g.tilt = .23; g.lean = .08; }
+    if (p === 'stretch') { g.armLz = -2.8; g.armRz = 2.8; g.lean = Math.sin(t*.9)*.1; g.tilt = -.2; bob = .025; }
+    if (p === 'sip') { const lift = .5+.5*Math.sin(t*1.1); g.armL = -1.2-lift*1.4; g.armLz = .35; g.tilt = -.12*lift; g.yaw = -.15; }
     if (p === 'shoot') {
       const u = (t % 1.8) / 1.8;
       if (u < .35) { const k = u / .35; bob = -.07 * Math.sin(k * Math.PI / 2); g.armL = g.armR = -1.5; g.tilt = -.05; }
@@ -351,15 +502,24 @@ class Character {
     this.pelvis.position.y = cur.pelvis + bob; this.pelvis.rotation.x = cur.lean;
     this.hips[0].rotation.x = cur.hipL; this.hips[1].rotation.x = cur.hipR;
     this.arms[0].rotation.x = cur.armL; this.arms[1].rotation.x = cur.armR; this.arms[0].rotation.z = cur.armLz; this.arms[1].rotation.z = cur.armRz;
+    this.cup.rotation.x = -cur.armL; this.cup.rotation.z = -cur.armLz;
     this.head.rotation.x = cur.tilt; this.head.rotation.y = cur.yaw;
     if (this.antennaTip) this.antennaTip.scale.setScalar(this.state === 'waiting' ? 1 + .35 * Math.abs(Math.sin(t * 6)) : 1);
-    if (this.state === 'waiting') this.lightMat.color.set(Math.sin(t * 7) > 0 ? STATUS.waiting.color : '#5A4420');
-    drawFace(this);
+    if (this.state === 'waiting') this.lightMat.color.set(STATUS.waiting.color).multiplyScalar(.8 + .2 * Math.sin(t * 2));
+    if (this.animalEyes) {
+      const sleepy = this.state === 'idle', happy = this.state === 'done';
+      const opening = this.blink > 0 ? .12 : sleepy ? .35 : this.state === 'working' ? .7 : 1;
+      this.animalEyes.forEach((eye,i) => { eye.scale.y = happy ? .65 : opening; eye.rotation.z = this.state === 'error' ? (i ? -.18 : .18) : 0; });
+      this.animalMouth.rotation.z = this.state === 'error' ? Math.PI : 0;
+      this.animalMouth.scale.y = happy ? 1.5 : .65;
+      this.ears.forEach((ear,i) => { ear.rotation.z = (i ? 1 : -1) * (this.state === 'error' ? .22 : .04) + Math.sin(t*1.8+i)*.035; });
+      this.tail.rotation.y = Math.sin(t*(happy ? 9 : 2))*(happy ? .55 : .12);
+    } else drawFace(this);
   }
 }
 
 /* ---------- the stage ---------- */
-const chars = PRESETS.map(p => new Character(p));
+const chars = ANIMAL_PRESETS.map(p => new Character(p));
 const pedestals = [];
 const pedMat = std('#FFFFFF', .6), pedSide = std('#DDE4E7', .7);
 chars.forEach(ch => {
@@ -410,10 +570,20 @@ function buildSwatches(el, colors, key) {
   el.innerHTML = colors.map(c => `<button type="button" style="--c:${c}" data-c="${c}" aria-label="${key} ${c}" aria-pressed="false"></button>`).join('');
   el.addEventListener('click', e => { const b = e.target.closest('button'); if (b) { selected.cfg[key] = b.dataset.c; selected.build(); syncPanel(); } });
 }
+function switchCrew(next) {
+  crewLooks[crew] = chars.map(ch => ({...ch.cfg, accessories:[...ch.cfg.accessories], state:ch.state, pose:ch.pose}));
+  crew = next;
+  const looks = crewLooks[crew] || (crew === 'animals' ? ANIMAL_PRESETS : PRESETS);
+  chars.forEach((ch,i)=> { ch.cfg = {...looks[i], accessories:[...looks[i].accessories]}; ch.state=looks[i].state; ch.pose=looks[i].pose; ch.build(); });
+  syncAll();
+}
+buildSeg($('#crews'), {animals:'Animal friends',robots:'Original robots'}, switchCrew);
+buildSeg($('#species'), ANIMALS, k=> {selected.cfg.species=k; selected.build();syncPanel();});
 const targets = () => $('#all').checked ? chars : [selected];
 buildSeg($('#states'), STATUS, k => { targets().forEach(ch => ch.setState(k)); syncAll(); }, k => STATUS[k].color);
 buildSeg($('#poses'), POSES, k => { targets().forEach(ch => ch.pose = k); syncAll(); });
 buildSeg($('#bodies'), BODIES, k => { selected.cfg.body = k; selected.build(); syncPanel(); });
+buildSeg($('#heads'), HEADS, k => { selected.cfg.head = k; selected.build(); syncPanel(); });
 buildSeg($('#faces'), FACES, k => { selected.cfg.face = k; syncPanel(); });
 buildSwatches($('#sw-color'), BODY_COLORS, 'color');
 buildSwatches($('#sw-trim'), TRIM_COLORS, 'trim');
@@ -427,21 +597,35 @@ $('#accs').addEventListener('click', e => {
 $('#intern').onchange = e => { selected.cfg.intern = e.target.checked; selected.build(); syncPanel(); };
 $('#name').addEventListener('input', e => { selected.cfg.name = e.target.value || 'Agent'; syncAll(); });
 function randomLook(ch) {
-  const c = ch.cfg; c.body = pick(Object.keys(BODIES)); c.face = pick(Object.keys(FACES));
+  const c = ch.cfg; c.body = pick(Object.keys(BODIES)); c.face = pick(Object.keys(FACES)); c.head = pick(Object.keys(HEADS));
   c.color = pick(BODY_COLORS); c.trim = pick(TRIM_COLORS.filter(t => t !== c.color)); c.accent = pick(ACCENT_COLORS.filter(a => a !== c.color));
   const pool = Object.keys(ACCESSORIES).sort(() => Math.random() - .5); c.accessories = [];
   for (const a of pool) { if (c.accessories.length >= 1 + Math.floor(Math.random() * 2)) break; if (HATS.includes(a) && c.accessories.some(h => HATS.includes(h))) continue; c.accessories.push(a); }
   ch.build();
 }
+$('#restore').onclick = () => {
+  chars.forEach((ch, i) => { const p = (crew === 'animals' ? ANIMAL_PRESETS : PRESETS)[i]; ch.cfg = { ...p, accessories: [...p.accessories] }; ch.state = p.state; ch.pose = p.pose; ch.build(); });
+  syncAll();
+};
 $('#rand').onclick = () => { randomLook(selected); syncPanel(); };
 $('#rand-all').onclick = () => { chars.forEach(randomLook); syncAll(); };
 $('#spin').onchange = () => {};
 function select(ch) { selected = ch; chars.forEach(c => c.selRing.visible = c === ch); syncAll(); }
 function syncPanel() {
   const c = selected.cfg;
+  const need = NEEDS[selected.state];
+  $('#intent-title').textContent = `${c.name} · ${need[0]}`;
+  $('#intent-copy').textContent = `${need[1]} ${selected.pose === 'auto' ? 'Following state' : 'Manual action'}: ${POSES[selected.action()]}.`;
+  $('.intent').style.setProperty('--intent-color', STATUS[selected.state].color);
+  const index = chars.indexOf(selected);
+  $('#crew-story').textContent = crew === 'animals' && c.species !== ANIMAL_PRESETS[index].species ? `${c.name} the ${ANIMALS[c.species].label.toLowerCase()}. Same little teammate, a new animal look.` : (crew === 'animals' ? ANIMAL_STORIES : STORIES)[index];
+  pressSeg($('#crews'),crew); pressSeg($('#species'),c.species);
+  $('#species-row').style.display = crew === 'animals' ? '' : 'none';
+  $('#head-row').style.display = $('#face-row').style.display = crew === 'animals' ? 'none' : '';
+  $('#collection-title').textContent = crew === 'animals' ? 'Creature comforts' : 'The night shift';
   $('#chip').style.setProperty('--c', c.color); $('#chip').textContent = (c.name || '?')[0];
   if (document.activeElement !== $('#name')) $('#name').value = c.name;
-  pressSeg($('#bodies'), c.body); pressSeg($('#faces'), c.face);
+  pressSeg($('#heads'), c.head || 'monitor'); pressSeg($('#bodies'), c.body); pressSeg($('#faces'), c.face);
   [['#sw-color', 'color'], ['#sw-trim', 'trim'], ['#sw-accent', 'accent']].forEach(([s, k]) => $(s).querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.c === c[k])));
   $('#accs').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', c.accessories.includes(b.dataset.k)));
   $('#intern').checked = !!c.intern;
@@ -491,3 +675,5 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => char
 requestAnimationFrame(frame);
 })();
 </script>
+
+</html>
