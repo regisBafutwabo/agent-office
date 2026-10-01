@@ -2414,6 +2414,7 @@ function buildRig(a) {
     part(new THREE.BoxGeometry(.1, .03, .014), mAcc, pelvis, 0, S.h * .62 + .045, bodyRadius(S, .62) + .021); }
   // laptop for working away from the desk, held in front
   a.laptop = new THREE.Group(); a.laptop.position.set(0, S.h * .5, bodyRadius(S, .5) + .15); pelvis.add(a.laptop);   // clear of the belly so the lid isn't buried
+  a.laptop.rotation.y = Math.PI;                      // hinge on the far side, screen facing the agent
   box(.36, .018, .25, mats.steel, 0, 0, 0, a.laptop);
   const lid = new THREE.Group(); lid.position.set(0, .01, -.12); lid.rotation.x = -.3; a.laptop.add(lid);
   box(.36, .23, .012, mats.steel, 0, .115, 0, lid);
@@ -3630,7 +3631,8 @@ curFloor = makeFloor('lobby', 'Your first project', true); rebuildTower();
 setLiftOpen(uiPrefs.lift !== false); if (uiPrefs.panel === false) setPanelOpen(false);
 showDetailTab(uiPrefs.detailTab === 'activity' ? 'activity' : 'chat');
 applyScene(uiPrefs.theme in SCENES ? uiPrefs.theme : 'auto'); buildCustomize(); renderJSON(); drawTerm(); drawBoard(); layout();
-if (Object.hasOwn(CITIES, uiPrefs.city)) setCity(uiPrefs.city); else $('#city-picker').showModal();
+if (Object.hasOwn(CITIES, uiPrefs.city)) setCity(uiPrefs.city);
+else { $('#city-picker').showModal(); $('#city-choices [aria-pressed="true"]')?.focus(); }   // start focus on the current city, not the first card
 setView('3d'); Object.assign(cam, { theta: goal.theta, phi: goal.phi, radius: goal.radius }); cam.target.copy(goal.target); applyCam();
 if (MODE === 'demo' || !/^https?:$/.test(location.protocol)) startDemo(); else connectLive();
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { agents.forEach(a => a.labelDirty = true); floorLabels.forEach(l => l.draw()); drawTerm(); drawBoard(); drawNeon(); floors.forEach(f => drawSign(f, true)); });

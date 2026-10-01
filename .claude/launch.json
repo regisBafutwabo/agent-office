@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "office", "runtimeExecutable": "env", "runtimeArgs": ["AGENT_OFFICE_PORT=4799", "node", "bridge/server.js"], "port": 4799 }
+  ]
+}
