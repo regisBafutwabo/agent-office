@@ -60,7 +60,18 @@ export function isMerge(tool, input = {}) {
 
 export class Store {
   constructor(read = readTranscript) { this.sessions = new Map(); this.recent = []; this.read = read; this.transcriptChecks = new Map(); this.pendingTasks = new Map();
-    this.ended = new Set(); }   // sessions that reported SessionEnd: their logs are still fresh, but they mustn't come back
+    this.ended = new Set(); this.codexIds = new Set(); }   // ended logs and imported hooks mustn't bring sessions back
+
+  // Imported Claude hooks can report a Codex thread without the tool header. Only an exact
+  // thread-id match proves it's the same session; sharing a project or terminal doesn't.
+  claimCodex(agent, id) {
+    if (agent !== 'codex' || !id.startsWith('codex:')) return null;
+    const raw = id.slice(6); this.codexIds.add(raw);
+    if (this.sessions.get(raw)?.agent !== 'claude-code') return null;
+    this.sessions.delete(raw); this.transcriptChecks.delete(raw); this.pendingTasks.delete(raw);
+    this.recent = this.recent.filter(e => e.sessionId !== raw);
+    return raw;
+  }
 
   // SubagentStart has no task description, but the parent's Task/Agent call just before it does.
   // Remember those calls and hand each new subagent the oldest one of its type.
@@ -125,6 +136,8 @@ export class Store {
   // A chat found in its log (discover.js): add it, or refresh it while no hook has reported on it.
   // Returns a SessionFound event when something on screen changes; hooks always win over logs.
   adopt(f) {
+    if (f.agent === 'claude-code' && this.codexIds.has(f.id)) return null;
+    const replacesSessionId = !isHelperDir(f.cwd) ? this.claimCodex(f.agent, f.id) : null;
     if (this.ended.has(f.id)) return null;
     let s = this.sessions.get(f.id), isNew = !s;
     if (s && !s.fromLog) return null;
@@ -144,6 +157,7 @@ export class Store {
     const e = { type: 'SessionFound', sessionId: s.id, at: Date.now(), agentId: null, agentType: null, message: isNew ? 'Already running' : null,
       session: { id: s.id, agent: s.agent, app: null, term: null, chat: null, cwd: s.cwd, project: s.project, title: s.title, merged: false,
                  entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity, messages: s.messages } };
+    if (replacesSessionId) e.replacesSessionId = replacesSessionId;
     if (isNew) { this.recent.push(e); if (this.recent.length > RECENT_MAX) this.recent.shift(); }   // only the arrival goes in the feed
     return e;
   }
@@ -154,6 +168,8 @@ export class Store {
   ingest(p, entrypoint, projectDir, agent = 'claude-code', origin = {}) {
     const type = p.hook_event_name, sid = p.session_id;
     if (!type || !sid) return null;
+    if (agent === 'claude-code' && this.codexIds.has(sid)) return null;
+    const replacesSessionId = !isHelperDir(projectDir || p.cwd || '') ? this.claimCodex(agent, sid) : null;
     const now = Date.now();
     let s = this.sessions.get(sid);
     if (!s) {
@@ -174,6 +190,7 @@ export class Store {
     const chatChanged = this.refreshTranscript(s, p, type);
 
     const e = { type, sessionId: sid, at: now, agentId: p.agent_id || null, agentType: p.agent_type || null };
+    if (replacesSessionId) e.replacesSessionId = replacesSessionId;
     // Internal helper agents (e.g. the desktop app's prompt suggestions) only report SubagentStop. They never did visible work, so skip them.
     if (type === 'SubagentStop' && e.agentId && !s.subagents[e.agentId]) return null;
     const sub = e.agentId ? (s.subagents[e.agentId] ||= { id: e.agentId, type: e.agentType || 'subagent', task: this.claimTask(sid, e.agentType, now),

@@ -21,7 +21,7 @@ You also need [Claude Code](https://claude.com/claude-code) itself, either the C
 1. **Download** `Agent-Office_<version>_aarch64.dmg` from the [latest release](https://github.com/regisBafutwabo/agent-office/releases/latest).
 2. **Install:** open the .dmg and drag **Agent Office** to Applications.
 3. **Open it from Applications.** If macOS blocks it, follow [Allow the first launch](#allow-the-first-launch) below.
-4. **Connect your agents.** The office opens with a **Connect your coding agents** card. Click **Connect Claude Code**, plus **Connect Codex** or **Connect Cursor** if you use them.
+4. **Meet your office.** Choose **Pets** or **Robots**, pick your city, and take the short office tour. Its connection step lets you connect Claude Code, Codex, or Cursor. You can skip the tour and connect later in **Customize → Connect agents**.
 5. **Start a new Claude Code session** and send a prompt. Its agent rides up in the lift and takes a desk on its project's floor.
 
 You can also connect agents later from the menu-bar icon (**Connect agents**) or in the office's **Customize → Connect agents**.

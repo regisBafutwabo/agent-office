@@ -223,6 +223,8 @@ pub struct Store {
     pub read: Option<fn(&str) -> Option<Transcript>>,
     /// Sessions that reported SessionEnd: their logs are still fresh, but they mustn't come back.
     ended: HashSet<String>,
+    /// Thread ids confirmed as Codex by its adapter or log discovery.
+    codex_ids: HashSet<String>,
 }
 
 fn set_status(s: &mut Session, sub: Option<usize>, status: &str, activity: String) {
@@ -239,6 +241,16 @@ fn set_status(s: &mut Session, sub: Option<usize>, status: &str, activity: Strin
 }
 
 impl Store {
+    fn claim_codex(&mut self, agent: &str, id: &str) -> Option<String> {
+        if agent != "codex" { return None; }
+        let raw = id.strip_prefix("codex:")?;
+        self.codex_ids.insert(raw.into());
+        if !self.sessions.iter().any(|s| s.id == raw && s.agent == "claude-code") { return None; }
+        self.sessions.retain(|s| !(s.id == raw && s.agent == "claude-code"));
+        self.recent.retain(|e| e["sessionId"].as_str() != Some(raw));
+        Some(raw.into())
+    }
+
     pub fn snapshot(&mut self) -> Value {
         self.prune();
         let skip = self.recent.len().saturating_sub(80);
@@ -285,6 +297,8 @@ impl Store {
     /// A chat found in its log (discover.rs): add it, or refresh it while no hook has reported on it.
     /// Returns a SessionFound event when something on screen changes; hooks always win over logs.
     pub fn adopt(&mut self, f: Found) -> Option<Value> {
+        if f.agent == "claude-code" && self.codex_ids.contains(&f.id) { return None; }
+        let replaces = if !is_helper_dir(&f.cwd) { self.claim_codex(&f.agent, &f.id) } else { None };
         if self.ended.contains(&f.id) {
             return None;
         }
@@ -314,12 +328,13 @@ impl Store {
             }
         };
         let s = &self.sessions[idx];
-        let event = json!({
+        let mut event = json!({
             "type": "SessionFound", "sessionId": s.id, "at": now_ms(), "agentId": null, "agentType": null,
             "message": if new { Value::from("Already running") } else { Value::Null },
             "session": { "id": s.id, "agent": s.agent, "cwd": s.cwd, "project": s.project, "title": s.title, "merged": false, "entrypoint": s.entrypoint,
                          "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": null, "term": null, "chat": null, "messages": s.messages },
         });
+        if let Some(id) = replaces { event["replacesSessionId"] = id.into(); }
         if new {                                   // only the arrival goes in the feed, not every refresh
             self.recent.push_back(event.clone());
             if self.recent.len() > RECENT_MAX {
@@ -343,6 +358,9 @@ impl Store {
         if kind.is_empty() || sid.is_empty() {
             return None;
         }
+        if agent == "claude-code" && self.codex_ids.contains(sid) { return None; }
+        let root = project_dir.filter(|d| !d.is_empty()).unwrap_or(str_of(p, "cwd"));
+        let replaces = if !is_helper_dir(root) { self.claim_codex(agent, sid) } else { None };
         let now = now_ms();
         let pm = str_of(p, "permission_mode");
         let idx = match self.sessions.iter().position(|s| s.id == sid) {
@@ -412,6 +430,7 @@ impl Store {
         }
 
         let mut e = Map::new();
+        if let Some(id) = replaces { e.insert("replacesSessionId".into(), id.into()); }
         e.insert("type".into(), kind.into());
         e.insert("sessionId".into(), sid.into());
         e.insert("at".into(), now.into());
@@ -551,6 +570,38 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn codex_replaces_imported_claude_ghost_in_either_order() {
+        for claude_first in [true, false] {
+            let mut st = Store::default();
+            let p = json!({ "session_id": "t1", "cwd": "/repo", "hook_event_name": "UserPromptSubmit", "prompt": "Fix UI" });
+            if claude_first { st.ingest(&p, None, None); }
+            let mut codex = p.clone(); codex["session_id"] = "codex:t1".into();
+            let e = st.ingest_from(&codex, Some("codex-tui"), None, "codex", Origin::default()).unwrap();
+            assert_eq!(e["replacesSessionId"].as_str(), if claude_first { Some("t1") } else { None });
+            assert!(st.ingest(&p, None, None).is_none());
+            assert_eq!(st.sessions.len(), 1);
+            assert_eq!((st.sessions[0].id.as_str(), st.sessions[0].agent.as_str()), ("codex:t1", "codex"));
+            assert!(st.recent.iter().all(|e| e["sessionId"] != "t1"));
+            codex["hook_event_name"] = "SessionEnd".into();
+            st.ingest_from(&codex, None, None, "codex", Origin::default());
+            assert!(st.ingest(&p, None, None).is_none());
+            assert!(st.sessions.is_empty());
+        }
+    }
+
+    #[test]
+    fn codex_discovery_keeps_independent_claude_sessions() {
+        let mut st = Store::default();
+        st.ingest(&json!({ "session_id": "t1", "cwd": "/repo", "hook_event_name": "SessionStart" }), None, None);
+        st.ingest(&json!({ "session_id": "real-claude", "cwd": "/repo", "hook_event_name": "SessionStart" }), Some("cli"), None);
+        let f = Found { id: "codex:t1".into(), agent: "codex".into(), cwd: "/repo".into(), entrypoint: None,
+            at: now_ms(), status: "working".into(), activity: "Working".into(), title: None, messages: vec![] };
+        assert_eq!(st.adopt(f).unwrap()["replacesSessionId"], "t1");
+        assert_eq!(st.sessions.len(), 2);
+        assert!(st.sessions.iter().any(|s| s.id == "real-claude"));
+    }
 
     fn base(extra: Value) -> Value {
         let mut v = json!({ "session_id": "s1", "cwd": "/Users/me/code/shop", "permission_mode": "default" });

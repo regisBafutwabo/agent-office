@@ -81,7 +81,9 @@ web/index.html    ── the 3D office (Three.js)
 
 Agents are small robots with a screen for a face, and the face shows what the agent is doing: eyes looking up with "…" while thinking, focused while working, a big "!" when it needs you, happy ^ ^ when done, sleepy zZ when idle, and a frown when something failed. A light on the chest shows the same status color.
 
-Customize each agent in **Customize → Agents**: body shape, face style, colors, and accessories (headphones, beanie, cap, glasses, antenna, scarf, backpack, mug). Looks are remembered per project. Subagents automatically look like a smaller "intern" version of their parent, and agents from other tools get a default accessory (Cursor wears headphones, Codex a cap, and so on). Try looks side by side in `prototype/character-lab.html`.
+Pick **Pets** or **Robots** when you first open the office. Pets include a bear, cat, rabbit, Maltese, raccoon, and duck. Change crews anytime in **Customize → Agents**, and customize each agent's animal or robot face, body shape, colors, and accessories (headphones, beanie, cap, glasses, antenna, scarf, backpack, mug). Looks are remembered per project. Subagents automatically look like a smaller "intern" version of their parent, and agents from other tools get a default accessory (Cursor wears headphones, Codex a cap, and so on). Try looks side by side in `prototype/character-lab.html`.
+
+The first-visit tour shows how project floors, agent activity, tool connections, and permission requests work. Skip it anytime or replay it from **Customize → Getting started**. With no agents running, **Try demo** opens a sample team; the tour can then take you back to your live office to connect your own tools.
 
 ## Day and night
 

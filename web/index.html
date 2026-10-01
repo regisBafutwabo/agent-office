@@ -227,6 +227,21 @@ pre.json{margin:0;padding:12px;background:var(--panel-2);border:1px solid var(--
 .city-picker p{margin:0 0 16px;color:var(--muted);font:400 13px/20px var(--font-b)}
 .city-picker .themes{grid-template-columns:1fr;padding:0}
 .city-picker .city-card{height:40px}
+.welcome{width:min(480px,calc(100% - 32px))}
+.crew-choices{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0}
+.crew-choice{padding:20px 12px;border:2px solid var(--line);border-radius:var(--r-lg);background:var(--panel-2);cursor:pointer;text-align:center}
+.crew-choice[aria-pressed="true"]{border-color:var(--accent);background:var(--panel-3)}
+.crew-choice svg{display:block;margin:0 auto 12px;width:88px;height:88px}
+.crew-choice b{display:block;font:700 18px/24px var(--font-d)}
+.crew-choice span{display:block;color:var(--muted);font-size:12px;margin-top:4px}
+.guide-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:16px}
+.guide-actions .primary{margin-left:auto}
+.guide{position:absolute;z-index:40;left:50%;bottom:24px;transform:translateX(-50%);width:min(380px,calc(100% - 32px));padding:20px;border-radius:var(--r-lg);background:var(--panel);border:1px solid var(--line);box-shadow:var(--e-2)}
+.guide h2{margin:4px 0 8px;font:700 20px/26px var(--font-d)}
+.guide p{margin:0;color:var(--muted)}
+.guide .guide-step{font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+.guide-target{outline:3px solid var(--accent);outline-offset:4px}
+@media(max-width:760px){.guide{bottom:auto;top:112px;padding:16px;max-height:calc(100% - 176px);overflow:auto}.guide[data-detail="true"]{top:auto;bottom:60px;max-height:40%}.crew-choice{padding:16px 8px}}
 
 /* detail card */
 .detail{position:absolute;left:16px;bottom:16px;width:360px;max-width:calc(100% - var(--panel-w) - 48px);max-height:calc(56% - 40px);overflow:auto;border-radius:var(--r-lg);padding:16px;z-index:5;display:flex;flex-direction:column;gap:12px}
@@ -401,7 +416,10 @@ body.live .speed-top, body.live .demo-only{display:none}
         <button class="btn sm" id="sf-bridge" hidden>View Golden Gate</button>
       </div>
       <h3>Agents</h3>
+      <div class="seg" id="crew-setting" role="group" aria-label="Agent characters"><button data-crew="pets">Pets</button><button data-crew="robots">Robots</button></div>
       <div id="cust-agents"></div>
+      <h3>Getting started</h3>
+      <button class="btn" id="replay-guide">Replay the office tour</button>
       <h3 id="connect-title" hidden>Connect agents</h3>
       <div class="connect-list" id="connect-list" hidden></div>
       <h3>Display</h3>
@@ -476,6 +494,27 @@ body.live .speed-top, body.live .demo-only{display:none}
   <div class="hint glass" id="hint">Drag to orbit · Scroll to zoom · Click an agent · <kbd>[</kbd><kbd>]</kbd> panels</div>
   <div class="toasts" id="toasts"></div>
   <a class="city-credit" id="city-credit" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" hidden>© OpenStreetMap contributors</a>
+  <dialog class="city-picker welcome" id="welcome" aria-labelledby="welcome-title" aria-describedby="welcome-description">
+    <h2 id="welcome-title">Who’s on your team?</h2>
+    <p id="welcome-description">Your coding agents, with a little personality. Pick a crew, then take a quick tour of your office.</p>
+    <div class="crew-choices" role="group" aria-label="Choose your agent characters">
+      <button class="crew-choice" data-crew="pets" aria-pressed="false">
+        <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M24 42 18 13 43 31M76 42 82 13 57 31" fill="#DDA66C" stroke="#9C6F4C" stroke-width="3"/><ellipse cx="50" cy="55" rx="37" ry="32" fill="#DDA66C"/><ellipse cx="50" cy="67" rx="21" ry="13" fill="#FFE8C8"/><ellipse cx="36" cy="51" rx="5" ry="7" fill="#25202A"/><ellipse cx="64" cy="51" rx="5" ry="7" fill="#25202A"/><path d="m46 63 4 5 4-5M50 68v4m-8 0q8 8 16 0" fill="none" stroke="#25202A" stroke-width="3" stroke-linecap="round"/></svg>
+        <b>Pets</b><span>Six cozy animal teammates</span>
+      </button>
+      <button class="crew-choice" data-crew="robots" aria-pressed="true">
+        <svg viewBox="0 0 100 100" aria-hidden="true"><path d="M50 25V13" stroke="#647A86" stroke-width="4"/><circle cx="50" cy="11" r="6" fill="#FFB400"/><rect x="13" y="27" width="74" height="60" rx="19" fill="#3FA7D6"/><rect x="20" y="35" width="60" height="44" rx="13" fill="#15212A"/><rect x="31" y="46" width="10" height="18" rx="5" fill="#8BE9F5"/><rect x="59" y="46" width="10" height="18" rx="5" fill="#8BE9F5"/><path d="M43 69q7 6 14 0" fill="none" stroke="#8BE9F5" stroke-width="3" stroke-linecap="round"/></svg>
+        <b>Robots</b><span>Expressive screen faces</span>
+      </button>
+    </div>
+    <p>You can switch crews anytime in Customize.</p>
+    <div class="guide-actions"><button class="btn ghost" id="welcome-skip">Skip tour</button><button class="btn primary" id="welcome-next">Meet my office</button></div>
+  </dialog>
+  <section class="guide" id="office-guide" aria-labelledby="guide-title" hidden>
+    <div aria-live="polite" aria-atomic="true"><p class="guide-step" id="guide-step"></p><h2 id="guide-title" tabindex="-1"></h2><p id="guide-body"></p></div>
+    <div id="guide-tools"></div>
+    <div class="guide-actions"><button class="btn ghost" id="guide-skip">Skip tour</button><button class="btn" id="guide-back">Back</button><button class="btn" id="guide-action" hidden></button><button class="btn primary" id="guide-next">Next</button></div>
+  </section>
   <dialog class="city-picker" id="city-picker" aria-labelledby="city-title" aria-describedby="city-description">
     <h2 id="city-title">Pick your city</h2>
     <p id="city-description">Choose the view outside. You can change it in Customize.</p>
@@ -2307,6 +2346,8 @@ const FACE_COLORS = { thinking: '#C8BFFF', working: '#8BE9F5', waiting: '#FFC867
 const TOOL_ACCESSORY = { cursor: 'headphones', codex: 'cap', gemini: 'antenna', copilot: 'glasses', factory: 'backpack', qwen: 'beanie',
   goose: 'scarf', kiro: 'antenna', windsurf: 'headphones', cline: 'glasses', opencode: 'cap', amp: 'antenna' };
 const LEG = .3;                                  // hip height when standing
+const ANIMALS = { bear: {label:'Bear', fur:'#A57A55', muzzle:'#E5C7A1'}, cat: {label:'Cat', fur:'#DDA66C', muzzle:'#FFE8C8'}, rabbit: {label:'Rabbit', fur:'#C3BBC9', muzzle:'#F7EBEE'}, maltese: {label:'Maltese', fur:'#FFF9EF', muzzle:'#FFFFFF'}, raccoon: {label:'Raccoon', fur:'#9296A2', muzzle:'#E7E5E1'}, duck: {label:'Duck', fur:'#F6DE83', muzzle:'#E9A044'} };
+const petSpecies = a => Object.hasOwn(ANIMALS, a.look.species) ? a.look.species : a.parent ? petSpecies(a.parent) : Object.keys(ANIMALS)[seedHash(a.cwd || a.name) % 6];
 const JOINT = M('#2A3035', { roughness: .5 });
 const seedHash = s => { let h = 7; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) | 0; return Math.abs(h); };
 
@@ -2322,7 +2363,8 @@ function lookFor(seed, color, toolAccessory) {
 function randomLook(color) {
   const keys = Object.keys(ACCESSORIES).sort(() => Math.random() - .5), acc = [];
   for (const k of keys) { if (acc.length >= 1 + Math.floor(Math.random() * 2)) break; if (HATS.includes(k) && acc.some(a => HATS.includes(a))) continue; acc.push(k); }
-  return { body: pick(Object.keys(BODIES)), face: pick(Object.keys(FACE_STYLES)), color, trim: pick(TRIM_COLORS), accent: pick(ACCENT_COLORS), accessories: acc, intern: false };
+  return { body: pick(Object.keys(BODIES)), face: pick(Object.keys(FACE_STYLES)), color, trim: pick(TRIM_COLORS), accent: pick(ACCENT_COLORS), accessories: acc, intern: false,
+    ...(uiPrefs.crew === 'pets' ? { species: pick(Object.keys(ANIMALS)) } : {}) };
 }
 // Subagents look like a smaller "intern" version of their parent.
 const internLook = (parent, color) => ({ ...parent.look, color, intern: true, accessories: parent.look.accessories.filter(a => a !== 'mug' && a !== 'backpack') });
@@ -2365,8 +2407,16 @@ function buildAvatar(a) {
 // The body itself, rebuilt whenever the look changes.
 function buildRig(a) {
   const L = a.look = { ...a.look, color: a.color, accessories: [...(a.look.accessories || [])] };
-  if (a.rig) { a.g.remove(a.rig); a.rig.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+  if (a.rig) {
+    a.g.remove(a.rig); const owned = new Set(), shared = new Set([JOINT, ...Object.values(mats)]);
+    a.rig.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && !shared.has(o.material)) owned.add(o.material); });
+    owned.forEach(m => m.dispose());
+  }
   const S = BODIES[L.body] || BODIES.round, rig = a.rig = new THREE.Group(); a.g.add(rig);
+  const animal = uiPrefs.crew === 'pets' ? ANIMALS[petSpecies(a)] : null;
+  if (animal) L.species = petSpecies(a);
+  const fur = animal ? M(animal.fur, { roughness: .95 }) : null;
+  a.animalEyes = null; a.ears = []; a.tail = null; a.animalMouth = null;
   if (L.intern) rig.scale.setScalar(.9);
   const mBody = M(L.color, { roughness: .5 }), mTrim = M(L.trim, { roughness: .45 }), mAcc = M(L.accent, { roughness: .75 });
   const pelvis = a.pivot = new THREE.Group(); pelvis.position.y = a.pelvisY; rig.add(pelvis);
@@ -2379,22 +2429,25 @@ function buildRig(a) {
   const light = part(new THREE.CylinderGeometry(.05, .05, .034, 16), a.lightMat, pelvis, 0, S.h * .55, zc + .002, false); light.rotation.x = Math.PI / 2;
   // legs
   a.hips = [-1, 1].map(s => { const hip = new THREE.Group(); hip.position.set(s * S.R * .42, .06, 0); pelvis.add(hip);
-    part(new THREE.CylinderGeometry(.075, .068, LEG - .06, 12), JOINT, hip, 0, -(LEG - .06) / 2);
-    const foot = part(new THREE.SphereGeometry(.095, 14, 10), mTrim, hip, 0, -LEG + .07, .04); foot.scale.set(1, .6, 1.45); return hip; });
+    part(new THREE.CylinderGeometry(.075, .068, LEG - .06, 12), fur || JOINT, hip, 0, -(LEG - .06) / 2);
+    const foot = part(new THREE.SphereGeometry(animal ? .12 : .095, 14, 10), fur || mTrim, hip, 0, -LEG + .07, .04); foot.scale.set(1, .6, 1.45); return hip; });
   // arms (office code drives armL/armR)
   const sx = bodyRadius(S, .72) + .045;
   [a.armL, a.armR] = [-1, 1].map(s => { const sh = new THREE.Group(); sh.position.set(s * sx, S.h * .72, 0); sh.rotation.z = s * .12; pelvis.add(sh);
     part(new THREE.SphereGeometry(.07, 12, 10), mBody, sh);
     part(new THREE.CylinderGeometry(.055, .048, .32, 10), mBody, sh, 0, -.17);
-    const hand = new THREE.Group(); hand.position.y = -.36; sh.add(hand); part(new THREE.SphereGeometry(.072, 12, 10), mTrim, hand);
+    const hand = new THREE.Group(); hand.position.y = -.36; sh.add(hand); part(new THREE.SphereGeometry(animal ? .09 : .072, 12, 10), fur || mTrim, hand);
     sh.userData.hand = hand; return sh; });
   // neck and screen head
   part(new THREE.CylinderGeometry(.075, .085, .09, 14), JOINT, pelvis, 0, S.h + .02);
   const head = a.head = new THREE.Group(); head.position.y = S.h + .07 + .27; pelvis.add(head);
-  part(roundedBox(.56, .44, .3, .13, .05), mBody, head);
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(.54, .42), new THREE.MeshBasicMaterial({ map: a.faceTex })); screen.position.z = .204; head.add(screen);
+  if (animal) buildAnimal(a, animal, fur);
+  else {
+    part(roundedBox(.56, .44, .3, .13, .05), mBody, head);
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(.54, .42), new THREE.MeshBasicMaterial({ map: a.faceTex })); screen.position.z = .204; head.add(screen);
+  }
   const A = L.accessories;
-  if (!A.includes('headphones')) [-1, 1].forEach(s => { const b = part(new THREE.CylinderGeometry(.05, .05, .05, 14), mTrim, head, s * .34, 0, 0); b.rotation.z = Math.PI / 2; });
+  if (!animal && !A.includes('headphones')) [-1, 1].forEach(s => { const b = part(new THREE.CylinderGeometry(.05, .05, .05, 14), mTrim, head, s * .34, 0, 0); b.rotation.z = Math.PI / 2; });
   a.antennaMat = null;
   if (A.includes('headphones')) { part(new THREE.TorusGeometry(.37, .03, 8, 24, Math.PI), JOINT, head, 0, .02, 0);
     [-1, 1].forEach(s => { const cup = part(new THREE.CylinderGeometry(.11, .11, .1, 18), mAcc, head, s * .37, .02, 0); cup.rotation.z = Math.PI / 2; }); }
@@ -2402,7 +2455,7 @@ function buildRig(a) {
     part(new THREE.CylinderGeometry(.37, .375, .1, 20), mAcc, head, 0, .22, 0); part(new THREE.SphereGeometry(.075, 10, 8), mTrim, head, 0, .5, 0); }
   if (A.includes('cap')) { const d = part(new THREE.SphereGeometry(.35, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), mAcc, head, 0, .24, 0); d.scale.set(1, .6, 1.02);
     const brim = part(new THREE.CylinderGeometry(.24, .24, .03, 20), mAcc, head, 0, .25, .3); brim.scale.set(1.25, 1, 1.4); }
-  if (A.includes('glasses')) { [-1, 1].forEach(s => part(new THREE.TorusGeometry(.085, .016, 8, 18), JOINT, head, s * .125, .03, .232)); part(new THREE.BoxGeometry(.07, .016, .016), JOINT, head, 0, .05, .232); }
+  if (A.includes('glasses')) { const z = animal ? .325 : .232; [-1, 1].forEach(s => part(new THREE.TorusGeometry(.085, .016, 8, 18), JOINT, head, s * .125, .03, z)); part(new THREE.BoxGeometry(.07, .016, .016), JOINT, head, 0, .05, z); }
   if (A.includes('antenna') && !A.some(h => HATS.includes(h))) { part(new THREE.CylinderGeometry(.014, .014, .26, 8), JOINT, head, .14, .4, 0);
     a.antennaMat = new THREE.MeshBasicMaterial({ color: STATUS[a.state].hex }); part(new THREE.SphereGeometry(.05, 12, 8), a.antennaMat, head, .14, .55, 0, false); }
   if (A.includes('scarf')) { const sc = part(new THREE.TorusGeometry(.16, .06, 8, 20), mAcc, pelvis, 0, S.h + .01, 0); sc.rotation.x = Math.PI / 2;
@@ -2422,15 +2475,67 @@ function buildRig(a) {
   const ls = new THREE.Mesh(new THREE.PlaneGeometry(.32, .19), a.lapScreen); ls.position.set(0, .115, .007); lid.add(ls);
   a.laptop.visible = false;
   // the "needs you" marker floats above the head
-  a.beaconY = S.h + .07 + .6 + (A.includes('antenna') || A.includes('beanie') ? .42 : .28);
+  const headTop = animal ? (petSpecies(a) === 'rabbit' ? 1.04 : .72) : .54;
+  a.beaconY = S.h + .07 + headTop + .3 + (A.includes('antenna') || A.includes('beanie') ? .2 : 0);
   a.beacon = new THREE.Mesh(new THREE.OctahedronGeometry(.13), new THREE.MeshBasicMaterial({ color: STATUS.waiting.hex })); a.beacon.position.y = a.beaconY; a.beacon.visible = false; pelvis.add(a.beacon);
-  a.topY = (LEG + S.h + .07 + .54 + (A.includes('beanie') || A.includes('antenna') ? .2 : .04)) * (L.intern ? .9 : 1);
+  a.topY = (LEG + S.h + .07 + headTop + (A.includes('beanie') || A.includes('antenna') ? .2 : .04)) * (L.intern ? .9 : 1);
   a.label.position.y = a.topY + .5;
   a.faceT = 1; updateScreen(a);
 }
 
+function buildAnimal(a, animal, fur) {
+    const species = petSpecies(a), pale = M(animal.muzzle, { roughness: .95 }), pink = M('#DCA7A1', { roughness: .95 }), ink = M('#25202A', { roughness: .65 });
+    const oval = (parent, material, x,y,z, sx,sy,sz) => { const o = part(new THREE.SphereGeometry(1,16,12), material,parent,x,y,z); o.scale.set(sx,sy,sz); return o; };
+    const trimmed = species === 'maltese';
+    oval(a.head,fur,0,.015,0,trimmed ? .32 : .37,trimmed ? .30 : .33,.28);
+    // A low, swept fringe softens Lumi's crown without adding bulk around the eyes.
+    if (trimmed) {
+      [-1, 0, 1].forEach(i => {
+        const tuft = oval(a.head,fur,i*.065,.285-Math.abs(i)*.012,.025,.06,.055,.13);
+        tuft.rotation.z = -.25 + i*.12;
+      });
+    }
+    [-1,1].forEach(side => {
+      const ear = new THREE.Group(); a.head.add(ear); a.ears.push(ear);
+      ear.position.set(side*.29, species==='maltese' ? .07 : .24, -.035);
+      if(species==='rabbit') { oval(ear,fur,side*.035,.25,0,.095,.32,.075); oval(ear,pink,side*.035,.25,.063,.052,.23,.018); }
+      else if(species==='maltese') { oval(ear,fur,side*.055,-.12,.005,.115,.22,.09); oval(ear,pale,side*.06,-.15,.045,.09,.18,.055); }
+      else if(species==='cat'||species==='raccoon') { const outer=part(new THREE.ConeGeometry(.14,.27,3),fur,ear,0,.075,0); outer.rotation.y=Math.PI; const inner=part(new THREE.ConeGeometry(.075,.16,3),pink,ear,0,.08,.066); inner.rotation.y=Math.PI; }
+      else if(species==='bear') { oval(ear,fur,0,.035,0,.14,.14,.075); oval(ear,pink,0,.035,.063,.085,.085,.018); }
+      else { oval(a.head,fur,side*.06,.32,-.02,.06,.13,.06); }
+    });
+    if(species==='raccoon') [-1,1].forEach(side => { const mask=oval(a.head,ink,side*.14,.04,.245,.15,.105,.055); mask.rotation.z=side*.2; });
+    a.animalEyes = [-1,1].map(side => {
+      const eye = new THREE.Group(); a.head.add(eye); eye.position.set(side*.135,.055,.263);
+      oval(eye,M('#FFFDF8'),0,0,0,.07,.088,.035); oval(eye,ink,side*-.005,0,.032,.045,.064,.023); oval(eye,M('#FFFFFF'),-.013,.026,.052,.014,.019,.01);
+      return eye;
+    });
+    if(species==='duck') { oval(a.head,pale,0,-.1,.3,.19,.062,.15); }
+    else { [-1,1].forEach(side=>oval(a.head,pale,side*(trimmed ? .045 : .065),-.09,.255,trimmed ? .078 : .108,trimmed ? .06 : .083,trimmed ? .06 : .075)); oval(a.head,ink,0,-.065,trimmed ? .32 : .334,.045,.032,.026); }
+    // A small curved mouth changes with the state, independently of the robot screen faces.
+    const curve=new THREE.QuadraticBezierCurve3(new THREE.Vector3(-.045,0,0),new THREE.Vector3(0,-.035,0),new THREE.Vector3(.045,0,0));
+    a.animalMouth=part(new THREE.TubeGeometry(curve,12,.009,6,false),ink,a.head,0,-.165,species==='duck'?.38:.306);
+    if(species==='cat') [-1,1].forEach(side=> { for(let i=0;i<2;i++){const w=part(new THREE.BoxGeometry(.14,.006,.006),ink,a.head,side*.24,-.09-i*.04,.265);w.rotation.z=side*(i?.15:-.15);} });
+    a.tail=new THREE.Group(); a.tail.position.set(0,.18,-.18); a.pivot.add(a.tail);
+    if(species==='cat'||species==='raccoon') {
+      for(let i=0;i<7;i++) oval(a.tail,species==='raccoon'&&i%2?ink:fur,.08+i*.055,i*.075,-.12-i*.055,species==='raccoon'?.1:.05,.075,.075);
+    } else if(species==='maltese') { for(let i=0;i<6;i++) {const angle=i*.45;oval(a.tail,fur,.12+Math.sin(angle)*.12,.04+i*.04,-.15-Math.cos(angle)*.12,.095,.08,.08);} }
+    else oval(a.tail,fur,0,.03,-.15,.13,.12,.12);
+
+}
+
+function drawAnimalFace(a) {
+  const st = a.faceErrorUntil > a.animT ? 'error' : a.state;
+  const open = a.blink > 0 ? .08 : st === 'idle' ? .65 : st === 'done' ? .55 : st === 'waiting' ? 1.15 : 1;
+  a.animalEyes.forEach(eye => { eye.scale.y = open; eye.rotation.z = st === 'error' ? (eye.position.x > 0 ? -.15 : .15) : 0; });
+  a.animalMouth.rotation.z = st === 'error' ? Math.PI : 0;
+  a.ears.forEach((ear, i) => { ear.rotation.z = (i ? 1 : -1) * (st === 'waiting' ? -.1 : st === 'idle' ? .12 : .03); });
+  a.tail.rotation.y = Math.sin(a.animT * (st === 'done' ? 7 : 2)) * (st === 'done' ? .35 : .08);
+}
+
 function hexA(hex, alpha) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${alpha})`; }
 function drawFace(a) {
+  if (a.animalEyes) { drawAnimalFace(a); return; }
   const x = a.faceCtx, W = 256, H = 200, L = a.look, t = a.animT;
   const st = a.faceErrorUntil > t ? 'error' : a.state, col = FACE_COLORS[st], glow = st === 'error' ? '#E5534B' : STATUS[st].hex;
   x.fillStyle = '#0C1216'; x.fillRect(0, 0, W, H);
@@ -2482,7 +2587,7 @@ let faceRig = null;
 const faceCache = new Map();
 function faceShot(a, mood = 'done') {
   if (!a || !a.head || a.gone) return '';
-  const id = `${a.id}|${mood}`, key = `${a.color}|${JSON.stringify(a.look)}`, hit = faceCache.get(id);
+  const id = `${a.id}|${mood}`, key = `${uiPrefs.crew}|${a.color}|${JSON.stringify(a.look)}`, hit = faceCache.get(id);
   if (hit && hit.key === key) return hit.url;
   try {
     if (!faceRig) {
@@ -2965,6 +3070,10 @@ function select(a, focus) {
     $('#d-prompt').placeholder = selected.kind === 'sub' ? '' : `Give ${selected.name} a task`;
     if (focus) { const p = worldPos(selected); goal.target.x = p.x; goal.target.z = p.z; if (view === '3d') goal.radius = Math.min(goal.radius, 15); }
   } else if (follow) setFollow(false);
+  if (guideStep === 1 || guideStep === 3) {
+    $('#office-guide').dataset.detail = !!selected;
+    if (isMobile() && selected) setPanelOpen(false);
+  }
 }
 function renderDetail() {
   const a = selected; if (!a) return; detailDirty = false;
@@ -3079,7 +3188,7 @@ function buildCustomize() {
         <label class="field">Name <input type="text" id="name-${a.id}" data-field="name" value="${esc(a.name)}" maxlength="18"></label>
         <label class="field">Works at <select id="pref-${a.id}" data-field="pref">${Object.entries(PREFS).map(([k, v]) => `<option value="${k}"${k === a.pref ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
         <span class="lbl">Body</span>${seg(a, 'body', BODIES)}
-        <span class="lbl">Face</span>${seg(a, 'face', FACE_STYLES)}
+        ${uiPrefs.crew === 'pets' ? `<span class="lbl">Animal</span>${seg(a, 'species', ANIMALS)}` : `<span class="lbl">Face</span>${seg(a, 'face', FACE_STYLES)}`}
         <span class="lbl">Color</span>${sw(a, 'color', PALETTE, a.color)}
         <span class="lbl">Trim</span>${sw(a, 'trim', TRIM_COLORS, a.look.trim)}
         <span class="lbl">Accessory color</span>${sw(a, 'accent', ACCENT_COLORS, a.look.accent)}
@@ -3395,6 +3504,20 @@ $('#opt-sound').checked = soundOn();
 $('#opt-sound').onchange = e => { uiPrefs.sound = e.target.checked; saveUi(); if (e.target.checked) { const a = agents.find(x => x.kind === 'main'); if (a) chime('done', a, true); } };
 
 function onLiveEvent(e, replay) {
+  if (e.replacesSessionId) {
+    const duplicate = live.byId.get(e.replacesSessionId);
+    if (duplicate) {
+      for (const a of [...(duplicate.subs?.values() || []), duplicate]) {
+        a.gone = a.leaving = true;
+        for (const spot of [...Object.values(a.floor.SPOTS).flat(), ...ROOF_SPOTS]) {
+          if (spot.by === a.id) spot.by = null;
+          if (spot.owner === a) { spot.owner = null; spot.chairMat?.color.set(sceneT.chair); }
+        }
+        removeAgent(a);
+      }
+      live.byId.delete(e.replacesSessionId); buildCustomize();
+    }
+  }
   const s = e.session;
   if (e.type === 'SessionEnd') { const a = live.byId.get(e.sessionId); if (a) { emit(a, 'SessionEnd', e.reason || 'Session ended', e.at); leaveOffice(a); } return; }
   const a = liveMain(s, replay);
@@ -3561,9 +3684,96 @@ function renderSetup() {
   if (empty) card.innerHTML = todo.length
     ? `<b>Connect your coding agents</b><span>Agent Office adds a small hook that reports what each session is doing. Nothing leaves your Mac.</span><div class="btns">${todo.map((t, i) => btn(t, i === 0)).join('')}</div>`
     : `<b>No agents yet</b><span>Start a new ${tools.some(t => t.id === 'claude-code' && t.status === 'connected') ? 'Claude Code ' : ''}session and send a prompt. Its agent rides up in the lift.</span>`;
+  renderGuideTools();
 }
 document.addEventListener('click', e => { const b = e.target.closest('[data-connect]'); if (b) connectTool(b.dataset.connect); });
 addEventListener('focus', () => { if (live.connected) loadSetup(); });
+
+/* ---------- first visit and the replayable office tour ---------- */
+let guideStep = -1, guideOpener = null, tourAfterCity = false;
+const GUIDE_STEPS = [
+  { title: 'Every project gets a floor', body: 'Your coding sessions share an office. Use the floor buttons to visit a project; drag the scene to look around and scroll to zoom.', target: '#lift' },
+  { title: 'Meet your teammates', body: 'Click an agent in the office or the Agents list to see its activity. Thinking and Working mean it’s busy; Done means it has finished. No agents yet? Try the demo to meet a sample team.', target: '#panel' },
+  { title: 'Connect your coding tools', body: 'Connect each tool once, then start a new coding session and send a prompt. Its agent will arrive in your office. Connection status appears below.', target: '#connect-list' },
+  { title: 'Know when you’re needed', body: 'A yellow marker and a knock mean an agent needs you. Select it to see the request. Use Open chat to continue in your coding app; Allow and Deny appear when a permission request is available.', target: '#detail' },
+];
+function setCrew(crew) {
+  if (!['pets', 'robots'].includes(crew)) return;
+  uiPrefs.crew = crew; saveUi();
+  // Rebuild avatars in place: switching crews keeps sessions, seats and activity intact.
+  for (const a of agents) { buildRig(a); a.labelDirty = true; }
+  faceCache.clear(); uiDirty = detailDirty = true;
+  buildCustomize(); syncCrewButtons(); agents.forEach(sendFaces);
+}
+function syncCrewButtons() {
+  document.querySelectorAll('[data-crew]').forEach(b => b.setAttribute('aria-pressed', b.dataset.crew === (uiPrefs.crew || 'robots')));
+}
+document.querySelectorAll('[data-crew]').forEach(b => { b.onclick = () => setCrew(b.dataset.crew); });
+function openWelcome() {
+  guideOpener = document.activeElement;
+  syncCrewButtons(); $('#welcome').showModal();
+  $('#welcome [aria-pressed="true"]').focus();
+}
+function leaveWelcome(tour) {
+  if (!uiPrefs.crew) setCrew('robots');
+  $('#welcome').close();
+  if (!tour) { uiPrefs.guideDone = true; delete uiPrefs.guideStep; saveUi(); }
+  if (!Object.hasOwn(CITIES, uiPrefs.city)) {
+    tourAfterCity = tour; $('#city-picker').showModal(); $('#city-choices [aria-pressed="true"]')?.focus();
+  } else if (tour) startGuide(0);
+  else restoreGuideFocus();
+}
+$('#welcome-next').onclick = () => leaveWelcome(true);
+$('#welcome-skip').onclick = () => leaveWelcome(false);
+$('#welcome').addEventListener('cancel', e => { e.preventDefault(); leaveWelcome(false); });
+$('#city-picker').addEventListener('close', () => { if (tourAfterCity) { tourAfterCity = false; startGuide(0); } });
+$('#replay-guide').onclick = () => { finishGuide(false); openWelcome(); };
+function startGuide(step = 0) {
+  guideStep = Math.max(0, Math.min(GUIDE_STEPS.length - 1, step));
+  uiPrefs.guideDone = false; uiPrefs.guideStep = guideStep; saveUi();
+  $('#office-guide').hidden = false; renderGuide();
+}
+function clearGuideTarget() { document.querySelectorAll('.guide-target').forEach(el => el.classList.remove('guide-target')); }
+function renderGuide() {
+  clearGuideTarget(); const step = GUIDE_STEPS[guideStep];
+  $('#guide-step').textContent = `Office tour · ${guideStep + 1} of ${GUIDE_STEPS.length}`;
+  $('#guide-title').textContent = step.title; $('#guide-body').textContent = step.body;
+  $('#guide-back').hidden = guideStep === 0; $('#guide-next').textContent = guideStep === 3 ? 'Start using my office' : 'Next';
+  $('#office-guide').dataset.detail = guideStep === 3 && !!selected;
+  if (guideStep === 0) setLiftOpen(true);
+  const tab = $('#panel .tabs [data-tab="' + (guideStep === 2 ? 'custom' : 'agents') + '"]');
+  if (tab.getAttribute('aria-selected') !== 'true') tab.click();
+  setPanelOpen(!isMobile() || ![0, 3].includes(guideStep));
+  if (guideStep === 1) select(null);
+  if (guideStep === 2) { select(null); $('#connect-list').scrollIntoView({ block: 'nearest' }); }
+  if (guideStep === 3 && !selected) { const a = agents.find(a => a.kind === 'main'); if (a) select(a, true); }
+  const target = $(step.target); if (target && !target.hidden) target.classList.add('guide-target');
+  const action = $('#guide-action'); action.hidden = ![1, 3].includes(guideStep);
+  action.textContent = agents.some(a => a.kind === 'main') ? (guideStep === 1 ? 'View an agent' : 'View activity') : 'Try demo';
+  renderGuideTools(); $('#guide-title').focus();
+}
+function renderGuideTools() {
+  const el = $('#guide-tools'); if (guideStep !== 2) { el.replaceChildren(); return; }
+  const activeTool = el.contains(document.activeElement) ? document.activeElement.dataset.connect : null;
+  if (MODE === 'demo') el.innerHTML = '<p class="note">You’re exploring sample agents. Connect your own tools in your live office.</p><a class="btn" href="?tour">Go to live office</a>';
+  else if (setup.tools?.length) el.innerHTML = setup.tools.map(t => `<div class="connect-row"><span>${esc(t.name)}</span>${t.status === 'connected' ? '<span class="pill s-done">Connected</span>' : t.status === 'not-installed' ? '<span class="state">Not installed</span>' : `<button class="btn" data-connect="${t.id}"${setup.busy ? ' disabled' : ''}>${setup.busy === t.id ? 'Connecting…' : 'Connect'}</button>`}</div>`).join('');
+  else el.innerHTML = '<p class="note">The Mac app has one-click connection buttons. If you run the browser office from source, follow the setup guide to connect your tools.</p><a class="btn" href="https://github.com/regisBafutwabo/agent-office/blob/main/INSTALL.md#from-source" target="_blank" rel="noopener">Open setup guide ↗</a>';
+  if (activeTool) el.querySelector(`[data-connect="${activeTool}"]`)?.focus();
+}
+$('#guide-action').onclick = () => {
+  const a = selected || agents.find(a => a.kind === 'main');
+  if (!a) { location.href = '?demo&tour'; return; }
+  select(a, true); if (guideStep === 3) showDetailTab('activity');
+};
+function finishGuide(complete = true) {
+  guideStep = -1; clearGuideTarget(); $('#office-guide').hidden = true;
+  if (complete) { uiPrefs.guideDone = true; delete uiPrefs.guideStep; saveUi(); restoreGuideFocus(); }
+}
+function restoreGuideFocus() { (guideOpener && guideOpener !== document.body && guideOpener.isConnected ? guideOpener : $('#view-3d')).focus(); }
+$('#guide-next').onclick = () => guideStep === 3 ? finishGuide() : startGuide(guideStep + 1);
+$('#guide-back').onclick = () => startGuide(guideStep - 1);
+$('#guide-skip').onclick = () => finishGuide();
+$('#office-guide').addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); finishGuide(); } });
 
 function connectLive() {
   document.body.classList.add('live'); setSpeed(1); setModeLine();
@@ -3632,9 +3842,12 @@ setLiftOpen(uiPrefs.lift !== false); if (uiPrefs.panel === false) setPanelOpen(f
 showDetailTab(uiPrefs.detailTab === 'activity' ? 'activity' : 'chat');
 applyScene(uiPrefs.theme in SCENES ? uiPrefs.theme : 'auto'); buildCustomize(); renderJSON(); drawTerm(); drawBoard(); layout();
 if (Object.hasOwn(CITIES, uiPrefs.city)) setCity(uiPrefs.city);
-else { $('#city-picker').showModal(); $('#city-choices [aria-pressed="true"]')?.focus(); }   // start focus on the current city, not the first card
 setView('3d'); Object.assign(cam, { theta: goal.theta, phi: goal.phi, radius: goal.radius }); cam.target.copy(goal.target); applyCam();
 if (MODE === 'demo' || !/^https?:$/.test(location.protocol)) startDemo(); else connectLive();
+syncCrewButtons();
+if (!uiPrefs.guideDone && !uiPrefs.crew) openWelcome();
+else if (!Object.hasOwn(CITIES, uiPrefs.city)) { tourAfterCity = !uiPrefs.guideDone || params.has('tour'); $('#city-picker').showModal(); $('#city-choices [aria-pressed="true"]')?.focus(); }
+else if (!uiPrefs.guideDone || params.has('tour')) startGuide(Number.isInteger(uiPrefs.guideStep) ? uiPrefs.guideStep : 0);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { agents.forEach(a => a.labelDirty = true); floorLabels.forEach(l => l.draw()); drawTerm(); drawBoard(); drawNeon(); floors.forEach(f => drawSign(f, true)); });
 
 let last = performance.now(), uiT = 0;

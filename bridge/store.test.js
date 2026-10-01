@@ -5,6 +5,30 @@ import { chatLink } from './focus.js';
 
 const base = { session_id: 's1', cwd: '/Users/me/code/shop', permission_mode: 'default' };
 
+test('a Codex thread replaces its imported Claude ghost in either arrival order', () => {
+  for (const claudeFirst of [true, false]) {
+    const st = new Store(), p = { ...base, hook_event_name: 'UserPromptSubmit', prompt: 'Fix the UI' };
+    if (claudeFirst) st.ingest(p);
+    const e = st.ingest({ ...p, session_id: 'codex:s1' }, 'codex-tui', null, 'codex');
+    assert.equal(e.replacesSessionId, claudeFirst ? 's1' : undefined);
+    assert.equal(st.ingest({ ...p, hook_event_name: 'Stop' }), null);
+    assert.deepEqual(st.snapshot().sessions.map(s => [s.id, s.agent, s.status]), [['codex:s1', 'codex', 'thinking']]);
+    assert.ok(st.snapshot().recent.every(e => e.sessionId !== 's1'));
+    st.ingest({ ...p, session_id: 'codex:s1', hook_event_name: 'SessionEnd' }, null, null, 'codex');
+    assert.equal(st.ingest(p), null);
+    assert.equal(st.snapshot().sessions.length, 0);
+  }
+});
+
+test('Codex discovery removes the imported ghost but keeps independent Claude sessions in the same project', () => {
+  const st = new Store(), p = { ...base, hook_event_name: 'SessionStart' };
+  st.ingest(p); st.ingest({ ...p, session_id: 'real-claude' }, 'cli');
+  const f = { id: 'codex:s1', agent: 'codex', cwd: base.cwd, entrypoint: 'codex-tui', at: Date.now(), status: 'working', activity: 'Working', title: null, messages: [] };
+  assert.equal(st.adopt(f).replacesSessionId, 's1');
+  assert.equal(st.adopt({ ...f, id: 's1', agent: 'claude-code' }), null);
+  assert.deepEqual(st.snapshot().sessions.map(s => s.id).sort(), ['codex:s1', 'real-claude']);
+});
+
 test('labels where the session runs', () => {
   assert.equal(entrypointLabel('claude-desktop'), 'desktop');
   assert.equal(entrypointLabel('cli'), 'terminal');
