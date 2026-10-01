@@ -2413,7 +2413,7 @@ function buildRig(a) {
     part(new THREE.BoxGeometry(.1, .13, .012), mats.mug, pelvis, 0, S.h * .62, bodyRadius(S, .62) + .02);
     part(new THREE.BoxGeometry(.1, .03, .014), mAcc, pelvis, 0, S.h * .62 + .045, bodyRadius(S, .62) + .021); }
   // laptop for working away from the desk, held in front
-  a.laptop = new THREE.Group(); a.laptop.position.set(0, S.h * .5, .38); pelvis.add(a.laptop);
+  a.laptop = new THREE.Group(); a.laptop.position.set(0, S.h * .5, bodyRadius(S, .5) + .15); pelvis.add(a.laptop);   // clear of the belly so the lid isn't buried
   box(.36, .018, .25, mats.steel, 0, 0, 0, a.laptop);
   const lid = new THREE.Group(); lid.position.set(0, .01, -.12); lid.rotation.x = -.3; a.laptop.add(lid);
   box(.36, .23, .012, mats.steel, 0, .115, 0, lid);
@@ -3410,6 +3410,9 @@ function onLiveEvent(e, replay) {
   const label = `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}`;
   switch (e.type) {
     case 'SessionStart': emit(a, 'SessionStart', `${whereFrom(a)} · ${a.cwd}`, e.at); break;
+    case 'SessionFound':                                     // already running when the office opened, read from its log
+      if (e.message) emit(a, 'SessionFound', `${e.message} · ${whereFrom(a)} · ${a.cwd}`, e.at);
+      applyStatus(a, s.status, s.activity); break;
     case 'UserPromptSubmit':
       emit(a, 'UserPromptSubmit', `"${e.prompt || ''}"`, e.at); seeAgent(a);
       a.ws = chooseWorkspot(a); a.streak = 0;

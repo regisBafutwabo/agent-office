@@ -4,6 +4,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod adapters;
+mod discover;
 mod focus;
 mod music;
 mod server;

@@ -9,6 +9,7 @@ import { Store } from './store.js';
 import { normalize } from './adapters.js';
 import { focus, appIcon } from './focus.js';
 import { watchMusic } from './music.js';
+import { scan } from './discover.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = path.join(ROOT, 'web');
@@ -136,7 +137,14 @@ wss.on('connection', ws => {
     if (msg.type === 'decide' && pending.has(msg.id) && ['allow', 'deny', 'defer'].includes(msg.decision)) pending.get(msg.id).resolve(msg.decision);
   });
 });
-setInterval(() => store.prune(), 60_000).unref();
+// Chats that were already running move in from their logs (discover.js); keep the ones no hook reports on up to date,
+// and walk out the ones whose log went quiet.
+for (const f of scan()) store.adopt(f);
+setInterval(() => {
+  for (const f of scan()) { const e = store.adopt(f); if (e) broadcast({ type: 'event', event: e }); }
+  const before = [...store.sessions.keys()]; store.prune();
+  for (const id of before) if (!store.sessions.has(id)) broadcast({ type: 'event', event: { type: 'SessionEnd', sessionId: id, at: Date.now(), reason: 'No news for a while' } });
+}, 10_000).unref();
 watchMusic(m => { music = m; broadcast({ type: 'music', music }); }, () => wss.clients.size > 0);
 
 server.on('error', err => {

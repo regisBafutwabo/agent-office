@@ -2,6 +2,7 @@
 // and answers permission requests you allow or deny from the office.
 // Same endpoints as bridge/server.js, so phones and VR headsets can connect to it too.
 use crate::adapters;
+use crate::discover;
 use crate::focus;
 use crate::music;
 use crate::setup;
@@ -29,6 +30,9 @@ use tokio::sync::{broadcast, oneshot};
 struct Web;
 
 static THREE_JS: &[u8] = include_bytes!("../../../node_modules/three/build/three.min.js");
+
+/// How often to look for chats in the agents' logs (see discover.rs).
+const LOG_SCAN: Duration = Duration::from_secs(10);
 
 /// How long a watched office holds a permission request before Claude Code shows its own dialog.
 const APPROVAL_HOLD: Duration = Duration::from_secs(45);
@@ -72,7 +76,15 @@ pub fn router(port: u16, on_change: OnChange) -> Router {
         origins: ["localhost", "127.0.0.1", "[::1]"].iter().map(|h| format!("http://{h}:{port}")).collect(),
         music: Mutex::new(Value::Null),
     });
+    {
+        // Chats that were already running when the office opened move in before the first page loads.
+        let mut store = state.store.lock().unwrap();
+        for f in discover::scan_home(store::now_ms()) {
+            if let Some(e) = store.adopt(f) { (state.on_change)(&store, &e); }
+        }
+    }
     tokio::spawn(watch_music(state.clone()));
+    tokio::spawn(watch_logs(state.clone()));
     Router::new()
         .route("/hook", post(hook))
         .route("/permission", post(permission))
@@ -150,6 +162,28 @@ async fn watch_music(st: AppState) {
         };
         if changed {
             broadcast(&st, json!({ "type": "music", "music": now }));
+        }
+    }
+}
+
+/// Keeps chats known only from their logs up to date, adds new ones, and walks out the ones whose log went quiet.
+async fn watch_logs(st: AppState) {
+    let mut tick = tokio::time::interval(LOG_SCAN);
+    tick.tick().await; // the first scan already ran in router()
+    loop {
+        tick.tick().await;
+        let found = tokio::task::spawn_blocking(|| discover::scan_home(store::now_ms())).await.unwrap_or_default();
+        let mut store = st.store.lock().unwrap();
+        for f in found {
+            if let Some(e) = store.adopt(f) {
+                (st.on_change)(&store, &e);
+                broadcast(&st, json!({ "type": "event", "event": e }));
+            }
+        }
+        let before: Vec<String> = store.sessions.iter().map(|s| s.id.clone()).collect();
+        store.prune();
+        for id in before.iter().filter(|id| !store.sessions.iter().any(|s| &s.id == *id)) {
+            broadcast(&st, json!({ "type": "event", "event": { "type": "SessionEnd", "sessionId": id, "at": store::now_ms(), "reason": "No news for a while" } }));
         }
     }
 }
