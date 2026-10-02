@@ -2971,6 +2971,8 @@ let hoverT = 0;
 canvas.addEventListener('pointermove', e => {
   const p = ptrs.get(e.pointerId);
   if (!p) { const now = performance.now(); if (e.pointerType === 'mouse' && now - hoverT > 80) { hoverT = now; canvas.style.cursor = agentAt(e.clientX, e.clientY) ? 'pointer' : 'grab'; } return; }
+  // the pointerup can be lost when focus moves to another window or monitor mid-drag
+  if (e.pointerType === 'mouse' && e.buttons === 0) { dropPtrs(); return; }
   const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
   if (ptrs.size === 1) {
     if (panMode) pan(dx, dy); else { goal.theta -= dx * .006; goal.phi = clamp(goal.phi - dy * .005, .3, cityKey !== 'generic' ? 1.54 : 1.38); }
@@ -2985,7 +2987,9 @@ function endPtr(e) {
     if (a) select(a, true); else { const f = floorAt(e.clientX, e.clientY); if (f && (f !== curFloor || viewMode === 'building')) flyToFloor(f.i); else select(null); } }
   ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null;
 }
+function dropPtrs() { ptrs.clear(); pinch = null; }
 canvas.addEventListener('pointerup', endPtr); canvas.addEventListener('pointercancel', endPtr);
+addEventListener('blur', dropPtrs); document.addEventListener('visibilitychange', dropPtrs);
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 canvas.addEventListener('wheel', e => { e.preventDefault(); goal.radius = clamp(goal.radius * (1 + e.deltaY * .0012), 7, 150); hideHint(); }, { passive:false });
 const keys = new Set();
