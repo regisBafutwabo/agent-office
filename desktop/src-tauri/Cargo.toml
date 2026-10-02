@@ -1,6 +1,6 @@
 [package]
 name = "agent-office"
-version = "0.5.0"
+version = "0.5.1"
 description = "Agent Office: see your Claude Code agents at work in a 3D office"
 edition = "2021"
 license = "MIT"
@@ -14,6 +14,7 @@ tauri-plugin-notification = "2"
 notify-rust = "4"
 tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"
 axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1", features = ["net", "sync", "macros", "rt-multi-thread", "time"] }
 serde = { version = "1", features = ["derive"] }

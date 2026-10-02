@@ -11,6 +11,7 @@ mod server;
 mod setup;
 mod store;
 mod transcript;
+mod update;
 
 use serde_json::Value;
 use std::collections::HashMap;
@@ -155,6 +156,7 @@ fn main() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| open_office(app)))
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
@@ -163,6 +165,8 @@ fn main() {
             let open = MenuItem::with_id(app, "open", "Open Agent Office", true, None::<&str>)?;
             let browser = MenuItem::with_id(app, "browser", "Open in browser", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Agent Office", true, None::<&str>)?;
+            let update_item = MenuItem::with_id(app, "update", "Download update", true, None::<&str>)?;
+            let update_separator = PredefinedMenuItem::separator(app)?;
             let connect_items = setup::Tool::ALL.iter()
                 .map(|t| MenuItem::with_id(app, format!("connect:{}", t.id()), t.name(), false, None::<&str>))
                 .collect::<Result<Vec<_>, _>>()?;
@@ -178,6 +182,8 @@ fn main() {
                 refresh_connect_menu(&items);
             });
             let menu_items = connect_items.clone();
+            let ready = update::Ready::default();
+            tauri::async_runtime::spawn(update::watch(app.handle().clone(), menu.clone(), update_item, update_separator, ready.clone()));
 
             TrayIconBuilder::with_id(TRAY_ID)
                 .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?)
@@ -187,6 +193,7 @@ fn main() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(move |app, event| match event.id.as_ref() {
                     "open" => open_office(app),
+                    "update" => update::install(app, &ready),
                     id if id.starts_with("connect:") => {
                         let Some(tool) = setup::Tool::from_id(&id["connect:".len()..]) else { return };
                         let (app, items) = (app.clone(), menu_items.clone());

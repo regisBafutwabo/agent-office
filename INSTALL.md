@@ -125,7 +125,7 @@ To look around without any agents, open <http://localhost:4747/?demo>.
 
 ## Updating
 
-**Desktop app:** download the newest release and replace the app in Applications. The plugin updates itself.
+**Desktop app:** download the newest release and replace the app in Applications. The plugin updates itself. From 0.5.1 on, the app updates itself: every 4 hours it checks GitHub, downloads any new version in the background, and tells you once it's ready. Right-click the Agent Office icon near the clock and choose **Restart to update**. Run the app from Applications, not from the disk image, so it can replace itself.
 
 **From source:**
 
