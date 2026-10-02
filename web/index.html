@@ -2474,6 +2474,10 @@ function buildRig(a) {
   a.lapScreen = new THREE.MeshBasicMaterial({ color: '#1E262B' });
   const ls = new THREE.Mesh(new THREE.PlaneGeometry(.32, .19), a.lapScreen); ls.position.set(0, .115, .007); lid.add(ls);
   a.laptop.visible = false;
+  // closed laptop carried in the right hand while walking around the office (never on the roof)
+  a.carry = new THREE.Group(); a.carry.position.set(.02, -.1, 0); a.armR.userData.hand.add(a.carry);
+  box(.03, .25, .36, mats.steel, 0, 0, 0, a.carry);
+  a.carry.visible = false;
   // the "needs you" marker floats above the head
   const headTop = animal ? (petSpecies(a) === 'rabbit' ? 1.04 : .72) : .54;
   a.beaconY = S.h + .07 + headTop + .3 + (A.includes('antenna') || A.includes('beanie') ? .2 : 0);
@@ -2841,9 +2845,9 @@ function updateAgent(a, dt, sdt) {
   g.scale.setScalar(a.scale * Math.max(.001, a.appear));
   a.animT += sdt; const t = a.animT; const moving = a.path.length > 0;
   let bob = 0, l = 0, r = 0, rz = 0, tilt = 0;
-  const pose = animationPose(a, moving);
+  const pose = animationPose(a, moving), carrying = moving && !a.onRoof;
   switch (pose) {
-    case 'walk': bob = Math.abs(Math.sin(t * 9)) * .06; l = Math.sin(t * 9) * .6; r = -l; break;
+    case 'walk': bob = Math.abs(Math.sin(t * 9)) * .06; l = Math.sin(t * 9) * .6; r = carrying ? -l * .3 : -l; break;   // the laptop arm swings less
     case 'type': l = -1.15 + Math.sin(t * 17) * .13; r = -1.15 + Math.sin(t * 17 + 1.7) * .13; tilt = .12; break;
     case 'think': tilt = Math.sin(t * 1.4) * .12 - .05; r = -2.1; l = -.15; bob = Math.sin(t * 2) * .015; break;
     case 'read': l = r = -.95; tilt = .28; bob = Math.sin(t * 1.5) * .01; break;
@@ -2890,6 +2894,7 @@ function updateAgent(a, dt, sdt) {
   a.legs.l += (legL - a.legs.l) * k; a.legs.r += (legR - a.legs.r) * k; a.hips[0].rotation.x = a.legs.l; a.hips[1].rotation.x = a.legs.r;
   a.tilt += (tilt - a.tilt) * k; a.head.rotation.x = a.tilt; a.head.rotation.y += (headYaw - a.head.rotation.y) * k;
   a.pivot.position.y = a.pelvisY + bob;
+  a.carry.visible = carrying;
   a.laptop.visible = !moving && a.busy && !!a.spot && !!a.spot.laptop && pose !== 'raise' && pose !== 'read';
   a.ring.material.color.set(STATUS[a.state].hex);
   const waiting = a.state === 'waiting';
