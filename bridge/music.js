@@ -3,12 +3,11 @@
 // and nothing leaves the machine. macOS asks once before the office may read Spotify or Music.
 import { execFile } from 'node:child_process';
 
-export const NOW_PLAYING_SCRIPT = `ObjC.import('AppKit');
-function run() {
+export const NOW_PLAYING_SCRIPT = `function run() {
   for (const [id, source] of [['com.spotify.client', 'spotify'], ['com.apple.Music', 'music']]) {
-    if ($.NSRunningApplication.runningApplicationsWithBundleIdentifier(id).count === 0) continue;
     try {
       const app = Application(id);
+      if (!app.running()) continue;
       if (app.playerState() !== 'playing') continue;
       const t = app.currentTrack();
       return JSON.stringify({ source, title: t.name(), artist: t.artist(), album: t.album() });

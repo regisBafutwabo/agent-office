@@ -4,12 +4,11 @@
 use serde_json::{json, Value};
 use std::process::Command;
 
-const NOW_PLAYING_SCRIPT: &str = r#"ObjC.import('AppKit');
-function run() {
+const NOW_PLAYING_SCRIPT: &str = r#"function run() {
   for (const [id, source] of [['com.spotify.client', 'spotify'], ['com.apple.Music', 'music']]) {
-    if ($.NSRunningApplication.runningApplicationsWithBundleIdentifier(id).count === 0) continue;
     try {
       const app = Application(id);
+      if (!app.running()) continue;
       if (app.playerState() !== 'playing') continue;
       const t = app.currentTrack();
       return JSON.stringify({ source, title: t.name(), artist: t.artist(), album: t.album() });
