@@ -1,6 +1,6 @@
 # <img src="desktop/src-tauri/icons/128x128@2x.png" alt="Agent Office logo" width="48" height="48" align="absmiddle"> Agent Office
 
-A 3D office where your Claude Code agents work. Every session you run in the **Claude desktop app** or in the **terminal** becomes an agent that rides up in the lift, takes a desk, walks to the library when it researches, raises a hand when it needs your permission, and heads to the lounge when it's done. Subagents show up as smaller teammates.
+A 3D office where your Claude Code agents work. Every session you run in the **Claude desktop app** or in the **terminal** becomes an agent that rides up in the lift, takes a desk, walks to the library when it researches, raises a hand when it needs your permission, and heads to the lounge when it's done. Subagents show up as smaller teammates. When one finishes, it stays at its desk while its main agent walks over to review the work, then lets it go.
 
 Works in any browser on your computer. Phone and VR headset support comes next (see the roadmap).
 

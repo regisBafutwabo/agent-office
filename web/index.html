@@ -744,6 +744,14 @@ function approach(s) {
 }
 // inside the lift car; agents always leave and enter straight through the lift doors
 const DOOR = { x: 13.3, z: -1.8, face: [-1, 0], from: null, ax: 11.6, az: -1.8 };
+// Over the shoulder of whoever sits at a seat, looking at their screen: where a main agent stands to review a subagent's work.
+function besideSpot(s) {
+  const f = s.face || [0, 1], p = [-f[1], f[0]];
+  const at = k => ({ x: s.x - f[0] * .35 + k * p[0] * .8, z: s.z - f[1] * .35 + k * p[1] * .8 });
+  let o = at(1); if (!isFree(ci(o.x), cj(o.z))) { const q = at(-1); if (isFree(ci(q.x), cj(q.z))) o = q; }
+  const dx = s.x + f[0] * .85 - o.x, dz = s.z + f[1] * .85 - o.z, d = Math.hypot(dx, dz) || 1;
+  return { x: o.x, z: o.z, face: [dx / d, dz / d], from: null, y: 0 };
+}
 
 /* ---------- textures ---------- */
 function plankTexture() {
@@ -2811,11 +2819,18 @@ async function runSub(parent, type, task) {
   }
   if (a.spot !== home) { setState(a, 'working', 'Back to the seat'); await walkTo(a, home); }
   a.pose = 'type'; setState(a, 'thinking', 'Writing up findings'); await wait(rand(1.5, 2.5));
-  a.busy = false; a.pose = 'idle'; setState(a, 'done', `Reported back to ${parent.name}`); emit(a, 'SubagentStop', `Returned findings to ${parent.name}`);
-  await wait(1.2);
-  a.gone = true; home.by = null; if (home.screen && a.floor === curFloor) home.screen.color.set(sceneT.screenOff);
-  await walkTo(a, DOOR); a.leaving = true; await wait(.7);
-  removeAgent(a); return true;
+  a.busy = false; a.pose = 'idle'; setState(a, 'done', `Done · ${parent.name} is coming over`); emit(a, 'SubagentStop', `Returned findings to ${parent.name}`);
+  setState(parent, 'thinking', `Reviewing “${task}”`);
+  await walkTo(parent, besideSpot(home)); parent.pose = 'think'; parent.where = `Beside ${a.name}`;
+  setState(a, 'done', `${parent.name} is reviewing the work`); await wait(rand(3, 5));
+  setState(a, 'done', `Let go by ${parent.name}`);
+  (async () => {
+    await wait(1.2);
+    a.gone = true; home.by = null; if (home.screen && a.floor === curFloor) home.screen.color.set(sceneT.screenOff);
+    await walkTo(a, DOOR); a.leaving = true; await wait(.7);
+    removeAgent(a);
+  })();
+  return true;
 }
 function removeAgent(a) {
   seeAgent(a);
@@ -3326,6 +3341,7 @@ const MIN_STAY_MS = FAST ? 4000 : 20000;                           // don't boun
 const IDLE_BREAK_MS = FAST ? 8000 : 45000;                         // finished for a while: take a break
 const IDLE_ROAM_MS = FAST ? [10000, 16000] : [50000, 90000];       // then drift between break spots every so often
 const THINK_WANDER_MS = FAST ? 8000 : 30000;                       // a long think: maybe go grab a coffee
+const REVIEW_MIN_S = 3, REVIEW_MAX_S = FAST ? 10 : 30;              // a main agent stands beside a finished subagent at least / at most this long
 const IDLE_ROOF_MS = FAST ? 20000 : 300000;                        // idle this long without a merge: head up to the terrace and chill
 let MODE = params.has('demo') ? 'demo' : 'live';
 const live = { byId: new Map(), connected: false, everConnected: false, demoStarted: false, tickT: 0 };
@@ -3397,6 +3413,7 @@ function onBreak(a) {
 function place(a, spot, force) {
   if (a.spot && a.spot === a.wanderSpot) { force = true; a.wanderSpot = null; }
   if (!spot || a.leaving) return;
+  if (a.review) { a.afterReview = spot; a.nextSpot = null; return; }   // busy reviewing a subagent: go there afterwards
   if (a.onRoof) { a.nextSpot = spot; if (!a.comingDown) { a.comingDown = true; leaveRoof(a).then(() => { a.comingDown = false; const n = a.nextSpot; a.nextSpot = null; if (n) place(a, n, true); }); } return; }
   if (a.spot === spot || a.dest === spot) { a.nextSpot = null; return; }
   if (!force && !a.path.length && performance.now() - (a.arrivedAt || 0) < MIN_STAY_MS) { a.nextSpot = spot; return; }
@@ -3457,11 +3474,11 @@ function liveSub(a, id, type, instant, task) {
   applyStatus(sub, 'thinking', 'Starting');
   return sub;
 }
-async function leaveOffice(a) {
+async function leaveOffice(a, note) {
   if (a.leaving || a.exiting) return; a.exiting = true;
   if (a.onRoof) await leaveRoof(a);
   if (a.subs) for (const sub of a.subs.values()) leaveOffice(sub);
-  applyStatus(a, 'done', a.kind === 'sub' ? `Reported back to ${a.parent.name}` : 'Signing off');
+  applyStatus(a, 'done', note || (a.kind === 'sub' ? `Reported back to ${a.parent.name}` : 'Signing off'));
   await wait(1.2);
   a.gone = true;
   if (a.home) { if (a.home.by === a.id) a.home.by = null; if (a.home.owner === a) { a.home.owner = null; if (a.floor === curFloor) a.home.chairMat.color.set(sceneT.chair); } if (a.home.screen && a.floor === curFloor) a.home.screen.color.set(sceneT.screenOff); }
@@ -3512,6 +3529,37 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) { un
 $('#opt-sound').checked = soundOn();
 $('#opt-sound').onchange = e => { uiPrefs.sound = e.target.checked; saveUi(); if (e.target.checked) { const a = agents.find(x => x.kind === 'main'); if (a) chime('done', a, true); } };
 
+// A finished subagent stays at its seat until its main agent has come over and looked at the work, like a senior dev
+// reading over a junior's shoulder. The main agent lets it go once it moves on (its next tool call, reply or stop).
+function queueReview(a, sub) {
+  sub.awaitingReview = true; applyStatus(sub, 'done', `Done · waiting for ${a.name}`);
+  (a.reviewQ ||= []).push(sub);
+  if (!a.review) reviewSubs(a);
+}
+const reviewLabel = sub => `Reviewing “${sub.name}”`;
+async function reviewSubs(a) {
+  a.reviewDone = false;
+  while (a.reviewQ.length && !a.exiting) {
+    const sub = a.reviewQ.shift(); if (!sub.awaitingReview || sub.exiting) continue;
+    a.review = sub;
+    while (a.comingDown) await wait(.3);
+    if (a.onRoof) { a.comingDown = true; await leaveRoof(a); a.comingDown = false; }
+    if (!a.reviewDone && a.state !== 'waiting') applyStatus(a, 'thinking', reviewLabel(sub));
+    applyStatus(sub, 'done', `Done · ${a.name} is coming over`);
+    await walkTo(a, besideSpot(sub.dest || sub.spot || sub.home));
+    a.where = `Beside ${sub.name}`; a.pose = poseFor(a);
+    if (sub.awaitingReview) applyStatus(sub, 'done', `${a.name} is reviewing the work`);
+    const t0 = simTime;
+    await wait(REVIEW_MIN_S);
+    while (!a.exiting && sub.awaitingReview && !a.reviewDone && !a.reviewQ.length && simTime - t0 < REVIEW_MAX_S) await wait(.25);
+    if (sub.awaitingReview) { sub.awaitingReview = false; leaveOffice(sub, `Let go by ${a.name}`); }
+  }
+  a.review = null;
+  if (a.exiting) return;
+  const next = a.afterReview || workSpot(a); a.afterReview = null;
+  place(a, next, true);
+}
+
 function onLiveEvent(e, replay) {
   if (e.replacesSessionId) {
     const duplicate = live.byId.get(e.replacesSessionId);
@@ -3541,6 +3589,9 @@ function onLiveEvent(e, replay) {
   a.permissionMode = s.permissionMode;
   const who = e.agentId ? liveSub(a, e.agentId, e.agentType, replay, e.agentTask) : a;
   const label = `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}`;
+  const agentResult = e.type.startsWith('PostToolUse') && (e.tool === 'Task' || e.tool === 'Agent');
+  if (who === a && a.review && !agentResult) a.reviewDone = true;                       // the main agent moved on: let the subagent go
+  if (who !== a && who.awaitingReview && e.type !== 'SubagentStop') who.awaitingReview = false;   // resumed: back to work
   switch (e.type) {
     case 'SessionStart': emit(a, 'SessionStart', `${whereFrom(a)} · ${a.cwd}`, e.at); break;
     case 'SessionFound':                                     // already running when the office opened, read from its log
@@ -3563,7 +3614,7 @@ function onLiveEvent(e, replay) {
     case 'PostToolUse': case 'PostToolUseFailure':
       if (e.failed) emit(who, 'PostToolUseFailure', label, e.at);
       if (e.tool === 'Bash' && !replay) termPush(who, e.failed ? '✗ failed' : '✓ done', e.failed ? '#FF7B72' : '#6FD69A');
-      if (who.state !== 'waiting') applyStatus(who, 'thinking', e.failed ? `${e.tool} failed, rethinking` : 'Thinking');
+      if (who.state !== 'waiting') applyStatus(who, 'thinking', e.failed ? `${e.tool} failed, rethinking` : who.review && !who.reviewDone ? reviewLabel(who.review) : 'Thinking');
       if (e.merged) { emit(who, 'Merged', label, e.at); if (!replay) { celebrate(who); chime('merged', a); } }
       break;
     case 'PermissionRequest': case 'Notification': {
@@ -3580,7 +3631,8 @@ function onLiveEvent(e, replay) {
       if (!replay) toast(`${a.name} finished in ~/${a.project.key}`, hostName(a) ? [[opensChat(a) ? 'Open chat' : `Open in ${hostName(a)}`, () => openHost(a), true], ['Show me', () => select(a, true)]] : 'Show me', () => select(a, true), a, 'done');
       break;
     case 'SubagentStart': emit(who, 'SubagentStart', `${e.agentType || 'Subagent'} started`, e.at); break;
-    case 'SubagentStop': emit(who, 'SubagentStop', e.message || 'Returned its result', e.at); if (!replay) leaveOffice(who); else { removeAgent(who); a.subs.delete(e.agentId); } break;
+    case 'SubagentStop': emit(who, 'SubagentStop', e.message || 'Returned its result', e.at);
+      if (replay) { removeAgent(who); a.subs.delete(e.agentId); } else if (!who.awaitingReview && !who.exiting) queueReview(a, who); break;
     case 'PermissionResolved': emit(who, 'PermissionResolved', e.message, e.at); applyStatus(who, 'thinking', e.message);
       if (!replay) toast(`${e.message.startsWith('Allowed') ? 'Allowed' : 'Denied'}: ${who.name} ${e.message.startsWith('Allowed') ? 'can go ahead' : 'will find another way'}`); break;
     case 'PreCompact': emit(a, 'PreCompact', 'Compacting the conversation', e.at); applyStatus(a, 'working', 'Compacting context'); place(a, spotOfType(a, ['coffee']) || a.ws, true); break;
@@ -3621,7 +3673,7 @@ function liveTick(dt) {
   live.tickT += dt; if (live.tickT < 1) return; live.tickT = 0;
   const now = performance.now();
   for (const a of agents) {
-    if (!a.live || a.kind !== 'main' || a.exiting || a.comingDown || a.path.length) continue;
+    if (!a.live || a.kind !== 'main' || a.exiting || a.comingDown || a.path.length || a.review) continue;
     // finished: take a break, then drift between break spots (lounge, coffee, ping-pong, rooftop)
     if (a.onRoof && a.spot && a.spot.night && !isParty()) { roam(a); continue; }
     if (a.idleSince) {
