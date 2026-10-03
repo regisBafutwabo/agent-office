@@ -106,8 +106,8 @@ button{font:inherit;color:inherit}
 .topbar .seg{align-self:stretch;align-items:stretch;flex-wrap:nowrap;padding:4px;border-radius:var(--r-lg);background:var(--glass)}
 .topbar .seg button{height:auto;padding:0 12px;border-radius:var(--r-md);font-size:13px}
 .topbar .seg button[aria-pressed="true"]{background:var(--panel-3);box-shadow:none}
-.vr-btn{height:auto;padding:0 14px;border-radius:var(--r-lg);background:var(--glass);font-weight:500}
-.vr-btn:hover{background:var(--panel-2)}
+.vr-btn,.music-btn{height:auto;padding:0 14px;border-radius:var(--r-lg);background:var(--glass);font-weight:500}
+.vr-btn:hover,.music-btn:hover{background:var(--panel-2)}
 
 /* side panel */
 .panel{position:absolute;top:var(--top);right:16px;bottom:16px;width:344px;border-radius:var(--r-lg);display:flex;flex-direction:column;overflow:hidden;z-index:4;transition:transform .3s ease,opacity .3s ease}
@@ -325,8 +325,8 @@ body.live .speed-top, body.live .demo-only{display:none}
   .topbar{gap:6px}
   .brand p{display:none}
   .topbar .seg button{padding:0 10px}
-  .vr-btn{width:40px;padding:0}
-  .vr-btn span{display:none}
+  .vr-btn,.music-btn{width:40px;padding:0}
+  .vr-btn span,.music-btn span{display:none}
   .panel{top:auto;left:0;right:0;bottom:0;width:auto;height:44%;border-radius:var(--r-lg) var(--r-lg) 0 0;border-left:0;border-right:0;border-bottom:0}
   .panel.collapsed{height:auto}
   .panel.collapsed .tabpane{display:none}
@@ -369,6 +369,10 @@ body.live .speed-top, body.live .demo-only{display:none}
       <button id="view-3d" aria-pressed="true">3D</button>
       <button id="view-plan" aria-pressed="false">Plan</button>
     </div>
+    <button class="btn music-btn glass" id="music-btn" hidden aria-pressed="false">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      <span id="music-label">Play my music</span>
+    </button>
     <div class="seg glass speed-top" role="group" aria-label="Demo speed">
       <button data-speed="0" aria-pressed="false">Pause</button>
       <button data-speed="1" aria-pressed="true">1×</button>
@@ -979,7 +983,24 @@ const PARTY_COLORS = ['#FF4FA3', '#7C6CF2', '#3DCBE0', '#F5B342', '#52C96F'];
 let partyBar = -1;
 // What the DJ plays: your Spotify song, else your Apple Music song (the server asks the apps on this Mac),
 // else plan B, DJ Bot's own office mix, a new made-up track every few minutes.
-let music = null;
+// Asking those apps makes macOS show a permission prompt, so it's off until you turn it on from the rooftop.
+let music = null, musicSupported = false;
+let musicOn = (() => { try { return localStorage.getItem('agent-office:music') === 'on'; } catch (_) { return false; } })();
+function updateMusicBtn() {
+  const b = $('#music-btn'); if (!b) return;
+  b.hidden = !(viewMode === 'roof' && MODE === 'live' && live.connected && musicSupported);
+  b.setAttribute('aria-pressed', musicOn);
+  $('#music-label').textContent = musicOn ? 'My music is on' : 'Play my music';
+  b.title = musicOn ? 'The DJ plays your Spotify or Apple Music song. Click to stop.' : 'Let the DJ play the song Spotify or Apple Music is playing on this Mac';
+}
+function setMusicOn(on) {
+  musicOn = on; try { localStorage.setItem('agent-office:music', on ? 'on' : 'off'); } catch (_) {}
+  if (!on) music = null;
+  if (live.ws && live.ws.readyState === 1) live.ws.send(JSON.stringify({ type: 'music', on }));
+  if (on) toast('The DJ will play what Spotify or Apple Music is playing. macOS asks once; nothing leaves your Mac.');
+  updateMusicBtn();
+}
+$('#music-btn').onclick = () => setMusicOn(!musicOn);
 const DJ_MIX = ['Merge Conflict (Club Mix)', 'Green Checks', 'Rebase at Midnight', 'Hotfix Hustle', 'Standup Shuffle',
   'Null Pointer Groove', 'Lint Free', 'Ship It Friday', '404 Love', 'Cache Me Outside', 'Works On My Machine', 'Deploy Disco'];
 const MUSIC_LOOK = { spotify: ['NOW PLAYING ON SPOTIFY', '#1ED760'], music: ['NOW PLAYING ON APPLE MUSIC', '#FA586A'], mix: ["DJ BOT'S OFFICE MIX", '#8BE9F5'] };
@@ -2265,6 +2286,7 @@ function renderLift() {
   const cur = viewMode === 'building' ? `<span class="fl-num">${BUILDING_ICON}</span>Whole building`
     : viewMode === 'roof' ? `<span class="fl-num${isParty() ? ' party' : ''}">${ROOF_ICON}</span>Rooftop` : `${floorBadge(curFloor, false)}${esc(curFloor.name)}`;
   const ce = $('#lift-current'); if (ce._html !== cur) { ce.innerHTML = cur; ce._html = cur; }
+  updateMusicBtn();
 }
 
 /* ---------- theme ---------- */
@@ -3641,7 +3663,7 @@ function onLiveEvent(e, replay) {
 }
 
 function onSnapshot(msg) {
-  music = msg.music || null;
+  musicSupported = !!msg.musicSupported; music = musicOn && msg.music || null; updateMusicBtn();
   const ids = new Set(msg.sessions.map(s => s.id));
   for (const [id, a] of live.byId) if (!ids.has(id)) leaveOffice(a);
   feedEl.innerHTML = '';
@@ -3843,17 +3865,18 @@ function connectLive() {
   catch (_) { startDemo(); return; }
   const fallback = setTimeout(() => { if (!live.everConnected) { try { ws.close(); } catch (_) {} startDemo(); } }, 2500);
   live.ws = ws;
-  ws.onopen = () => { live.connected = live.everConnected = true; clearTimeout(fallback); setModeLine(); sendPresence(); loadSetup(); };
+  ws.onopen = () => { live.connected = live.everConnected = true; clearTimeout(fallback); setModeLine(); sendPresence(); loadSetup();
+    if (musicOn) ws.send(JSON.stringify({ type: 'music', on: true })); };
   ws.onmessage = m => { let msg; try { msg = JSON.parse(m.data); } catch (_) { return; }
     if (msg.type === 'snapshot') onSnapshot(msg); else if (msg.type === 'event') onLiveEvent(msg.event, false);
     else if (msg.type === 'focus-result') toast(msg.message);
-    else if (msg.type === 'music') music = msg.music || null;
+    else if (msg.type === 'music') music = musicOn && msg.music || null;
     else if (msg.type === 'setup') loadSetup();
     else if (msg.type === 'approval') onApproval(msg.approval, true); else if (msg.type === 'approval-resolved') onApprovalResolved(msg); };
   ws.onclose = () => {
     clearTimeout(fallback);
     if (!live.everConnected) { startDemo(); return; }
-    live.connected = false; setModeLine(); setTimeout(connectLive, 2000);
+    live.connected = false; setModeLine(); updateMusicBtn(); setTimeout(connectLive, 2000);
   };
 }
 

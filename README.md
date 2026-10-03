@@ -97,9 +97,9 @@ Choose **Seoul**, **San Francisco**, or **Generic city** on your first visit, or
 
 *A lossless export of the demo's night scene. City footprints © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).*
 
-The rooftop DJ plays what you're listening to. On a Mac, the office asks the Spotify app for its current song, then Apple Music, and shows it on the front of the DJ booth. With your music on, the DJ plays by day too; the full party (lights, fire, bar) still waits for dark. With nothing playing, the DJ spins its own office mix of made-up tracks.
+The rooftop DJ can play what you're listening to. It's off until you go up to the rooftop and click **Play my music** at the top: macOS then asks once whether Agent Office may see Spotify and Music. From then on, the office asks the Spotify app for its current song, then Apple Music, and shows it on the front of the DJ booth. With your music on, the DJ plays by day too; the full party (lights, fire, bar) still waits for dark. With nothing playing, the DJ spins its own office mix of made-up tracks.
 
-It only checks while an office page is open, never opens Spotify or Music, and nothing leaves your machine. macOS asks once whether Agent Office (or your terminal, with `npm start`) may control Spotify or Music; to change that later, go to **System Settings → Privacy & Security → Automation**. The dance floor keeps its own beat, because Spotify no longer shares a song's tempo.
+It only checks while an office page has it turned on, never opens Spotify or Music, and nothing leaves your machine. Click the button again to stop. The permission belongs to Agent Office (or your terminal, with `npm start`); to change it later, go to **System Settings → Privacy & Security → Automation**. The dance floor keeps its own beat, because Spotify no longer shares a song's tempo.
 
 ## Jumping to an agent's chat
 

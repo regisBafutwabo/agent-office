@@ -116,7 +116,7 @@ const server = http.createServer(async (req, res) => {
 
 const wss = new WebSocketServer({ server, path: '/ws', verifyClient: ({ req }) => originOk(req) });
 let music = null;                                               // what the rooftop DJ plays: your Spotify or Apple Music song
-const snapshot = () => ({ ...store.snapshot(), approvals: [...pending.values()].map(p => p.approval), music });
+const snapshot = () => ({ ...store.snapshot(), approvals: [...pending.values()].map(p => p.approval), music, musicSupported: process.platform === 'darwin' });
 // Office pages report whether they're visible; requests are only held while at least one is.
 const watchers = () => [...wss.clients].filter(c => c.readyState === 1 && c.visible).length;
 function broadcast(msg) {
@@ -128,6 +128,7 @@ wss.on('connection', ws => {
   ws.on('message', raw => {
     let msg; try { msg = JSON.parse(raw); } catch { return; }
     if (msg.type === 'presence') ws.visible = !!msg.visible;
+    if (msg.type === 'music') ws.music = !!msg.on;                // the viewer turned "Play my music" on or off at the rooftop
     if (msg.type === 'focus') {                                    // "Open in …" from the agent card
       const s = store.sessions.get(msg.sessionId);
       (s ? focus(s) : Promise.reject(new Error('That session has ended')))
@@ -145,7 +146,7 @@ setInterval(() => {
   const before = [...store.sessions.keys()]; store.prune();
   for (const id of before) if (!store.sessions.has(id)) broadcast({ type: 'event', event: { type: 'SessionEnd', sessionId: id, at: Date.now(), reason: 'No news for a while' } });
 }, 10_000).unref();
-watchMusic(m => { music = m; broadcast({ type: 'music', music }); }, () => wss.clients.size > 0);
+watchMusic(m => { music = m; broadcast({ type: 'music', music }); }, () => [...wss.clients].some(c => c.readyState === 1 && c.music));
 
 server.on('error', err => {
   if (err.code === 'EADDRINUSE') console.error(`Port ${PORT} is already in use. Is Agent Office already running? Set AGENT_OFFICE_PORT to use another port.`);

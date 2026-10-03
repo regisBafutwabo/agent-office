@@ -1,6 +1,7 @@
 // Now playing, for the rooftop DJ: the song on this Mac's Spotify, else Apple Music (macOS only).
 // Mirrors desktop/src-tauri/src/music.rs. It only asks an app that's already running, so it never opens one,
-// and nothing leaves the machine. macOS asks once before the office may read Spotify or Music.
+// and nothing leaves the machine. macOS asks once before the office may read Spotify or Music, so it only
+// starts once a viewer turns on "Play my music" at the rooftop.
 import { execFile } from 'node:child_process';
 
 export const NOW_PLAYING_SCRIPT = `function run() {
@@ -29,12 +30,14 @@ export function parseNowPlaying(out) {
 const nowPlaying = () => new Promise(resolve =>
   execFile('osascript', ['-l', 'JavaScript', '-e', NOW_PLAYING_SCRIPT], { timeout: 4_000 }, (err, stdout) => resolve(err ? null : parseNowPlaying(stdout.trim()))));
 
-/** Checks every few seconds while `watched()` is true, and calls `onChange(music)` when the song changes or stops. */
+/** Checks every few seconds while `watched()` is true, and calls `onChange(music)` when the song changes or stops.
+ *  When nobody wants it any more, the song goes back to null. */
 export function watchMusic(onChange, watched) {
   if (process.platform !== 'darwin') return;
   let last = 'null', busy = false;
   setInterval(async () => {
-    if (busy || !watched()) return;
+    if (busy) return;
+    if (!watched()) { if (last !== 'null') { last = 'null'; onChange(null); } return; }
     busy = true;
     const music = await nowPlaying();
     busy = false;

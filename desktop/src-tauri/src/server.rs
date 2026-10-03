@@ -57,6 +57,8 @@ struct Shared {
     origins: Vec<String>,
     /// What the rooftop DJ plays: your Spotify or Apple Music song, or null.
     music: Mutex<Value>,
+    /// Office pages that turned on "Play my music"; Spotify and Music are only asked while this is above zero.
+    music_listeners: AtomicUsize,
 }
 type AppState = Arc<Shared>;
 
@@ -75,6 +77,7 @@ pub fn router(port: u16, on_change: OnChange) -> Router {
         seq: AtomicU64::new(0),
         origins: ["localhost", "127.0.0.1", "[::1]"].iter().map(|h| format!("http://{h}:{port}")).collect(),
         music: Mutex::new(Value::Null),
+        music_listeners: AtomicUsize::new(0),
     });
     {
         // Chats that were already running when the office opened move in before the first page loads.
@@ -145,15 +148,16 @@ pub async fn run(port: u16, on_change: OnChange) {
     }
 }
 
-/// Every few seconds while an office page is connected, check what's playing and tell the pages when the song changes.
+/// Every few seconds while an office page wants your music, check what's playing and tell the pages when the song changes.
 async fn watch_music(st: AppState) {
     let mut tick = tokio::time::interval(Duration::from_secs(5));
     loop {
         tick.tick().await;
-        if st.tx.receiver_count() == 0 {
-            continue;
-        }
-        let now = tokio::task::spawn_blocking(music::now_playing).await.unwrap_or(Value::Null);
+        let now = if st.music_listeners.load(Ordering::SeqCst) == 0 {
+            Value::Null
+        } else {
+            tokio::task::spawn_blocking(music::now_playing).await.unwrap_or(Value::Null)
+        };
         let changed = {
             let mut music = st.music.lock().unwrap();
             let changed = *music != now;
@@ -320,6 +324,7 @@ fn snapshot(st: &Shared) -> Value {
     let mut v = st.store.lock().unwrap().snapshot();
     v["approvals"] = st.pending.lock().unwrap().values().map(|p| p.approval.clone()).collect::<Vec<_>>().into();
     v["music"] = st.music.lock().unwrap().clone();
+    v["musicSupported"] = cfg!(target_os = "macos").into();
     v
 }
 
@@ -339,6 +344,7 @@ async fn client(mut socket: WebSocket, st: AppState) {
         return;
     }
     let mut visible = false;
+    let mut wants_music = false;
     loop {
         tokio::select! {
             msg = rx.recv() => match msg {
@@ -355,6 +361,14 @@ async fn client(mut socket: WebSocket, st: AppState) {
                             if now_visible != visible {
                                 if now_visible { st.watchers.fetch_add(1, Ordering::SeqCst); } else { st.watchers.fetch_sub(1, Ordering::SeqCst); }
                                 visible = now_visible;
+                            }
+                        }
+                        Some("music") => {
+                            // "Play my music" at the rooftop, turned on or off
+                            let on = msg["on"].as_bool().unwrap_or(false);
+                            if on != wants_music {
+                                if on { st.music_listeners.fetch_add(1, Ordering::SeqCst); } else { st.music_listeners.fetch_sub(1, Ordering::SeqCst); }
+                                wants_music = on;
                             }
                         }
                         Some("focus") => {
@@ -386,6 +400,9 @@ async fn client(mut socket: WebSocket, st: AppState) {
     }
     if visible {
         st.watchers.fetch_sub(1, Ordering::SeqCst);
+    }
+    if wants_music {
+        st.music_listeners.fetch_sub(1, Ordering::SeqCst);
     }
 }
 

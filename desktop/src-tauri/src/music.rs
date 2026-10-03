@@ -1,6 +1,7 @@
 // Now playing, for the rooftop DJ: the song on this Mac's Spotify, else Apple Music (macOS).
 // Same as bridge/music.js. It only asks an app that's already running, so it never opens one,
-// and nothing leaves the machine. macOS asks once before the office may read Spotify or Music.
+// and nothing leaves the machine. macOS asks once before the office may read Spotify or Music, so it only
+// starts once a viewer turns on "Play my music" at the rooftop.
 use serde_json::{json, Value};
 use std::process::Command;
 
