@@ -34,7 +34,7 @@ impl Status {
 }
 
 fn home() -> PathBuf { PathBuf::from(std::env::var_os("HOME").unwrap_or_default()) }
-fn support_dir() -> PathBuf { home().join("Library/Application Support/Agent Office") }
+pub fn support_dir() -> PathBuf { home().join("Library/Application Support/Agent Office") }
 fn hook_script() -> PathBuf { support_dir().join("hook.sh") }
 fn codex_hooks() -> PathBuf { home().join(".codex/hooks.json") }
 fn cursor_hooks() -> PathBuf { home().join(".cursor/hooks.json") }
@@ -71,7 +71,7 @@ pub fn connect(tool: Tool) -> Result<String, String> {
     }
 }
 
-fn version(v: &str) -> (u32, u32, u32) {
+pub fn version(v: &str) -> (u32, u32, u32) {
     let mut n = v.trim().split('.').map(|p| p.parse().unwrap_or(0));
     (n.next().unwrap_or(0), n.next().unwrap_or(0), n.next().unwrap_or(0))
 }

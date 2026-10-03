@@ -51,7 +51,11 @@ export function parseTranscript(text) {
 }
 
 export function readTranscript(p) {
-  if (!readable(p)) return null;
+  return readable(p) ? readTail(p) : null;
+}
+
+// Reads a transcript the office found itself (see discover.js), so no path check.
+export function readTail(p) {
   let fd;
   try {
     fd = fs.openSync(p, 'r');

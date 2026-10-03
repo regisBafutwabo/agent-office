@@ -1,6 +1,6 @@
 # <img src="desktop/src-tauri/icons/128x128@2x.png" alt="Agent Office logo" width="48" height="48" align="absmiddle"> Agent Office
 
-A 3D office where your Claude Code agents work. Every session you run in the **Claude desktop app** or in the **terminal** becomes an agent that rides up in the lift, takes a desk, walks to the library when it researches, raises a hand when it needs your permission, and heads to the lounge when it's done. Subagents show up as smaller teammates.
+A 3D office where your Claude Code agents work. Every session you run in the **Claude desktop app** or in the **terminal** becomes an agent that rides up in the lift, takes a desk, walks to the library when it researches, raises a hand when it needs your permission, and heads to the lounge when it's done. Subagents show up as smaller teammates. When one finishes, it stays at its desk while its main agent walks over to review the work, then lets it go.
 
 Works in any browser on your computer. Phone and VR headset support comes next (see the roadmap).
 
@@ -81,7 +81,9 @@ web/index.html    ── the 3D office (Three.js)
 
 Agents are small robots with a screen for a face, and the face shows what the agent is doing: eyes looking up with "…" while thinking, focused while working, a big "!" when it needs you, happy ^ ^ when done, sleepy zZ when idle, and a frown when something failed. A light on the chest shows the same status color.
 
-Customize each agent in **Customize → Agents**: body shape, face style, colors, and accessories (headphones, beanie, cap, glasses, antenna, scarf, backpack, mug). Looks are remembered per project. Subagents automatically look like a smaller "intern" version of their parent, and agents from other tools get a default accessory (Cursor wears headphones, Codex a cap, and so on). Try looks side by side in `prototype/character-lab.html`.
+Pick **Pets** or **Robots** when you first open the office. Pets include a bear, cat, rabbit, Maltese, raccoon, and duck. Change crews anytime in **Customize → Agents**, and customize each agent's animal or robot face, body shape, colors, and accessories (headphones, beanie, cap, glasses, antenna, scarf, backpack, mug). Looks are remembered per project. Subagents automatically look like a smaller "intern" version of their parent, and agents from other tools get a default accessory (Cursor wears headphones, Codex a cap, and so on). Try looks side by side in `prototype/character-lab.html`.
+
+The first-visit tour shows how project floors, agent activity, tool connections, and permission requests work. Skip it anytime or replay it from **Customize → Getting started**. With no agents running, **Try demo** opens a sample team; the tour can then take you back to your live office to connect your own tools.
 
 ## Day and night
 
@@ -95,9 +97,9 @@ Choose **Seoul**, **San Francisco**, or **Generic city** on your first visit, or
 
 *A lossless export of the demo's night scene. City footprints © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).*
 
-The rooftop DJ plays what you're listening to. On a Mac, the office asks the Spotify app for its current song, then Apple Music, and shows it on the front of the DJ booth. With your music on, the DJ plays by day too; the full party (lights, fire, bar) still waits for dark. With nothing playing, the DJ spins its own office mix of made-up tracks.
+The rooftop DJ can play what you're listening to. It's off until you go up to the rooftop and click **Play my music** at the top: macOS then asks once whether Agent Office may see Spotify and Music. From then on, the office asks the Spotify app for its current song, then Apple Music, and shows it on the front of the DJ booth. With your music on, the DJ plays by day too; the full party (lights, fire, bar) still waits for dark. With nothing playing, the DJ spins its own office mix of made-up tracks.
 
-It only checks while an office page is open, never opens Spotify or Music, and nothing leaves your machine. macOS asks once whether Agent Office (or your terminal, with `npm start`) may control Spotify or Music; to change that later, go to **System Settings → Privacy & Security → Automation**. The dance floor keeps its own beat, because Spotify no longer shares a song's tempo.
+It only checks while an office page has it turned on, never opens Spotify or Music, and nothing leaves your machine. Click the button again to stop. The permission belongs to Agent Office (or your terminal, with `npm start`); to change it later, go to **System Settings → Privacy & Security → Automation**. The dance floor keeps its own beat, because Spotify no longer shares a song's tempo.
 
 ## Jumping to an agent's chat
 

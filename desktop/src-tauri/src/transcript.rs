@@ -96,6 +96,11 @@ pub fn read_transcript(p: &str) -> Option<Transcript> {
     if !path.is_absolute() || !p.ends_with(".jsonl") || !path.starts_with(&home) || path.components().any(|c| c == Component::ParentDir) {
         return None;
     }
+    read_tail(path)
+}
+
+/// Reads a transcript the office found itself (see discover.rs), so no path check.
+pub fn read_tail(path: &Path) -> Option<Transcript> {
     let mut f = File::open(path).ok()?;
     let size = f.metadata().ok()?.len();
     let mut t = Transcript::default();

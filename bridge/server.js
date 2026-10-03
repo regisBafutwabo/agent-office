@@ -9,6 +9,7 @@ import { Store } from './store.js';
 import { normalize } from './adapters.js';
 import { focus, appIcon } from './focus.js';
 import { watchMusic } from './music.js';
+import { scan } from './discover.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = path.join(ROOT, 'web');
@@ -97,6 +98,7 @@ const server = http.createServer(async (req, res) => {
     try { console.error('[office page]', (await readBody(req)).slice(0, 2000)); } catch {}
     res.writeHead(204); res.end(); return;
   }
+  if (req.method === 'POST' && url.pathname.startsWith('/api/face/')) { req.resume(); res.writeHead(204); res.end(); return; }   // only the desktop app's banners use faces
   if (req.method !== 'GET') { res.writeHead(405); res.end(); return; }
   if (url.pathname === '/api/state') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(snapshot())); return; }
   if (url.pathname === '/vendor/three.min.js') return sendFile(res, THREE_JS);
@@ -114,7 +116,7 @@ const server = http.createServer(async (req, res) => {
 
 const wss = new WebSocketServer({ server, path: '/ws', verifyClient: ({ req }) => originOk(req) });
 let music = null;                                               // what the rooftop DJ plays: your Spotify or Apple Music song
-const snapshot = () => ({ ...store.snapshot(), approvals: [...pending.values()].map(p => p.approval), music });
+const snapshot = () => ({ ...store.snapshot(), approvals: [...pending.values()].map(p => p.approval), music, musicSupported: process.platform === 'darwin' });
 // Office pages report whether they're visible; requests are only held while at least one is.
 const watchers = () => [...wss.clients].filter(c => c.readyState === 1 && c.visible).length;
 function broadcast(msg) {
@@ -126,6 +128,7 @@ wss.on('connection', ws => {
   ws.on('message', raw => {
     let msg; try { msg = JSON.parse(raw); } catch { return; }
     if (msg.type === 'presence') ws.visible = !!msg.visible;
+    if (msg.type === 'music') ws.music = !!msg.on;                // the viewer turned "Play my music" on or off at the rooftop
     if (msg.type === 'focus') {                                    // "Open in …" from the agent card
       const s = store.sessions.get(msg.sessionId);
       (s ? focus(s) : Promise.reject(new Error('That session has ended')))
@@ -135,8 +138,15 @@ wss.on('connection', ws => {
     if (msg.type === 'decide' && pending.has(msg.id) && ['allow', 'deny', 'defer'].includes(msg.decision)) pending.get(msg.id).resolve(msg.decision);
   });
 });
-setInterval(() => store.prune(), 60_000).unref();
-watchMusic(m => { music = m; broadcast({ type: 'music', music }); }, () => wss.clients.size > 0);
+// Chats that were already running move in from their logs (discover.js); keep the ones no hook reports on up to date,
+// and walk out the ones whose log went quiet.
+for (const f of scan()) store.adopt(f);
+setInterval(() => {
+  for (const f of scan()) { const e = store.adopt(f); if (e) broadcast({ type: 'event', event: e }); }
+  const before = [...store.sessions.keys()]; store.prune();
+  for (const id of before) if (!store.sessions.has(id)) broadcast({ type: 'event', event: { type: 'SessionEnd', sessionId: id, at: Date.now(), reason: 'No news for a while' } });
+}, 10_000).unref();
+watchMusic(m => { music = m; broadcast({ type: 'music', music }); }, () => [...wss.clients].some(c => c.readyState === 1 && c.music));
 
 server.on('error', err => {
   if (err.code === 'EADDRINUSE') console.error(`Port ${PORT} is already in use. Is Agent Office already running? Set AGENT_OFFICE_PORT to use another port.`);

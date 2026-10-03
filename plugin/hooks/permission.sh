@@ -2,6 +2,14 @@
 # Ask Agent Office whether to allow a tool call. The office only holds the request while someone is
 # looking at it; otherwise (or if the office isn't running) this prints nothing and Claude Code shows its
 # normal permission dialog. Always exits 0: only the printed JSON can allow or deny.
+# Codex can import Claude plugins as well as running its own Agent Office adapter.
+# Do not report that session a second time as Claude. A real Claude process launched
+# from Codex sets its own entrypoint (or CLAUDECODE), so it must still report normally.
+if [ -n "${CODEX_THREAD_ID:-}${CODEX_SESSION_ID:-}${CODEX_APP_TOOLS_PIPE_PATH:-}" ] &&
+   [ -z "${CLAUDE_CODE_ENTRYPOINT:-}" ] && [ "${CLAUDECODE:-}" != "1" ]; then
+  exit 0
+fi
+
 # App, terminal, tty and chat id let the office bring this agent's chat, window or terminal tab to the front.
 RESPONSE=$(curl -s -m 65 -X POST \
   -H 'Content-Type: application/json' \

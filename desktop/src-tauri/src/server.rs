@@ -2,6 +2,7 @@
 // and answers permission requests you allow or deny from the office.
 // Same endpoints as bridge/server.js, so phones and VR headsets can connect to it too.
 use crate::adapters;
+use crate::discover;
 use crate::focus;
 use crate::music;
 use crate::setup;
@@ -18,6 +19,7 @@ use axum::{
 use rust_embed::RustEmbed;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -28,6 +30,9 @@ use tokio::sync::{broadcast, oneshot};
 struct Web;
 
 static THREE_JS: &[u8] = include_bytes!("../../../node_modules/three/build/three.min.js");
+
+/// How often to look for chats in the agents' logs (see discover.rs).
+const LOG_SCAN: Duration = Duration::from_secs(10);
 
 /// How long a watched office holds a permission request before Claude Code shows its own dialog.
 const APPROVAL_HOLD: Duration = Duration::from_secs(45);
@@ -52,6 +57,8 @@ struct Shared {
     origins: Vec<String>,
     /// What the rooftop DJ plays: your Spotify or Apple Music song, or null.
     music: Mutex<Value>,
+    /// Office pages that turned on "Play my music"; Spotify and Music are only asked while this is above zero.
+    music_listeners: AtomicUsize,
 }
 type AppState = Arc<Shared>;
 
@@ -70,8 +77,17 @@ pub fn router(port: u16, on_change: OnChange) -> Router {
         seq: AtomicU64::new(0),
         origins: ["localhost", "127.0.0.1", "[::1]"].iter().map(|h| format!("http://{h}:{port}")).collect(),
         music: Mutex::new(Value::Null),
+        music_listeners: AtomicUsize::new(0),
     });
+    {
+        // Chats that were already running when the office opened move in before the first page loads.
+        let mut store = state.store.lock().unwrap();
+        for f in discover::scan_home(store::now_ms()) {
+            if let Some(e) = store.adopt(f) { (state.on_change)(&store, &e); }
+        }
+    }
     tokio::spawn(watch_music(state.clone()));
+    tokio::spawn(watch_logs(state.clone()));
     Router::new()
         .route("/hook", post(hook))
         .route("/permission", post(permission))
@@ -80,11 +96,27 @@ pub fn router(port: u16, on_change: OnChange) -> Router {
         .route("/api/app-icon/{file}", get(app_icon))
         .route("/api/setup", get(setup_status))
         .route("/api/setup/{tool}", post(setup_connect))
+        .route("/api/face/{session}/{mood}", post(save_face))
         .route("/ws", get(ws))
         .route("/vendor/three.min.js", get(three))
         .fallback(get(asset))
         .layer(middleware::from_fn_with_state(state.clone(), check_origin))
         .with_state(state)
+}
+
+/// Where the office's picture of an agent's face is kept, for the "done" and "needs you" banners.
+pub fn face_path(session: &str, mood: &str) -> Option<PathBuf> {
+    let safe = !session.is_empty() && session.len() <= 128 && session.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    (safe && matches!(mood, "done" | "waiting")).then(|| std::env::temp_dir().join("agent-office-faces").join(format!("{session}-{mood}.png")))
+}
+
+async fn save_face(Path((session, mood)): Path<(String, String)>, body: Bytes) -> StatusCode {
+    let Some(path) = face_path(&session, &mood) else { return StatusCode::BAD_REQUEST };
+    if body.len() > 512 * 1024 || !body.starts_with(b"\x89PNG") {
+        return StatusCode::BAD_REQUEST;
+    }
+    let saved = path.parent().is_some_and(|dir| std::fs::create_dir_all(dir).is_ok()) && std::fs::write(&path, &body).is_ok();
+    if saved { StatusCode::NO_CONTENT } else { StatusCode::INTERNAL_SERVER_ERROR }
 }
 
 /// Serve on 127.0.0.1 (and ::1, so http://localhost works everywhere). If the port is taken by another
@@ -116,15 +148,16 @@ pub async fn run(port: u16, on_change: OnChange) {
     }
 }
 
-/// Every few seconds while an office page is connected, check what's playing and tell the pages when the song changes.
+/// Every few seconds while an office page wants your music, check what's playing and tell the pages when the song changes.
 async fn watch_music(st: AppState) {
     let mut tick = tokio::time::interval(Duration::from_secs(5));
     loop {
         tick.tick().await;
-        if st.tx.receiver_count() == 0 {
-            continue;
-        }
-        let now = tokio::task::spawn_blocking(music::now_playing).await.unwrap_or(Value::Null);
+        let now = if st.music_listeners.load(Ordering::SeqCst) == 0 {
+            Value::Null
+        } else {
+            tokio::task::spawn_blocking(music::now_playing).await.unwrap_or(Value::Null)
+        };
         let changed = {
             let mut music = st.music.lock().unwrap();
             let changed = *music != now;
@@ -133,6 +166,28 @@ async fn watch_music(st: AppState) {
         };
         if changed {
             broadcast(&st, json!({ "type": "music", "music": now }));
+        }
+    }
+}
+
+/// Keeps chats known only from their logs up to date, adds new ones, and walks out the ones whose log went quiet.
+async fn watch_logs(st: AppState) {
+    let mut tick = tokio::time::interval(LOG_SCAN);
+    tick.tick().await; // the first scan already ran in router()
+    loop {
+        tick.tick().await;
+        let found = tokio::task::spawn_blocking(|| discover::scan_home(store::now_ms())).await.unwrap_or_default();
+        let mut store = st.store.lock().unwrap();
+        for f in found {
+            if let Some(e) = store.adopt(f) {
+                (st.on_change)(&store, &e);
+                broadcast(&st, json!({ "type": "event", "event": e }));
+            }
+        }
+        let before: Vec<String> = store.sessions.iter().map(|s| s.id.clone()).collect();
+        store.prune();
+        for id in before.iter().filter(|id| !store.sessions.iter().any(|s| &s.id == *id)) {
+            broadcast(&st, json!({ "type": "event", "event": { "type": "SessionEnd", "sessionId": id, "at": store::now_ms(), "reason": "No news for a while" } }));
         }
     }
 }
@@ -269,6 +324,7 @@ fn snapshot(st: &Shared) -> Value {
     let mut v = st.store.lock().unwrap().snapshot();
     v["approvals"] = st.pending.lock().unwrap().values().map(|p| p.approval.clone()).collect::<Vec<_>>().into();
     v["music"] = st.music.lock().unwrap().clone();
+    v["musicSupported"] = cfg!(target_os = "macos").into();
     v
 }
 
@@ -288,6 +344,7 @@ async fn client(mut socket: WebSocket, st: AppState) {
         return;
     }
     let mut visible = false;
+    let mut wants_music = false;
     loop {
         tokio::select! {
             msg = rx.recv() => match msg {
@@ -304,6 +361,14 @@ async fn client(mut socket: WebSocket, st: AppState) {
                             if now_visible != visible {
                                 if now_visible { st.watchers.fetch_add(1, Ordering::SeqCst); } else { st.watchers.fetch_sub(1, Ordering::SeqCst); }
                                 visible = now_visible;
+                            }
+                        }
+                        Some("music") => {
+                            // "Play my music" at the rooftop, turned on or off
+                            let on = msg["on"].as_bool().unwrap_or(false);
+                            if on != wants_music {
+                                if on { st.music_listeners.fetch_add(1, Ordering::SeqCst); } else { st.music_listeners.fetch_sub(1, Ordering::SeqCst); }
+                                wants_music = on;
                             }
                         }
                         Some("focus") => {
@@ -335,6 +400,9 @@ async fn client(mut socket: WebSocket, st: AppState) {
     }
     if visible {
         st.watchers.fetch_sub(1, Ordering::SeqCst);
+    }
+    if wants_music {
+        st.music_listeners.fetch_sub(1, Ordering::SeqCst);
     }
 }
 

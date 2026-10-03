@@ -5,6 +5,30 @@ import { chatLink } from './focus.js';
 
 const base = { session_id: 's1', cwd: '/Users/me/code/shop', permission_mode: 'default' };
 
+test('a Codex thread replaces its imported Claude ghost in either arrival order', () => {
+  for (const claudeFirst of [true, false]) {
+    const st = new Store(), p = { ...base, hook_event_name: 'UserPromptSubmit', prompt: 'Fix the UI' };
+    if (claudeFirst) st.ingest(p);
+    const e = st.ingest({ ...p, session_id: 'codex:s1' }, 'codex-tui', null, 'codex');
+    assert.equal(e.replacesSessionId, claudeFirst ? 's1' : undefined);
+    assert.equal(st.ingest({ ...p, hook_event_name: 'Stop' }), null);
+    assert.deepEqual(st.snapshot().sessions.map(s => [s.id, s.agent, s.status]), [['codex:s1', 'codex', 'thinking']]);
+    assert.ok(st.snapshot().recent.every(e => e.sessionId !== 's1'));
+    st.ingest({ ...p, session_id: 'codex:s1', hook_event_name: 'SessionEnd' }, null, null, 'codex');
+    assert.equal(st.ingest(p), null);
+    assert.equal(st.snapshot().sessions.length, 0);
+  }
+});
+
+test('Codex discovery removes the imported ghost but keeps independent Claude sessions in the same project', () => {
+  const st = new Store(), p = { ...base, hook_event_name: 'SessionStart' };
+  st.ingest(p); st.ingest({ ...p, session_id: 'real-claude' }, 'cli');
+  const f = { id: 'codex:s1', agent: 'codex', cwd: base.cwd, entrypoint: 'codex-tui', at: Date.now(), status: 'working', activity: 'Working', title: null, messages: [] };
+  assert.equal(st.adopt(f).replacesSessionId, 's1');
+  assert.equal(st.adopt({ ...f, id: 's1', agent: 'claude-code' }), null);
+  assert.deepEqual(st.snapshot().sessions.map(s => s.id).sort(), ['codex:s1', 'real-claude']);
+});
+
 test('labels where the session runs', () => {
   assert.equal(entrypointLabel('claude-desktop'), 'desktop');
   assert.equal(entrypointLabel('cli'), 'terminal');
@@ -63,6 +87,13 @@ test('skips helper agents that only report SubagentStop', () => {
   const e = st.ingest({ ...base, hook_event_name: 'SubagentStop', agent_id: 'helper', last_assistant_message: 'make it public' });
   assert.equal(e, null);
   assert.equal(st.snapshot().recent.length, 0);
+});
+
+test('skips background helpers that run in no project folder', () => {
+  const st = new Store(() => null);
+  assert.equal(st.ingest({ hook_event_name: 'SessionStart', session_id: 'codex:h1', cwd: '/' }, null, null, 'codex'), null);
+  assert.equal(st.adopt({ agent: 'codex', id: 'codex:h2', cwd: '/', at: Date.now(), status: 'done', activity: 'Finished', title: null, messages: [] }), null);
+  assert.equal(st.sessions.size, 0);
 });
 
 test('files the session under the project folder, not the current folder', () => {
@@ -168,4 +199,28 @@ test('sends the chat only when it changes, and shows a new prompt right away', (
   assert.deepEqual(st.ingest({ ...t, hook_event_name: 'UserPromptSubmit', prompt: 'next' }).session.messages.at(-1), { role: 'user', text: 'next' });
   messages = [...messages, { role: 'user', text: 'next' }, { role: 'assistant', text: 'Done' }];
   assert.equal(st.ingest({ ...t, hook_event_name: 'Stop' }).session.messages.at(-1).text, 'Done');
+});
+
+const found = (id, status, at = Date.now()) => ({ agent: 'claude-code', id, cwd: '/Users/me/code/shop', entrypoint: 'claude-desktop', at, status, activity: 'Working', title: 'Fix cart', messages: [] });
+
+test('adopts chats found in logs until a hook takes over', () => {
+  const st = new Store(() => null);
+  const e = st.adopt(found('s1', 'working'));
+  assert.deepEqual([e.type, e.message, e.session.title, e.session.project, e.session.entrypoint], ['SessionFound', 'Already running', 'Fix cart', 'shop', 'desktop']);
+  assert.equal(st.adopt(found('s1', 'working')), null);                   // nothing changed
+  assert.equal(st.adopt(found('s1', 'done')).message, null);              // a refresh, not a new arrival
+  st.ingest({ ...base, hook_event_name: 'UserPromptSubmit', prompt: 'next' });
+  assert.equal(st.adopt(found('s1', 'done')), null);                      // hooks win from now on
+  const s = st.sessions.get('s1');
+  assert.deepEqual([st.sessions.size, s.status, s.title], [1, 'thinking', 'Fix cart']);
+});
+
+test('ended chats stay gone and unheard ones leave when their log goes quiet', () => {
+  const st = new Store(() => null);
+  st.adopt(found('s1', 'done'));
+  st.ingest({ ...base, hook_event_name: 'SessionEnd' });
+  assert.equal(st.adopt(found('s1', 'done')), null);
+  st.adopt(found('s2', 'done', Date.now() - 31 * 60 * 1000));
+  st.prune();
+  assert.equal(st.sessions.size, 0);
 });

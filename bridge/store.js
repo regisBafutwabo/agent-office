@@ -2,6 +2,7 @@
 import path from 'node:path';
 import { validTty, validChat } from './focus.js';
 import { readTranscript, MESSAGE_CHARS } from './transcript.js';
+import { FOUND_WINDOW_MS } from './discover.js';
 
 const STALE_MS = 6 * 60 * 60 * 1000;   // forget sessions that went silent (crashed without SessionEnd)
 const RECENT_MAX = 200;
@@ -9,6 +10,9 @@ const TRANSCRIPT_RECHECK_MS = 5_000;    // between prompts and stops, re-read th
 const TASK_WAIT_MS = 2 * 60 * 1000;    // how long a launched Task/Agent call waits for its subagent to show up
 
 const clip = (s, n = 140) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+
+// No project folder: a tool's background helper (Codex's app runs one in "/" when it opens), not a chat you started.
+const isHelperDir = cwd => !cwd || cwd === '/';
 
 export function entrypointLabel(raw) {
   if (!raw || raw === 'unknown') return 'unknown';
@@ -55,7 +59,19 @@ export function isMerge(tool, input = {}) {
 }
 
 export class Store {
-  constructor(read = readTranscript) { this.sessions = new Map(); this.recent = []; this.read = read; this.transcriptChecks = new Map(); this.pendingTasks = new Map(); }
+  constructor(read = readTranscript) { this.sessions = new Map(); this.recent = []; this.read = read; this.transcriptChecks = new Map(); this.pendingTasks = new Map();
+    this.ended = new Set(); this.codexIds = new Set(); }   // ended logs and imported hooks mustn't bring sessions back
+
+  // Imported Claude hooks can report a Codex thread without the tool header. Only an exact
+  // thread-id match proves it's the same session; sharing a project or terminal doesn't.
+  claimCodex(agent, id) {
+    if (agent !== 'codex' || !id.startsWith('codex:')) return null;
+    const raw = id.slice(6); this.codexIds.add(raw);
+    if (this.sessions.get(raw)?.agent !== 'claude-code') return null;
+    this.sessions.delete(raw); this.transcriptChecks.delete(raw); this.pendingTasks.delete(raw);
+    this.recent = this.recent.filter(e => e.sessionId !== raw);
+    return raw;
+  }
 
   // SubagentStart has no task description, but the parent's Task/Agent call just before it does.
   // Remember those calls and hand each new subagent the oldest one of its type.
@@ -102,7 +118,8 @@ export class Store {
 
   prune() {
     const now = Date.now();
-    for (const [id, s] of this.sessions) if (now - s.lastEventAt > STALE_MS) { this.sessions.delete(id); this.transcriptChecks.delete(id); this.pendingTasks.delete(id); }
+    // Found in a log and never heard from (fromLog): gone once the log goes quiet (it may have been a closed chat).
+    for (const [id, s] of this.sessions) if (now - s.lastEventAt > (s.fromLog ? FOUND_WINDOW_MS : STALE_MS)) { this.sessions.delete(id); this.transcriptChecks.delete(id); this.pendingTasks.delete(id); }
   }
 
   // A permission request answered from the office: the session (or subagent) stops waiting.
@@ -116,22 +133,54 @@ export class Store {
     return e;
   }
 
+  // A chat found in its log (discover.js): add it, or refresh it while no hook has reported on it.
+  // Returns a SessionFound event when something on screen changes; hooks always win over logs.
+  adopt(f) {
+    if (f.agent === 'claude-code' && this.codexIds.has(f.id)) return null;
+    const replacesSessionId = !isHelperDir(f.cwd) ? this.claimCodex(f.agent, f.id) : null;
+    if (this.ended.has(f.id)) return null;
+    let s = this.sessions.get(f.id), isNew = !s;
+    if (s && !s.fromLog) return null;
+    if (isNew && isHelperDir(f.cwd)) return null;
+    if (isNew) {
+      s = { id: f.id, agent: f.agent, cwd: f.cwd, project: path.basename(f.cwd) || 'session', entrypoint: entrypointLabel(f.entrypoint),
+            startedAt: f.at, lastEventAt: f.at, status: f.status, activity: f.activity, permissionMode: 'default', subagents: {}, tool: null,
+            title: f.title || null, transcriptTitle: f.title || null, messages: f.messages, fromLog: true };
+      this.sessions.set(f.id, s);
+    } else {
+      s.lastEventAt = Math.max(s.lastEventAt, f.at);
+      const title = f.title || s.transcriptTitle || null, messages = f.messages.length ? f.messages : s.messages;
+      const changed = s.status !== f.status || s.activity !== f.activity || JSON.stringify(s.messages) !== JSON.stringify(messages) || s.title !== title;
+      Object.assign(s, { status: f.status, activity: f.activity, messages, transcriptTitle: title, title });
+      if (!changed) return null;
+    }
+    const e = { type: 'SessionFound', sessionId: s.id, at: Date.now(), agentId: null, agentType: null, message: isNew ? 'Already running' : null,
+      session: { id: s.id, agent: s.agent, app: null, term: null, chat: null, cwd: s.cwd, project: s.project, title: s.title, merged: false,
+                 entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity, messages: s.messages } };
+    if (replacesSessionId) e.replacesSessionId = replacesSessionId;
+    if (isNew) { this.recent.push(e); if (this.recent.length > RECENT_MAX) this.recent.shift(); }   // only the arrival goes in the feed
+    return e;
+  }
+
   // Returns the normalized event (or null if the payload is unusable).
   // projectDir is CLAUDE_PROJECT_DIR from the hook; it stays put when the session cds into a subfolder.
   // origin: { app, term, tty, chat } from the hook scripts, used for "Open in …" and "Open chat".
   ingest(p, entrypoint, projectDir, agent = 'claude-code', origin = {}) {
     const type = p.hook_event_name, sid = p.session_id;
     if (!type || !sid) return null;
+    if (agent === 'claude-code' && this.codexIds.has(sid)) return null;
+    const replacesSessionId = !isHelperDir(projectDir || p.cwd || '') ? this.claimCodex(agent, sid) : null;
     const now = Date.now();
     let s = this.sessions.get(sid);
     if (!s) {
       const root = projectDir || p.cwd || '';
+      if (isHelperDir(root)) return null;
       s = { id: sid, agent, cwd: root, project: path.basename(root) || 'session', entrypoint: entrypointLabel(entrypoint),
             startedAt: now, lastEventAt: now, status: 'idle', activity: 'Session started', permissionMode: p.permission_mode || 'default',
             subagents: {}, tool: null };
       this.sessions.set(sid, s);
     }
-    s.lastEventAt = now;
+    s.lastEventAt = now; s.fromLog = false;
     if (p.permission_mode) s.permissionMode = p.permission_mode;
     if (entrypoint && entrypoint !== 'unknown') s.entrypoint = entrypointLabel(entrypoint);
     if (origin.app) s.app = origin.app;
@@ -141,6 +190,7 @@ export class Store {
     const chatChanged = this.refreshTranscript(s, p, type);
 
     const e = { type, sessionId: sid, at: now, agentId: p.agent_id || null, agentType: p.agent_type || null };
+    if (replacesSessionId) e.replacesSessionId = replacesSessionId;
     // Internal helper agents (e.g. the desktop app's prompt suggestions) only report SubagentStop. They never did visible work, so skip them.
     if (type === 'SubagentStop' && e.agentId && !s.subagents[e.agentId]) return null;
     const sub = e.agentId ? (s.subagents[e.agentId] ||= { id: e.agentId, type: e.agentType || 'subagent', task: this.claimTask(sid, e.agentType, now),
@@ -173,7 +223,7 @@ export class Store {
       case 'SubagentStart': if (sub) { sub.status = 'thinking'; sub.activity = 'Starting'; } break;
       case 'SubagentStop': if (sub) { sub.status = 'done'; sub.activity = 'Reported back'; e.message = clip(p.last_assistant_message, 160); delete s.subagents[e.agentId]; } break;
       case 'PreCompact': s.status = 'working'; s.activity = 'Compacting context'; break;
-      case 'SessionEnd': e.reason = p.reason; this.sessions.delete(sid); this.transcriptChecks.delete(sid); this.pendingTasks.delete(sid); break;
+      case 'SessionEnd': e.reason = p.reason; this.ended.add(sid); this.sessions.delete(sid); this.transcriptChecks.delete(sid); this.pendingTasks.delete(sid); break;
       default: break;
     }
     e.session = { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, cwd: s.cwd, project: s.project, title: s.title || null, merged: !!s.merged, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity };
