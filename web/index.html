@@ -1613,6 +1613,7 @@ async function setCity(id) {
     setCityAtmosphere(id); cityKey = id; uiPrefs.city = id; saveUi(); $('#city-credit').hidden = id === 'generic';
     $('#city-picker').close(); $('#city-status').hidden = true; buildCityChoices(); return true;
   } catch (err) {
+    try { if (/^https?:$/.test(location.protocol)) navigator.sendBeacon('/api/log', JSON.stringify({ kind: 'city', id, message: String(err && err.stack || err) })); } catch (_) {}
     if (request !== cityRequest) return false;
     clearCity(); buildGenericCity(); batchGenericCity(); cityKey = 'generic'; setCityAtmosphere('generic'); $('#city-credit').hidden = true; buildCityChoices();
     const message = location.protocol === 'file:' ? 'Open the office through its local server to load real cities.' : 'Couldn’t load that city. Showing Generic city.'; toast(message);
