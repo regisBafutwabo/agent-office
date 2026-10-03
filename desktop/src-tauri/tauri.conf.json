@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Agent Office",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "identifier": "ai.agentoffice.desktop",
   "build": {
     "frontendDist": "../placeholder"
@@ -21,7 +21,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc1QkRERjVDNENFOTFCODIKUldTQ0crbE1YTis5ZFhKOVRjNVh3T2dKU083SkRDd0tDVzQxSjkzdHJsdUFoWHlZemdUaytYWkIK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEMyMEY2RDI4QjRCQjRGMUEKUldRYVQ3dTBLRzBQd25Vcld2YTNHUGVTUXBWMjg2dHBocWxOV1hhL01oQ2pmRStGaWN0VDFzNzQK",
       "endpoints": ["https://github.com/regisBafutwabo/agent-office/releases/latest/download/latest.json"]
     }
   }

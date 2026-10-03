@@ -20,7 +20,7 @@ You also need [Claude Code](https://claude.com/claude-code) itself, either the C
 
 1. **Download** `Agent-Office_<version>_aarch64.dmg` from the [latest release](https://github.com/regisBafutwabo/agent-office/releases/latest).
 2. **Install:** open the .dmg and drag **Agent Office** to Applications.
-3. **Open it from Applications.** If macOS blocks it, follow [Allow the first launch](#allow-the-first-launch) below.
+3. **Open it from Applications.** From 0.5.3 on, the app is signed and notarized by Apple, so it opens like any other app.
 4. **Meet your office.** Choose **Pets** or **Robots**, pick your city, and take the short office tour. Its connection step lets you connect Claude Code, Codex, or Cursor. You can skip the tour and connect later in **Customize → Connect agents**.
 5. **Start a new Claude Code session** and send a prompt. Its agent rides up in the lift and takes a desk on its project's floor.
 
@@ -30,7 +30,7 @@ To start the app automatically, add it in **System Settings → General → Logi
 
 ### Allow the first launch
 
-The app is ad-hoc signed, without Apple Developer ID signing or notarization, so macOS may say Apple cannot verify it. For the app downloaded from this repository's releases:
+Releases from 0.5.3 on are signed with a Developer ID and notarized by Apple, so they open without a warning. Releases up to 0.5.2, and apps you build yourself, are ad-hoc signed, so macOS may say Apple cannot verify them. To open one anyway:
 
 1. Open **Finder → Applications → Agent Office** once to trigger the warning, then dismiss it with **Done** or **Cancel**.
 2. Open **Apple menu → System Settings → Privacy & Security**.
@@ -126,6 +126,8 @@ To look around without any agents, open <http://localhost:4747/?demo>.
 ## Updating
 
 **Desktop app:** download the newest release and replace the app in Applications. The plugin updates itself. From 0.5.1 on, the app updates itself: every 4 hours it checks GitHub, downloads any new version in the background, and tells you once it's ready. Right-click the Agent Office icon near the clock and choose **Restart to update**. Run the app from Applications, not from the disk image, so it can replace itself.
+
+0.5.3 is signed with a new update key, so 0.5.1 and 0.5.2 can't update to it on their own: download 0.5.3 once and replace the app. It updates itself again from there.
 
 **From source:**
 
