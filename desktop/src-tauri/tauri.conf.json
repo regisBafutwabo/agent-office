@@ -17,7 +17,7 @@
     "category": "DeveloperTool",
     "shortDescription": "See your Claude Code agents at work in a 3D office",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
-    "macOS": { "minimumSystemVersion": "11.0", "signingIdentity": "-" }
+    "macOS": { "minimumSystemVersion": "11.0", "signingIdentity": "-", "entitlements": "Entitlements.plist" }
   },
   "plugins": {
     "updater": {
