@@ -47,6 +47,7 @@ A 4 MB menu-bar app with the office server built in, so you don't need `npm star
 - The menu-bar icon shows how many agents need you, and macOS notifies you when one asks for permission.
 - **Connect agents** installs the Claude Code plugin and adds Codex or Cursor hooks in one click, so you don't need this repo. Newer app versions update the plugin by themselves.
 - **Open Agent Office** shows the 3D office in a window. Closing the window frees its memory; the server keeps running in the menu bar until you quit.
+- The app updates itself. To get a new version right away, choose **Check for Updates…** from the menu-bar icon or the Agent Office menu.
 - Phones and browsers can still open <http://localhost:4747>.
 
 Build it (needs Rust: `brew install rustup && rustup default stable`):
