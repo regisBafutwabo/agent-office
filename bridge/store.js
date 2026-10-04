@@ -8,6 +8,7 @@ const STALE_MS = 6 * 60 * 60 * 1000;   // forget sessions that went silent (cras
 const RECENT_MAX = 200;
 const TRANSCRIPT_RECHECK_MS = 5_000;    // between prompts and stops, re-read the transcript at most this often
 const TASK_WAIT_MS = 2 * 60 * 1000;    // how long a launched Task/Agent call waits for its subagent to show up
+const LATE_HOOK_MS = 10 * 1000;        // hooks post in parallel: a stopped subagent's last tool event can land after its SubagentStop
 
 const clip = (s, n = 140) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 
@@ -60,7 +61,7 @@ export function isMerge(tool, input = {}) {
 
 export class Store {
   constructor(read = readTranscript) { this.sessions = new Map(); this.recent = []; this.read = read; this.transcriptChecks = new Map(); this.pendingTasks = new Map();
-    this.ended = new Set(); this.codexIds = new Set(); }   // ended logs and imported hooks mustn't bring sessions back
+    this.ended = new Set(); this.codexIds = new Set(); this.stoppedSubs = new Map(); }   // ended logs and imported hooks mustn't bring sessions back
 
   // Imported Claude hooks can report a Codex thread without the tool header. Only an exact
   // thread-id match proves it's the same session; sharing a project or terminal doesn't.
@@ -120,6 +121,7 @@ export class Store {
     const now = Date.now();
     // Found in a log and never heard from (fromLog): gone once the log goes quiet (it may have been a closed chat).
     for (const [id, s] of this.sessions) if (now - s.lastEventAt > (s.fromLog ? FOUND_WINDOW_MS : STALE_MS)) { this.sessions.delete(id); this.transcriptChecks.delete(id); this.pendingTasks.delete(id); }
+    for (const [k, at] of this.stoppedSubs) if (now - at > LATE_HOOK_MS) this.stoppedSubs.delete(k);
   }
 
   // A permission request answered from the office: the session (or subagent) stops waiting.
@@ -193,6 +195,8 @@ export class Store {
     if (replacesSessionId) e.replacesSessionId = replacesSessionId;
     // Internal helper agents (e.g. the desktop app's prompt suggestions) only report SubagentStop. They never did visible work, so skip them.
     if (type === 'SubagentStop' && e.agentId && !s.subagents[e.agentId]) return null;
+    // A straggler from a subagent that just stopped mustn't bring it back, stuck "thinking". A later one is a real resume.
+    if (e.agentId && type !== 'SubagentStart' && now - (this.stoppedSubs.get(`${sid}\n${e.agentId}`) ?? -Infinity) < LATE_HOOK_MS) return null;
     const sub = e.agentId ? (s.subagents[e.agentId] ||= { id: e.agentId, type: e.agentType || 'subagent', task: this.claimTask(sid, e.agentType, now),
                                                           status: 'thinking', activity: 'Starting', startedAt: now }) : null;
     if (sub) e.agentTask = sub.task;
@@ -221,7 +225,7 @@ export class Store {
         break;
       case 'Stop': s.status = 'done'; s.activity = s.merged ? 'Finished · merged' : 'Finished'; s.tool = null; break;
       case 'SubagentStart': if (sub) { sub.status = 'thinking'; sub.activity = 'Starting'; } break;
-      case 'SubagentStop': if (sub) { sub.status = 'done'; sub.activity = 'Reported back'; e.message = clip(p.last_assistant_message, 160); delete s.subagents[e.agentId]; } break;
+      case 'SubagentStop': if (sub) { sub.status = 'done'; sub.activity = 'Reported back'; e.message = clip(p.last_assistant_message, 160); delete s.subagents[e.agentId]; this.stoppedSubs.set(`${sid}\n${e.agentId}`, now); } break;
       case 'PreCompact': s.status = 'working'; s.activity = 'Compacting context'; break;
       case 'SessionEnd': e.reason = p.reason; this.ended.add(sid); this.sessions.delete(sid); this.transcriptChecks.delete(sid); this.pendingTasks.delete(sid); break;
       default: break;
