@@ -1,6 +1,6 @@
 [package]
 name = "agent-office"
-version = "0.5.4"
+version = "0.5.5"
 description = "Agent Office: see your Claude Code agents at work in a 3D office"
 edition = "2021"
 license = "MIT"
@@ -21,6 +21,12 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 rust-embed = "8"
 mime_guess = "2"
+tauri-plugin-dialog = "2"
+
+# Bring the app forward before an update dialog (macOS opens a windowless app's alerts behind other apps).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSResponder"] }
 
 [profile.release]
 codegen-units = 1
