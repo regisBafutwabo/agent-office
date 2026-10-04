@@ -155,6 +155,7 @@ fn main() {
         // Opening the app again (or a second build of it) just brings the running office forward.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| open_office(app)))
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
@@ -165,6 +166,7 @@ fn main() {
             let open = MenuItem::with_id(app, "open", "Open Agent Office", true, None::<&str>)?;
             let browser = MenuItem::with_id(app, "browser", "Open in browser", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Agent Office", true, None::<&str>)?;
+            let check_updates = MenuItem::with_id(app, "check-updates", "Check for Updates…", true, None::<&str>)?;
             let update_item = MenuItem::with_id(app, "update", "Download update", true, None::<&str>)?;
             let update_separator = PredefinedMenuItem::separator(app)?;
             let connect_items = setup::Tool::ALL.iter()
@@ -172,7 +174,16 @@ fn main() {
                 .collect::<Result<Vec<_>, _>>()?;
             let connect_refs: Vec<&dyn tauri::menu::IsMenuItem<Wry>> = connect_items.iter().map(|i| i as &dyn tauri::menu::IsMenuItem<Wry>).collect();
             let connect = Submenu::with_items(app, "Connect agents", true, &connect_refs)?;
-            let menu = Menu::with_items(app, &[&status, &PredefinedMenuItem::separator(app)?, &open, &browser, &connect, &PredefinedMenuItem::separator(app)?, &quit])?;
+            let menu = Menu::with_items(app, &[&status, &PredefinedMenuItem::separator(app)?, &open, &browser, &connect, &PredefinedMenuItem::separator(app)?, &check_updates, &quit])?;
+            // The app menu (shown while the office window is open) gets it too, under About like any Mac app.
+            #[cfg(target_os = "macos")]
+            {
+                let app_menu = Menu::default(app.handle())?;
+                if let Some(first) = app_menu.items()?.first().and_then(|i| i.as_submenu().cloned()) {
+                    first.insert(&MenuItem::with_id(app, "check-updates", "Check for Updates…", true, None::<&str>)?, 1)?;
+                }
+                app.set_menu(app_menu)?;
+            }
             // Checking Claude Code can ask the login shell where it lives, so do it off the main thread.
             let (items, app_handle) = (connect_items.clone(), app.handle().clone());
             std::thread::spawn(move || {
@@ -183,7 +194,8 @@ fn main() {
             });
             let menu_items = connect_items.clone();
             let ready = update::Ready::default();
-            tauri::async_runtime::spawn(update::watch(app.handle().clone(), menu.clone(), update_item, update_separator, ready.clone()));
+            let check_now = update::CheckNow::default();
+            tauri::async_runtime::spawn(update::watch(app.handle().clone(), menu.clone(), update_item, update_separator, ready.clone(), check_now.clone()));
 
             TrayIconBuilder::with_id(TRAY_ID)
                 .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?)
@@ -194,6 +206,8 @@ fn main() {
                 .on_menu_event(move |app, event| match event.id.as_ref() {
                     "open" => open_office(app),
                     "update" => update::install(app, &ready),
+                    // Clicks in the app menu arrive here too: Tauri hands every menu's events to every listener.
+                    "check-updates" => check_now.notify_one(),
                     id if id.starts_with("connect:") => {
                         let Some(tool) = setup::Tool::from_id(&id["connect:".len()..]) else { return };
                         let (app, items) = (app.clone(), menu_items.clone());
