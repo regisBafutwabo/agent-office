@@ -2,7 +2,7 @@
 // Mirrors bridge/store.js so the browser office works the same with either server.
 use serde::Serialize;
 use serde_json::{json, Map, Value};
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -13,6 +13,7 @@ const STALE_MS: u64 = 6 * 60 * 60 * 1000; // forget sessions that went silent (c
 const RECENT_MAX: usize = 200;
 const TRANSCRIPT_RECHECK_MS: u64 = 5_000; // between prompts and stops, re-read the transcript at most this often
 const TASK_WAIT_MS: u64 = 2 * 60 * 1000; // how long a launched Task/Agent call waits for its subagent to show up
+const LATE_HOOK_MS: u64 = 10 * 1000; // hooks post in parallel: a stopped subagent's last tool event can land after its SubagentStop
 
 pub fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
@@ -225,6 +226,8 @@ pub struct Store {
     ended: HashSet<String>,
     /// Thread ids confirmed as Codex by its adapter or log discovery.
     codex_ids: HashSet<String>,
+    /// (session id, agent id) → when that subagent reported SubagentStop.
+    stopped_subs: HashMap<(String, String), u64>,
 }
 
 fn set_status(s: &mut Session, sub: Option<usize>, status: &str, activity: String) {
@@ -261,6 +264,7 @@ impl Store {
         let now = now_ms();
         // Found in a log and never heard from: gone once the log goes quiet (it may have been a closed chat).
         self.sessions.retain(|s| now.saturating_sub(s.last_event_at) <= if s.from_log { FOUND_WINDOW_MS } else { STALE_MS });
+        self.stopped_subs.retain(|_, at| now.saturating_sub(*at) <= LATE_HOOK_MS);
     }
 
     /// Sessions and subagents currently waiting on the user.
@@ -427,6 +431,11 @@ impl Store {
             if kind == "SubagentStop" && !agent_id.is_empty() && !s.subagents.iter().any(|a| a.id == agent_id) {
                 return None;
             }
+            // A straggler from a subagent that just stopped mustn't bring it back, stuck "thinking". A later one is a real resume.
+            let stopped = self.stopped_subs.get(&(sid.to_string(), agent_id.to_string()));
+            if !agent_id.is_empty() && kind != "SubagentStart" && stopped.is_some_and(|at| now.saturating_sub(*at) < LATE_HOOK_MS) {
+                return None;
+            }
         }
 
         let mut e = Map::new();
@@ -536,6 +545,7 @@ impl Store {
                 e.insert("message".into(), clip(str_of(p, "last_assistant_message"), 160).into());
                 if let Some(i) = sub {
                     s.subagents.remove(i);
+                    self.stopped_subs.insert((sid.to_string(), agent_id.to_string()), now);
                 }
             }
             "PreCompact" => {
@@ -645,6 +655,18 @@ mod tests {
         assert_eq!(st.sessions[0].status, "idle");
         st.ingest(&base(json!({ "hook_event_name": "SubagentStop", "agent_id": "x1" })), None, None);
         assert!(st.sessions[0].subagents.is_empty());
+    }
+
+    #[test]
+    fn a_tool_event_that_lands_after_its_subagent_stop_does_not_bring_it_back() {
+        let mut st = Store::default();
+        let sub = |ev: &str| base(json!({ "hook_event_name": ev, "agent_id": "x1", "agent_type": "default", "tool_name": "Bash", "tool_input": { "command": "ls" } }));
+        st.ingest(&sub("PreToolUse"), None, None);
+        st.ingest(&sub("SubagentStop"), None, None);
+        assert!(st.ingest(&sub("PostToolUse"), None, None).is_none());
+        assert!(st.sessions[0].subagents.is_empty());
+        st.ingest(&sub("SubagentStart"), None, None); // resumed for real
+        assert_eq!(st.sessions[0].subagents.len(), 1);
     }
 
     #[test]

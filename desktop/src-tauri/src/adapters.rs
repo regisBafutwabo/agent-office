@@ -19,7 +19,7 @@ pub fn claude_tool(name: &str) -> String {
         "glob" | "list_directory" | "list_files" | "file_search" | "ls" => "Glob",
         "web_fetch" | "fetch" => "WebFetch",
         "google_web_search" | "web_search" => "WebSearch",
-        "task" | "agent" | "subagent" => "Task",
+        "task" | "agent" | "subagent" | "spawn_agent" => "Task",
         _ => return name.into(),
     };
     mapped.into()
@@ -59,6 +59,7 @@ pub fn claude_input(tool: &str, input: &Value) -> Value {
     if tool == "Grep" || tool == "Glob" { fill("file_path", &["absolute_path", "target_file", "filePath"]); } else { fill("file_path", &["absolute_path", "target_file", "filePath", "path"]); }
     if tool == "Grep" || tool == "Glob" { fill("pattern", &["query", "regex", "glob"]); }
     if tool == "WebSearch" { fill("query", &["q", "search_term"]); }
+    if tool == "Task" { fill("description", &["task_name"]); fill("subagent_type", &["agent_type"]); } // Codex spawn_agent; its message is encrypted
     if tool == "Edit" && missing(&out, "file_path") {
         let text = first(&src, &["input", "patch", "command"]).and_then(Value::as_str).unwrap_or("");
         if let Some(f) = patched_file(text) { out.insert("file_path".into(), f.into()); }
@@ -226,6 +227,13 @@ mod tests {
             "tool_input": { "input": "*** Begin Patch\n*** Update File: src/app.ts\n@@" } }), None).unwrap();
         assert_eq!((e["session_id"].as_str(), e["tool_name"].as_str(), e["tool_input"]["file_path"].as_str()), (Some("codex:c1"), Some("Edit"), Some("src/app.ts")));
         assert_eq!(normalize("codex", &json!({ "hook_event_name": "Interrupt", "session_id": "c1" }), None).unwrap()["hook_event_name"], "Stop");
+    }
+
+    #[test]
+    fn codex_spawn_agent_is_a_task_titled_by_its_task_name() {
+        let e = normalize("codex", &json!({ "hook_event_name": "PreToolUse", "session_id": "c1", "cwd": "/repo", "tool_name": "spawn_agent",
+            "tool_input": "{\"task_name\":\"designer\",\"fork_turns\":\"all\",\"message\":\"gAAAA\"}" }), None).unwrap();
+        assert_eq!((e["tool_name"].as_str(), e["tool_input"]["description"].as_str()), (Some("Task"), Some("designer")));
     }
 
     #[test]

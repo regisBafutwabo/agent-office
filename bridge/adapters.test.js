@@ -23,6 +23,15 @@ test('Codex: Claude-style events, apply_patch becomes an Edit of the patched fil
   assert.equal(normalize('codex', { hook_event_name: 'Interrupt', session_id: 'c1' }).hook_event_name, 'Stop');
 });
 
+test('Codex: spawn_agent launches a subagent titled by its task_name', () => {
+  const e = normalize('codex', { hook_event_name: 'PreToolUse', session_id: 'c1', cwd: '/repo', tool_name: 'spawn_agent',
+    tool_input: JSON.stringify({ task_name: 'designer', fork_turns: 'all', message: 'gAAAA…' }) });
+  assert.deepEqual([e.tool_name, e.tool_input.description], ['Task', 'designer']);
+  const st = new Store(), send = p => st.ingest(normalize('codex', { session_id: 'c1', cwd: '/repo', ...p }), null, null, 'codex');
+  send({ hook_event_name: 'PreToolUse', tool_name: 'spawn_agent', tool_input: { task_name: 'designer' } });
+  assert.equal(send({ hook_event_name: 'SubagentStart', agent_id: 'a1', agent_type: 'default' }).agentTask, 'designer');
+});
+
 test('Gemini CLI: BeforeTool/AfterAgent and tool-permission notifications', () => {
   const pre = normalize('gemini', { hook_event_name: 'BeforeTool', session_id: 'g1', cwd: '/repo', tool_name: 'run_shell_command', tool_input: { command: 'npm test' } });
   assert.deepEqual([pre.hook_event_name, pre.tool_name, pre.tool_input.command], ['PreToolUse', 'Bash', 'npm test']);

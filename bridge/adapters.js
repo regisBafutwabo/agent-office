@@ -10,7 +10,7 @@ const TOOL_ALIASES = {
   grep: 'Grep', search_file_content: 'Grep', search_files: 'Grep', codebase_search: 'Grep',
   glob: 'Glob', list_directory: 'Glob', list_files: 'Glob', file_search: 'Glob', ls: 'Glob',
   web_fetch: 'WebFetch', fetch: 'WebFetch', google_web_search: 'WebSearch', web_search: 'WebSearch',
-  task: 'Task', agent: 'Task', subagent: 'Task',
+  task: 'Task', agent: 'Task', subagent: 'Task', spawn_agent: 'Task',
 };
 export const AGENTS = ['claude-code', 'codex', 'cursor', 'gemini', 'copilot', 'factory', 'qwen', 'goose', 'kiro', 'windsurf', 'cline', 'opencode', 'amp'];
 
@@ -27,6 +27,7 @@ export function claudeInput(tool, input) {
   out.file_path ??= i.absolute_path ?? i.target_file ?? i.filePath ?? (tool !== 'Grep' && tool !== 'Glob' ? i.path : undefined);
   if (tool === 'Grep' || tool === 'Glob') out.pattern ??= i.query ?? i.regex ?? i.glob;
   if (tool === 'WebSearch') out.query ??= i.q ?? i.search_term;
+  if (tool === 'Task') { out.description ??= i.task_name; out.subagent_type ??= i.agent_type; }   // Codex spawn_agent; its message is encrypted
   if (tool === 'Edit' && !out.file_path) {                         // Codex apply_patch carries the patch text
     const m = String(i.input ?? i.patch ?? i.command ?? '').match(/\*\*\* (?:Update|Add|Delete) File: (.+)/);
     if (m) out.file_path = m[1].trim();
