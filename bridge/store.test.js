@@ -63,6 +63,16 @@ test('routes subagent tool calls to the subagent and removes it when it stops', 
   assert.equal(st.snapshot().sessions[0].subagents.length, 0);
 });
 
+test('a tool event that lands after its SubagentStop does not bring the subagent back', () => {
+  const st = new Store(), sub = { ...base, agent_id: 'x1', agent_type: 'default' };
+  st.ingest({ ...sub, hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'ls' } });
+  st.ingest({ ...sub, hook_event_name: 'SubagentStop' });
+  assert.equal(st.ingest({ ...sub, hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: { command: 'ls' } }), null);
+  assert.equal(st.snapshot().sessions[0].subagents.length, 0);
+  st.ingest({ ...sub, hook_event_name: 'SubagentStart' });                     // resumed for real
+  assert.equal(st.snapshot().sessions[0].subagents.length, 1);
+});
+
 test('names subagents after the task they were given', () => {
   const st = new Store();
   const launch = (t, d) => st.ingest({ ...base, hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_input: { subagent_type: t, description: d } });
