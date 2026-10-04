@@ -1,6 +1,6 @@
 [package]
 name = "agent-office"
-version = "0.5.3"
+version = "0.5.4"
 description = "Agent Office: see your Claude Code agents at work in a 3D office"
 edition = "2021"
 license = "MIT"
