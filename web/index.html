@@ -2047,9 +2047,9 @@ const worldPos = a => a.g.getWorldPosition(tmpV3);
 // Real icons of the apps installed on this Mac, served by the local office (/api/app-icon/<bundle id>.png).
 // Tools with no app installed, and the claude.ai preview, get a lettered badge instead.
 const TOOL_ICON = { 'claude-code': 'com.anthropic.claudefordesktop', codex: 'com.openai.codex', cursor: 'com.todesktop.230313mzl4w4u92',
-  windsurf: 'com.exafunction.windsurf', copilot: 'com.microsoft.VSCode', cline: 'com.microsoft.VSCode' };
+  windsurf: 'com.exafunction.windsurf', copilot: 'com.microsoft.VSCode', cline: 'com.microsoft.VSCode', ollama: 'com.electron.ollama' };
 const TOOL_LETTER = { 'claude-code': 'C', codex: 'X', cursor: 'Cu', gemini: 'G', copilot: 'Co', factory: 'F', qwen: 'Q', goose: 'Go',
-  kiro: 'K', windsurf: 'W', cline: 'Cl', opencode: 'O', amp: 'A' };
+  kiro: 'K', windsurf: 'W', cline: 'Cl', opencode: 'O', amp: 'A', ollama: 'Ol' };
 const LOCAL_OFFICE = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(location.host);
 const iconState = {}, iconImg = {};
 function iconFor(bundle) {
@@ -2375,7 +2375,7 @@ const TRIM_COLORS = ['#15212A', '#F4F1EA', '#FFB400', '#2B59C3', '#E4572E', '#98
 const ACCENT_COLORS = ['#E4572E', '#2B59C3', '#FFB400', '#15212A', '#F4F1EA', '#6CB26B', '#B16AD9', '#FF7EB6'];
 const FACE_COLORS = { thinking: '#C8BFFF', working: '#8BE9F5', waiting: '#FFC867', done: '#98F1B0', idle: '#AEBFC6', error: '#FF9C94' };
 const TOOL_ACCESSORY = { cursor: 'headphones', codex: 'cap', gemini: 'antenna', copilot: 'glasses', factory: 'backpack', qwen: 'beanie',
-  goose: 'scarf', kiro: 'antenna', windsurf: 'headphones', cline: 'glasses', opencode: 'cap', amp: 'antenna' };
+  goose: 'scarf', kiro: 'antenna', windsurf: 'headphones', cline: 'glasses', opencode: 'cap', amp: 'antenna', ollama: 'mug' };
 const LEG = .3;                                  // hip height when standing
 const ANIMALS = { bear: {label:'Bear', fur:'#A57A55', muzzle:'#E5C7A1'}, cat: {label:'Cat', fur:'#DDA66C', muzzle:'#FFE8C8'}, rabbit: {label:'Rabbit', fur:'#C3BBC9', muzzle:'#F7EBEE'}, maltese: {label:'Maltese', fur:'#FFF9EF', muzzle:'#FFFFFF'}, raccoon: {label:'Raccoon', fur:'#9296A2', muzzle:'#E7E5E1'}, duck: {label:'Duck', fur:'#F6DE83', muzzle:'#E9A044'} };
 const petSpecies = a => Object.hasOwn(ANIMALS, a.look.species) ? a.look.species : a.parent ? petSpecies(a.parent) : Object.keys(ANIMALS)[seedHash(a.cwd || a.name) % 6];
@@ -3340,7 +3340,7 @@ const params = new URLSearchParams(location.search);
 const FAST = params.has('fast');                                   // shorter idle timers, handy when testing
 const ENTRY = { desktop:'Desktop app', terminal:'Terminal', sdk:'SDK', unknown:'Claude Code' };
 const AGENT_NAMES = { codex:'Codex', cursor:'Cursor', gemini:'Gemini CLI', copilot:'Copilot', factory:'Droid', qwen:'Qwen Code',
-  goose:'Goose', kiro:'Kiro', windsurf:'Windsurf', cline:'Cline', opencode:'OpenCode', amp:'Amp' };
+  goose:'Goose', kiro:'Kiro', windsurf:'Windsurf', cline:'Cline', opencode:'OpenCode', amp:'Amp', ollama:'Ollama' };
 // Apps the desktop app can bring forward (matches focus.rs / focus.js).
 const HOST_APPS = { 'com.apple.Terminal': 'Terminal', 'com.googlecode.iterm2': 'iTerm', 'dev.warp.Warp-Stable': 'Warp', 'com.mitchellh.ghostty': 'Ghostty',
   'net.kovidgoyal.kitty': 'kitty', 'com.github.wez.wezterm': 'WezTerm', 'org.alacritty': 'Alacritty', 'com.todesktop.230313mzl4w4u92': 'Cursor',

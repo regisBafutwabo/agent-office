@@ -145,7 +145,7 @@ export class Store {
     if (s && !s.fromLog) return null;
     if (isNew && isHelperDir(f.cwd)) return null;
     if (isNew) {
-      s = { id: f.id, agent: f.agent, cwd: f.cwd, project: path.basename(f.cwd) || 'session', entrypoint: entrypointLabel(f.entrypoint),
+      s = { id: f.id, agent: f.agent, cwd: f.cwd, project: f.project || path.basename(f.cwd) || 'session', entrypoint: entrypointLabel(f.entrypoint),
             startedAt: f.at, lastEventAt: f.at, status: f.status, activity: f.activity, permissionMode: 'default', subagents: {}, tool: null,
             title: f.title || null, transcriptTitle: f.title || null, messages: f.messages, fromLog: true };
       this.sessions.set(f.id, s);
@@ -162,6 +162,14 @@ export class Store {
     if (replacesSessionId) e.replacesSessionId = replacesSessionId;
     if (isNew) { this.recent.push(e); if (this.recent.length > RECENT_MAX) this.recent.shift(); }   // only the arrival goes in the feed
     return e;
+  }
+
+  // Found agents a poll no longer reports (Ollama unloaded the model) leave now, not after the usual quiet spell.
+  // Returns their ids.
+  retire(agent, keep) {
+    const gone = [...this.sessions.values()].filter(s => s.agent === agent && s.fromLog && !keep.includes(s.id)).map(s => s.id);
+    for (const id of gone) { this.sessions.delete(id); this.transcriptChecks.delete(id); this.pendingTasks.delete(id); }
+    return gone;
   }
 
   // Returns the normalized event (or null if the payload is unusable).

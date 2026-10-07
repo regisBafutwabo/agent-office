@@ -298,6 +298,14 @@ impl Store {
         Some(event)
     }
 
+    /// Found agents a poll no longer reports (Ollama unloaded the model) leave now, not after the usual quiet spell.
+    /// Returns their ids.
+    pub fn retire(&mut self, agent: &str, keep: &[String]) -> Vec<String> {
+        let gone: Vec<String> = self.sessions.iter().filter(|s| s.agent == agent && s.from_log && !keep.contains(&s.id)).map(|s| s.id.clone()).collect();
+        self.sessions.retain(|s| !gone.contains(&s.id));
+        gone
+    }
+
     /// A chat found in its log (discover.rs): add it, or refresh it while no hook has reported on it.
     /// Returns a SessionFound event when something on screen changes; hooks always win over logs.
     pub fn adopt(&mut self, f: Found) -> Option<Value> {
@@ -321,7 +329,8 @@ impl Store {
             }
             None if is_helper_dir(&f.cwd) => return None,
             None => {
-                let project = Path::new(&f.cwd).file_name().map(|n| n.to_string_lossy().to_string()).filter(|s| !s.is_empty()).unwrap_or_else(|| "session".into());
+                let folder = Path::new(&f.cwd).file_name().map(|n| n.to_string_lossy().to_string());
+                let project = f.project.clone().or(folder).filter(|s| !s.is_empty()).unwrap_or_else(|| "session".into());
                 self.sessions.push(Session {
                     id: f.id, agent: f.agent, cwd: f.cwd, project, entrypoint: entrypoint_label(f.entrypoint.as_deref()), started_at: f.at, last_event_at: f.at,
                     status: f.status, activity: f.activity, permission_mode: "default".into(), subagents: vec![], tool: None,
@@ -606,7 +615,7 @@ mod tests {
         let mut st = Store::default();
         st.ingest(&json!({ "session_id": "t1", "cwd": "/repo", "hook_event_name": "SessionStart" }), None, None);
         st.ingest(&json!({ "session_id": "real-claude", "cwd": "/repo", "hook_event_name": "SessionStart" }), Some("cli"), None);
-        let f = Found { id: "codex:t1".into(), agent: "codex".into(), cwd: "/repo".into(), entrypoint: None,
+        let f = Found { id: "codex:t1".into(), agent: "codex".into(), cwd: "/repo".into(), project: None, entrypoint: None,
             at: now_ms(), status: "working".into(), activity: "Working".into(), title: None, messages: vec![] };
         assert_eq!(st.adopt(f).unwrap()["replacesSessionId"], "t1");
         assert_eq!(st.sessions.len(), 2);
@@ -751,7 +760,7 @@ mod tests {
     }
 
     fn found(id: &str, status: &str) -> Found {
-        Found { agent: "claude-code".into(), id: id.into(), cwd: "/Users/me/code/shop".into(), entrypoint: Some("claude-desktop".into()),
+        Found { agent: "claude-code".into(), id: id.into(), cwd: "/Users/me/code/shop".into(), project: None, entrypoint: Some("claude-desktop".into()),
                 at: now_ms(), status: status.into(), activity: "Working".into(), title: Some("Fix cart".into()), messages: vec![] }
     }
 

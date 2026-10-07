@@ -10,6 +10,7 @@ import { normalize } from './adapters.js';
 import { focus, appIcon } from './focus.js';
 import { watchMusic } from './music.js';
 import { scan } from './discover.js';
+import { pollOllama } from './ollama.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = path.join(ROOT, 'web');
@@ -138,11 +139,19 @@ wss.on('connection', ws => {
     if (msg.type === 'decide' && pending.has(msg.id) && ['allow', 'deny', 'defer'].includes(msg.decision)) pending.get(msg.id).resolve(msg.decision);
   });
 });
+// Models Ollama has loaded are agents too (ollama.js); one walks out as soon as Ollama unloads it.
+async function syncOllama() {
+  const found = await pollOllama();
+  for (const f of found) { const e = store.adopt(f); if (e) broadcast({ type: 'event', event: e }); }
+  for (const id of store.retire('ollama', found.map(f => f.id))) broadcast({ type: 'event', event: { type: 'SessionEnd', sessionId: id, at: Date.now(), reason: 'Ollama unloaded the model' } });
+}
 // Chats that were already running move in from their logs (discover.js); keep the ones no hook reports on up to date,
 // and walk out the ones whose log went quiet.
 for (const f of scan()) store.adopt(f);
+syncOllama();
 setInterval(() => {
   for (const f of scan()) { const e = store.adopt(f); if (e) broadcast({ type: 'event', event: e }); }
+  syncOllama();
   const before = [...store.sessions.keys()]; store.prune();
   for (const id of before) if (!store.sessions.has(id)) broadcast({ type: 'event', event: { type: 'SessionEnd', sessionId: id, at: Date.now(), reason: 'No news for a while' } });
 }, 10_000).unref();
