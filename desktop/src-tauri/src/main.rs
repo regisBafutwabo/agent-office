@@ -7,6 +7,7 @@ mod adapters;
 mod discover;
 mod focus;
 mod music;
+mod ollama;
 mod server;
 mod setup;
 mod store;

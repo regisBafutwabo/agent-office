@@ -40,6 +40,8 @@ To try it without Claude Code, open <http://localhost:4747/?demo> for simulated 
 
 Codex CLI, Cursor, Gemini CLI, GitHub Copilot CLI, Qwen Code, Factory Droid, Goose, Kiro, Windsurf, Cline, OpenCode and Amp can report to the office too, through `adapters/hook.sh`. The desktop app connects Codex and Cursor in one click (**Connect agents** in the menu bar or in Customize). Setup for the others is in [docs/adapters.md](docs/adapters.md). Works with both the desktop app and `npm start`.
 
+**Ollama** needs no setup. Each model Ollama has loaded shows up on an Ollama floor: busy while it answers, idle while it waits, gone when Ollama unloads it. Ollama doesn't say which tool or project sent a prompt, so these agents can't ask for permission or show the chat.
+
 ## Desktop app (macOS)
 
 A 4 MB menu-bar app with the office server built in, so you don't need `npm start` or Node:

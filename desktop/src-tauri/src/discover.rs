@@ -26,6 +26,8 @@ pub struct Found {
     /// Namespaced like hook session ids: "codex:<id>" (see adapters::normalize).
     pub id: String,
     pub cwd: String,
+    /// Floor name when it isn't the cwd's folder name (Ollama's models share one floor).
+    pub project: Option<String>,
     pub entrypoint: Option<String>,
     /// When the log was last written.
     pub at: u64,
@@ -130,7 +132,7 @@ fn claude(home: &Path, now: u64, out: &mut Vec<Found>) {
             };
             let (status, activity) = settle(status, activity, at, now);
             let t = read_tail(&log).unwrap_or_default();
-            out.push(Found { agent: "claude-code".into(), id, cwd: root.to_string_lossy().into(), entrypoint, at, status, activity, title: t.title, messages: t.messages });
+            out.push(Found { agent: "claude-code".into(), id, cwd: root.to_string_lossy().into(), project: None, entrypoint, at, status, activity, title: t.title, messages: t.messages });
         }
     }
 }
@@ -157,7 +159,7 @@ fn codex(home: &Path, now: u64, out: &mut Vec<Found>) {
                 None => ("idle", "Session started"),
             };
             let (status, activity) = settle(status, activity, at, now);
-            out.push(Found { agent: "codex".into(), id: format!("codex:{id}"), cwd: meta["cwd"].as_str().unwrap_or("").into(),
+            out.push(Found { agent: "codex".into(), id: format!("codex:{id}"), cwd: meta["cwd"].as_str().unwrap_or("").into(), project: None,
                              entrypoint: meta["originator"].as_str().map(String::from), at, status, activity, title: None, messages: vec![] });
         }
     }
@@ -181,7 +183,7 @@ fn cursor(home: &Path, now: u64, out: &mut Vec<Found>) {
                 let done = tail(&log).last().is_some_and(|o| o["type"] == "turn_ended");
                 let (status, activity) = settle(if done { "done" } else { "thinking" }, if done { "Finished" } else { "Thinking" }, at, now);
                 let title = head(&log, 1).first().filter(|o| o["role"] == "user").and_then(cursor_prompt);
-                out.push(Found { agent: "cursor".into(), id: format!("cursor:{id}"), cwd, entrypoint: None, at, status, activity, title, messages: vec![] });
+                out.push(Found { agent: "cursor".into(), id: format!("cursor:{id}"), cwd, project: None, entrypoint: None, at, status, activity, title, messages: vec![] });
             }
         }
     }

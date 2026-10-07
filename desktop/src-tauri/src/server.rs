@@ -5,6 +5,7 @@ use crate::adapters;
 use crate::discover;
 use crate::focus;
 use crate::music;
+use crate::ollama;
 use crate::setup;
 use crate::store::{self, Origin, Store};
 use axum::{
@@ -170,19 +171,31 @@ async fn watch_music(st: AppState) {
     }
 }
 
+fn ollama_models() -> Vec<discover::Found> {
+    match std::env::var("HOME") {
+        Ok(h) if !h.is_empty() => ollama::poll(std::path::Path::new(&h), store::now_ms()),
+        _ => vec![],
+    }
+}
+
 /// Keeps chats known only from their logs up to date, adds new ones, and walks out the ones whose log went quiet.
 async fn watch_logs(st: AppState) {
     let mut tick = tokio::time::interval(LOG_SCAN);
     tick.tick().await; // the first scan already ran in router()
     loop {
         tick.tick().await;
-        let found = tokio::task::spawn_blocking(|| discover::scan_home(store::now_ms())).await.unwrap_or_default();
+        let (found, models) = tokio::task::spawn_blocking(|| (discover::scan_home(store::now_ms()), ollama_models())).await.unwrap_or_default();
         let mut store = st.store.lock().unwrap();
-        for f in found {
+        let keep: Vec<String> = models.iter().map(|f| f.id.clone()).collect();
+        for f in found.into_iter().chain(models) {
             if let Some(e) = store.adopt(f) {
                 (st.on_change)(&store, &e);
                 broadcast(&st, json!({ "type": "event", "event": e }));
             }
+        }
+        // Models Ollama has loaded are agents too (ollama.rs); one walks out as soon as Ollama unloads it.
+        for id in store.retire("ollama", &keep) {
+            broadcast(&st, json!({ "type": "event", "event": { "type": "SessionEnd", "sessionId": id, "at": store::now_ms(), "reason": "Ollama unloaded the model" } }));
         }
         let before: Vec<String> = store.sessions.iter().map(|s| s.id.clone()).collect();
         store.prune();
