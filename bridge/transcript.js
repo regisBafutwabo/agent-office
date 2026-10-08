@@ -4,6 +4,7 @@
 //   {"type":"ai-title","aiTitle":…} when Claude Code names it itself; both repeat as the chat goes on.
 //   Messages: your prompts and Claude's text replies. Tool calls, tool results, thinking and subagent
 //   (sidechain) turns are left out; the live feed already shows tool calls.
+//   Context: how much of the context window the chat fills, from the last main-chain reply's token usage.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,6 +12,17 @@ import path from 'node:path';
 // Read the last 256 KB; if big tool outputs crowd the messages out, look further back (up to 4 MB).
 const TAIL_BYTES = [256 * 1024, 1024 * 1024, 4 * 1024 * 1024];
 export const MESSAGES_MAX = 12, MESSAGE_CHARS = 600;
+// Transcripts don't say how big the window is: 200k unless the chat already holds more, then the 1M window.
+export const CONTEXT_WINDOWS = [200_000, 1_000_000];
+
+// Everything the model read for that reply plus what it wrote is what the next turn starts from.
+function contextOf(o) {
+  const u = o.type === 'assistant' && !o.isSidechain && o.message && o.message.usage;
+  if (!u) return null;
+  const used = ['input_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens', 'output_tokens'].reduce((n, k) => n + (Number(u[k]) || 0), 0);
+  if (!used) return null;
+  return { used, max: CONTEXT_WINDOWS.find(w => used <= w) || used };
+}
 
 // Only transcripts in the user's home folder: the path comes from a hook payload.
 function readable(p) {
@@ -38,16 +50,16 @@ function messageOf(o) {
 }
 
 export function parseTranscript(text) {
-  let custom = null, ai = null; const messages = [];
+  let custom = null, ai = null, context = null; const messages = [];
   for (const line of text.split('\n')) {
     if (!line.startsWith('{')) continue;
     let o; try { o = JSON.parse(line); } catch { continue; }   // first line of the tail is usually cut in half
     if (o.type === 'custom-title' && o.customTitle) custom = String(o.customTitle);
     else if (o.type === 'ai-title' && o.aiTitle) ai = String(o.aiTitle);
-    else { const m = messageOf(o); if (m) messages.push(m); }
+    else { const m = messageOf(o); if (m) messages.push(m); context = contextOf(o) || context; }
   }
   const title = (custom || ai || '').replace(/\s+/g, ' ').trim() || null;
-  return { title, messages: messages.slice(-MESSAGES_MAX) };
+  return { title, messages: messages.slice(-MESSAGES_MAX), context };
 }
 
 export function readTranscript(p) {

@@ -14,7 +14,7 @@
   --ground:#E6ECEE; --panel:#FFFFFF; --panel-2:#F3F6F7; --panel-3:#E6ECEF;
   --ink:#15212A; --ink-2:#3E4C54; --muted:#5B6A72; --line:#DCE3E6;
   --accent:#3D63DD; --accent-ink:#FFFFFF; --on-wait:#1B1206;
-  --s-think:#7C6CF2; --s-work:#1597AC; --s-wait:#D5870F; --s-done:#2F9E4F; --s-idle:#7F8D93;
+  --s-think:#7C6CF2; --s-work:#1597AC; --s-wait:#D5870F; --s-done:#2F9E4F; --s-idle:#7F8D93; --s-err:#D9473F;
   --pill-k:60%;   /* badge text: status colour mixed toward ink, for contrast */
   --glass:rgba(255,255,255,.92);
   --e-1:0 1px 2px rgba(21,33,42,.06),0 4px 16px rgba(21,33,42,.10);
@@ -30,7 +30,7 @@
     --ground:#0B1114; --panel:#121A1E; --panel-2:#182227; --panel-3:#222D33;
     --ink:#E2EAED; --ink-2:#B9C6CC; --muted:#8C9DA5; --line:#253238;
     --accent:#7D9BFF; --accent-ink:#0B1114; --on-wait:#1B1206;
-    --s-think:#A194FF; --s-work:#3DCBE0; --s-wait:#F5B342; --s-done:#52C96F; --s-idle:#95A3A9;
+    --s-think:#A194FF; --s-work:#3DCBE0; --s-wait:#F5B342; --s-done:#52C96F; --s-idle:#95A3A9; --s-err:#FF7B72;
     --pill-k:100%; --glass:rgba(18,26,30,.90);
     --e-1:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.32);
     --e-2:0 2px 6px rgba(0,0,0,.4),0 20px 48px rgba(0,0,0,.5);
@@ -42,7 +42,7 @@
   --ground:#0B1114; --panel:#121A1E; --panel-2:#182227; --panel-3:#222D33;
   --ink:#E2EAED; --ink-2:#B9C6CC; --muted:#8C9DA5; --line:#253238;
   --accent:#7D9BFF; --accent-ink:#0B1114; --on-wait:#1B1206;
-  --s-think:#A194FF; --s-work:#3DCBE0; --s-wait:#F5B342; --s-done:#52C96F; --s-idle:#95A3A9;
+  --s-think:#A194FF; --s-work:#3DCBE0; --s-wait:#F5B342; --s-done:#52C96F; --s-idle:#95A3A9; --s-err:#FF7B72;
   --pill-k:100%; --glass:rgba(18,26,30,.90);
   --e-1:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.32);
   --e-2:0 2px 6px rgba(0,0,0,.4),0 20px 48px rgba(0,0,0,.5);
@@ -250,6 +250,13 @@ pre.json{margin:0;padding:12px;background:var(--panel-2);border:1px solid var(--
 .d-head h2{margin:0;font:700 16px/20px var(--font-d);letter-spacing:-.01em}
 .d-head p{margin:0;font:400 12px/16px var(--font-b);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .d-activity{margin:0;font:400 13px/20px var(--font-b);color:var(--ink-2)}
+.d-alert{margin:0;padding:8px 10px;border-radius:var(--r-md);border:1px solid color-mix(in srgb,var(--s-err) 40%,transparent);background:color-mix(in srgb,var(--s-err) 8%,var(--panel));font:400 12px/17px var(--font-b);color:var(--ink)}
+.d-alert b{font-weight:600}
+.d-alert code{font:500 11px/16px var(--font-m);overflow-wrap:anywhere}
+.d-ctx{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:center;font:400 12px/16px var(--font-b);color:var(--muted)}
+.d-ctx .bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.d-ctx .bar i{display:block;height:100%;border-radius:3px;background:var(--c)}
+.d-ctx small{font-size:12px;font-variant-numeric:tabular-nums}
 .perm{border:1px solid color-mix(in srgb,var(--s-wait) 40%,transparent);background:color-mix(in srgb,var(--s-wait) 8%,var(--panel));border-radius:var(--r-md);padding:12px;display:flex;flex-direction:column;gap:8px}
 .perm-head{font-weight:600}
 .perm code{font:500 12px/16px var(--font-m);background:var(--panel-2);border:1px solid var(--line);padding:8px 10px;border-radius:var(--r-sm);overflow-x:auto;white-space:nowrap}
@@ -459,6 +466,8 @@ body.live .speed-top, body.live .demo-only{display:none}
       <button class="icon-btn sm" id="d-close" aria-label="Close agent details"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
     <p class="d-activity" id="d-activity"></p>
+    <div class="d-alert" id="d-alert" hidden></div>
+    <div class="d-ctx" id="d-ctx" hidden title="How much of its context window this chat fills. Near the top, Claude Code compacts it and the details get summarized."><span>Memory</span><span class="bar"><i id="d-ctx-bar"></i></span><small id="d-ctx-text"></small></div>
     <div class="perm" id="d-perm" hidden>
       <div class="perm-head">Wants to run <b id="d-perm-tool"></b></div>
       <code id="d-perm-cmd"></code>
@@ -616,10 +625,10 @@ const SCENES = {
     screenOff:'#252B22', glass:'#D5ECD9', grid:'#8C7A5E' },
 };
 const PLACE = { desk:'Desk', sofa:'Lounge sofa', armchair:'Lounge chair', pouf:'Pouf', stool:'Café counter', hightable:'Hot desk',
-  booth:'Focus booth', meeting:'War room', library:'Library', coffee:'Coffee bar', hoops:'Basketball machine', beanbag:'Beanbag' };
+  booth:'Focus booth', meeting:'War room', library:'Library', coffee:'Coffee bar', hoops:'Basketball machine', beanbag:'Beanbag', arcade:'Arcade' };
 const LOUNGE_WORK = ['sofa','armchair','hightable','stool','booth'];
 Object.assign(PLACE, { roofsofa:'Sofa', roofchair:'Lounge chair', barstool:'Bar', firepit:'Fire pit', lounger:'Sun lounger', rail:'View', dance:'Dance floor' });
-const IDLE_ACTIVITY = { coffee:'Making a flat white', hoops:'Shooting hoops', beanbag:'Lounging on a beanbag', pouf:'Chatting in the lounge', sofa:'Relaxing on the sofa' };
+const IDLE_ACTIVITY = { coffee:'Making a flat white', hoops:'Shooting hoops', arcade:'Playing an arcade game', beanbag:'Lounging on a beanbag', pouf:'Chatting in the lounge', sofa:'Relaxing on the sofa' };
 const PREFS = { anywhere:'Anywhere', desk:'Own desk', lounge:'Lounge first' };
 
 /* ---------- renderer / scene ---------- */
@@ -1930,10 +1939,58 @@ hoopMachine(-12.0, 7.7, M('#2D5DA8', { roughness: .5 }));
 { const rg = box(3.0, .015, 2.8, mats.rug2, -6.7, .008, 7.1, scene, false); rg.castShadow = false;
   [[-7.4, 6.4, mats.beanA], [-6.0, 7.9, mats.beanB]].forEach(([x, z, m]) => { const b = new THREE.Mesh(beanbagGeo(), m); b.position.set(x, .175, z); b.rotation.y = yawOf([-1, 0]); b.castShadow = true; b.receiveShadow = true; scene.add(b); block(x, z, .95, .95, .05);
     spot('beanbag', x - .12, z, [-1, 0], { y: .14, from: 'front' }); });
-  const ac = grp(-3.2, 8.4, Math.PI); box(.8, 1.8, .7, mats.cabinet, 0, .9, 0, ac); box(.66, .5, .02, mats.bezel, 0, 1.35, -.36, ac);
-  const as = new THREE.Mesh(new THREE.PlaneGeometry(.6, .44), new THREE.MeshBasicMaterial({ color:'#6C5CE7' })); as.position.set(0, 1.35, -.372); as.rotation.y = Math.PI; ac.add(as);
-  box(.7, .08, .3, mats.black, 0, 1.02, -.42, ac); block(-3.2, 8.4, .8, .7, .2);
   plantBig(-13.1, -6.7, 1.0); plantBush(-5.0, 8.4, .8);
+}
+// Arcade cabinet: turned a little toward the room so you can watch the screen while an agent on a break plays.
+const ARCADE_FACE = [.8, .6];
+const arcade = (() => {
+  const x = -3.4, z = 7.9, g = grp(x, z, yawOf([-ARCADE_FACE[0], -ARCADE_FACE[1]]));   // local -z is the front
+  box(.8, 1.8, .7, mats.cabinet, 0, .9, 0, g); box(.66, .5, .02, mats.bezel, 0, 1.35, -.36, g);
+  box(.7, .08, .3, mats.black, 0, 1.02, -.42, g);
+  const stick = cyl(.012, .012, .1, mats.black, -.16, 1.11, -.45, g, 6);
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(.035, 10, 8), hoopMats.rim); knob.position.y = .06; stick.add(knob);
+  [.06, .16, .26].forEach((bx, k) => cyl(.028, .028, .02, k === 1 ? hoopMats.ball : hoopMats.rim, bx, 1.07, -.44, g, 12));
+  const tex = canvasTex(160, 120); tex.t.magFilter = THREE.NearestFilter;
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(.6, .44), new THREE.MeshBasicMaterial({ map: tex.t })); screen.position.set(0, 1.35, -.372); screen.rotation.y = Math.PI; g.add(screen);
+  block(x, z, .9, .9, .2);
+  spot('arcade', x + ARCADE_FACE[0] * .85, z + ARCADE_FACE[1] * .85, [-ARCADE_FACE[0], -ARCADE_FACE[1]], { from: null });   // walk straight up: behind it is the window
+  return { tex, stick, t: 0, frameT: 1, player: null, floor: null };
+})();
+// A little maze game: the hero chomps along a row of dots while a ghost gives chase; eat the power dot and the ghost runs.
+// Nobody playing: the attract screen blinks INSERT COIN.
+function drawArcade(m, p, scores) {
+  const x = m.tex.x, W = 160, H = 120, t = m.t;
+  x.fillStyle = '#05060D'; x.fillRect(0, 0, W, H);
+  x.strokeStyle = '#3B4BFF'; x.lineWidth = 3; rrect(x, 6, 34, W - 12, 52, 8); x.stroke(); rrect(x, 14, 42, W - 28, 36, 5); x.stroke();
+  x.font = '700 10px "IBM Plex Mono", monospace'; x.textAlign = 'left';
+  if (!p) {
+    x.fillStyle = '#FFD84A'; x.fillText('HI', 8, 14); x.fillStyle = '#FFFFFF'; x.fillText(String(m.best || 0).padStart(5, '0'), 26, 14);
+    if (Math.floor(t * 1.6) % 2) { x.fillStyle = '#FF5D8F'; x.textAlign = 'center'; x.font = '700 13px "IBM Plex Mono", monospace'; x.fillText('INSERT COIN', W / 2, 106); }
+    x.fillStyle = '#FFD84A'; x.beginPath(); const hx = 20 + ((t * 30) % (W - 40)); x.arc(hx, 60, 7, .5, Math.PI * 2 - .5); x.lineTo(hx, 60); x.fill();
+    x.textAlign = 'left'; m.tex.t.needsUpdate = true; return;
+  }
+  const lap = 4, u = (t % lap) / lap, hx = 18 + u * (W - 36), dots = 9;
+  const power = u > .55, ghostX = power ? hx + 30 - (u - .55) * 40 : hx - 26 - Math.sin(t * 3) * 3;
+  for (let k = 0; k < dots; k++) { const dx = 22 + k * (W - 44) / (dots - 1); if (dx > hx) { x.fillStyle = '#FFE7B8'; x.beginPath(); x.arc(dx, 60, k === 5 ? 4 : 2, 0, 7); x.fill(); } }
+  const mouth = .45 * Math.abs(Math.sin(t * 12));
+  x.fillStyle = '#FFD84A'; x.beginPath(); x.arc(hx, 60, 7, mouth, Math.PI * 2 - mouth); x.lineTo(hx, 60); x.fill();
+  x.fillStyle = power ? (Math.floor(t * 8) % 2 ? '#2B3BFF' : '#FFFFFF') : '#FF4F5E';
+  x.beginPath(); x.arc(ghostX, 58, 7, Math.PI, 0); x.lineTo(ghostX + 7, 66); for (let k = 0; k < 3; k++) x.lineTo(ghostX + 7 - (k + .5) * 14 / 3, k % 2 ? 66 : 63); x.lineTo(ghostX - 7, 66); x.fill();
+  x.fillStyle = '#FFFFFF'; x.fillRect(ghostX - 4, 56, 3, 3); x.fillRect(ghostX + 1, 56, 3, 3);
+  const score = scores.arcade;
+  x.fillStyle = '#FFFFFF'; x.fillText('1UP', 8, 14); x.fillText(String(score).padStart(5, '0'), 8, 26);
+  x.fillStyle = '#FFD84A'; x.textAlign = 'right'; x.fillText(fitText(x, p.name.toUpperCase(), 84), W - 8, 14); x.fillStyle = '#8BE9F5'; x.fillText(`LV ${1 + Math.floor(t / (lap * 3))}`, W - 8, 26);
+  x.textAlign = 'left'; m.tex.t.needsUpdate = true;
+}
+function updateArcade(dt) {
+  const m = arcade, scores = curFloor.arcadeScores || (curFloor.arcadeScores = { arcade: 0 });
+  const fs = curFloor.SPOTS.arcade[0];
+  const p = agents.find(a => a.spot === fs && a.floor === curFloor && !a.path.length && !a.onRoof) || null;
+  if (p !== m.player || m.floor !== curFloor) { if (p && p !== m.player) { scores.arcade = 0; m.t = 0; } m.player = p; m.floor = curFloor; m.frameT = 1; }
+  const prev = m.t; m.t += dt * speed;
+  if (p && Math.floor(m.t * 2) > Math.floor(prev * 2)) { scores.arcade += 10; m.best = Math.max(m.best || 0, scores.arcade); }
+  m.stick.rotation.z = p ? Math.sin(m.t * 7) * .35 : 0; m.stick.rotation.x = p ? Math.cos(m.t * 5) * .2 : 0;
+  m.frameT += dt; if (m.frameT > 1 / 12) { m.frameT = 0; drawArcade(m, p, scores); }   // 12 fps reads as retro and costs little
 }
 function drawScore(m, score, name) {
   const x = m.scoreTex.x; x.fillStyle = '#0B0D0F'; x.fillRect(0, 0, 256, 96);
@@ -2020,6 +2077,7 @@ async function goRoof(a) {
   const s = pickRoof(); if (!s) return false; s.by = a.id;
   setState(a, 'idle', 'Heading up to the roof');
   await walkTo(a, DOOR); a.leaving = true; await wait(.6);
+  if (a.review) { a.leaving = false; s.by = null; return false; }   // a subagent reported back meanwhile: the review walk wins
   roofGroup.add(a.g); a.onRoof = true; a.spot = ROOF_LIFT; a.leaving = false; a.appear = 0;
   a.g.position.set(ROOF_LIFT.x, ROOF_Y, ROOF_LIFT.z); a.yaw = a.yawT = -Math.PI / 2;
   await roofWalkTo(a, s);
@@ -2579,12 +2637,13 @@ function drawFace(a) {
   x.fillStyle = 'rgba(255,255,255,.035)'; for (let y = 0; y < H; y += 4) x.fillRect(0, y, W, 1);
   x.strokeStyle = L.trim; x.lineWidth = 8; rrect(x, 4, 4, W - 8, H - 8, 26); x.stroke();
   let look = { x: 0, y: 0 }, open = 1;
-  const happy = st === 'done';
+  const happy = st === 'done', lost = !!a.stuck && a.busy && st !== 'waiting' && st !== 'error';
   if (st === 'thinking') look = { x: 12, y: -16 };
   if (st === 'working') { open = .55; look = { x: Math.sin(t * 1.6) * 12, y: 4 }; }
   if (st === 'waiting') open = 1.25;
   if (st === 'idle') { open = .32 + .06 * Math.sin(t * .8); look.y = 6; }
   if (st === 'error') { open = .85; look = { x: -4, y: 2 }; }
+  if (lost) { look = { x: -12, y: -8 }; open = .9; }
   if (a.blink > 0 && !happy) open = .08;
   x.fillStyle = col; x.strokeStyle = col; x.lineCap = 'round'; x.lineJoin = 'round';
   [[96, 92], [160, 92]].forEach(([ex, ey], i) => {
@@ -2608,7 +2667,8 @@ function drawFace(a) {
   else if (st === 'waiting') { x.beginPath(); x.ellipse(mx, my, 8, 10, 0, 0, 7); x.stroke(); }
   else if (st === 'thinking') { x.beginPath(); x.moveTo(mx - 6, my); x.lineTo(mx + 10, my - 3); x.stroke(); }
   else if (st === 'idle') { x.beginPath(); x.moveTo(mx - 8, my); x.lineTo(mx + 8, my); x.stroke(); }
-  if (st === 'thinking') { for (let k = 0; k < 3; k++) { x.globalAlpha = (Math.floor(t * 3) % 3) === k ? 1 : .35; x.beginPath(); x.arc(196 + k * 16, 42, 6, 0, 7); x.fill(); } x.globalAlpha = 1; }
+  if (lost) { x.fillStyle = LOST; x.globalAlpha = .75 + .25 * Math.sin(t * 5); x.font = '700 60px "Bricolage Grotesque", sans-serif'; x.textAlign = 'center'; x.fillText('?', 214, 86); x.textAlign = 'left'; x.globalAlpha = 1; x.fillStyle = col; }
+  else if (st === 'thinking') { for (let k = 0; k < 3; k++) { x.globalAlpha = (Math.floor(t * 3) % 3) === k ? 1 : .35; x.beginPath(); x.arc(196 + k * 16, 42, 6, 0, 7); x.fill(); } x.globalAlpha = 1; }
   if (st === 'waiting') { x.globalAlpha = .7 + .3 * Math.sin(t * 8); x.font = '700 64px "Bricolage Grotesque", sans-serif'; x.textAlign = 'center'; x.fillText('!', 214, 88); x.textAlign = 'left'; x.globalAlpha = 1; }
   if (st === 'idle') { x.font = '700 22px "IBM Plex Sans", sans-serif'; ['z', 'Z'].forEach((z, k) => { const u = (t * .35 + k * .5) % 1; x.globalAlpha = Math.sin(u * Math.PI); x.fillText(z, 190 + k * 16 + u * 10, 70 - u * 40); }); x.globalAlpha = 1; }
   if (st === 'error') { x.fillStyle = '#8FD3FF'; x.beginPath(); const sy = 40 + ((t * 30) % 30); x.moveTo(206, sy); x.quadraticCurveTo(216, sy + 16, 206, sy + 20); x.quadraticCurveTo(196, sy + 16, 206, sy); x.fill(); }
@@ -2662,10 +2722,16 @@ function drawLabel(a) {
   x.fillStyle = sceneT.dark ? 'rgba(18,26,30,.9)' : 'rgba(255,255,255,.94)'; rrect(x, 6, 10, 500, 108, 30); x.fill();
   x.strokeStyle = sceneT.dark ? '#253238' : '#DCE3E6'; x.lineWidth = 3; x.stroke();
   x.fillStyle = STATUS[a.state].hex; x.beginPath(); x.arc(46, 64, 15, 0, 7); x.fill();
+  const cup = a.kind === 'main' && a.context, tw = cup ? 352 : 410;
   x.fillStyle = sceneT.dark ? '#E2EAED' : '#15212A'; x.font = '700 38px "Bricolage Grotesque", sans-serif';
-  x.fillText(fitText(x, a.name, 410), 76, 58);
+  x.fillText(fitText(x, a.name, tw), 76, 58);
   x.fillStyle = sceneT.dark ? '#8C9DA5' : '#5B6A72'; x.font = '400 27px "IBM Plex Sans", sans-serif';
-  x.fillText(fitText(x, a.activity, 410), 76, 96);
+  x.fillText(fitText(x, a.activity, tw), 76, 96);
+  // Memory as a coffee cup: full when the chat is fresh, draining as the context window fills.
+  if (cup) { const left = 1 - ctxShare(a.context), X = 440, Y = 30, Wc = 40, Hc = 66, ink = sceneT.dark ? '#8C9DA5' : '#5B6A72';
+    x.save(); rrect(x, X, Y, Wc, Hc, 8); x.clip(); x.fillStyle = ctxColor(a.context); x.fillRect(X, Y + Hc * (1 - left), Wc, Hc * left); x.restore();
+    x.strokeStyle = ink; x.lineWidth = 4; rrect(x, X, Y, Wc, Hc, 8); x.stroke();
+    x.beginPath(); x.arc(X + Wc + 2, Y + Hc * .45, 12, -Math.PI / 2, Math.PI / 2); x.stroke(); }
   a.L.t.needsUpdate = true; a.labelDirty = false;
 }
 const stateColor = a => a.state === 'idle' ? sceneT.screenOff : STATUS[a.state].hex;
@@ -2735,9 +2801,9 @@ function chooseWorkspot(a) {
   if (a.pref === 'lounge') return away() || a.home;
   return Math.random() < .5 ? a.home : (away() || a.home);
 }
-const IDLE_WEIGHT = { hoops: 4 };                                  // hoops is the fun one: pick it more often
+const IDLE_WEIGHT = { hoops: 4, arcade: 3 };                       // the games are the fun ones: pick them more often
 function chooseIdle(fl) {
-  const f = freeSpots(['coffee','hoops','beanbag','pouf','sofa'], fl); if (!f.length) return null;
+  const f = freeSpots(['coffee','hoops','arcade','beanbag','pouf','sofa'], fl); if (!f.length) return null;
   let r = Math.random() * f.reduce((n, s) => n + (IDLE_WEIGHT[s.type] || 1), 0);
   return f.find(s => (r -= IDLE_WEIGHT[s.type] || 1) < 0) || f[f.length - 1];
 }
@@ -2818,7 +2884,7 @@ async function mainLoop(a) {
     if (Math.random() < .45 && await goRoof(a)) { await Promise.race([wait(rand(14, 26)), new Promise(r => a.wake = r)]); a.wake = null; continue; }
     const idle = chooseIdle(a.floor);
     if (idle) { setState(a, 'done', `Heading to the ${PLACE[idle.type].toLowerCase()}`); await walkTo(a, idle);
-      a.pose = idle.type === 'hoops' ? 'shoot' : 'idle'; setState(a, 'idle', IDLE_ACTIVITY[idle.type]); }
+      a.pose = poseFor(a); setState(a, 'idle', IDLE_ACTIVITY[idle.type]); }
     else setState(a, 'idle', 'Waiting for the next prompt');
     await Promise.race([wait(rand(8, 14)), new Promise(r => a.wake = r)]); a.wake = null;
   }
@@ -2900,6 +2966,8 @@ function updateAgent(a, dt, sdt) {
       bob = Math.abs(Math.sin(b)) * .16; l = r = -2.9 + Math.sin(b) * .18; rz = Math.sin(b) * .2; tilt = -.15; break; }
     case 'dance': { const b = partyBeat() * Math.PI;             // on the beat with the DJ: bounce, arms up
       bob = Math.abs(Math.sin(b)) * .09; l = -2.5 + Math.sin(b) * .5; r = -2.5 - Math.sin(b) * .5; rz = Math.sin(b / 2) * .4; tilt = Math.sin(b) * .08; break; }
+    case 'arcade': l = -1.05 + Math.abs(Math.sin(t * 13)) * .14; r = -1.0; rz = Math.sin(t * 7) * .22; tilt = .1 + Math.sin(t * 1.3) * .04;   // stick in one hand, buttons with the other
+      bob = Math.sin(t * 2.4) * .012; break;
     case 'play': r = -1.2 + Math.sin(t * 5.5) * .7; rz = Math.sin(t * 5.5) * .5; l = -.3; bob = Math.abs(Math.sin(t * 5.5)) * .04; break;
     default: bob = Math.sin(t * 2) * .015; l = r = -.06;
   }
@@ -2935,8 +3003,10 @@ function updateAgent(a, dt, sdt) {
   a.carry.visible = carrying;
   a.laptop.visible = !moving && a.busy && !!a.spot && !!a.spot.laptop && pose !== 'raise' && pose !== 'read';
   a.ring.material.color.set(STATUS[a.state].hex);
-  const waiting = a.state === 'waiting';
-  a.beacon.visible = waiting;
+  const waiting = a.state === 'waiting', lost = !waiting && !!a.stuck && a.busy;
+  a.beacon.visible = waiting || lost;
+  a.beacon.material.color.set(waiting ? STATUS.waiting.hex : LOST);
+  if (lost) { a.beacon.rotation.y += dt * 2.5; a.beacon.position.y = a.beaconY + Math.sin(performance.now() / 300) * .05; }
   if (waiting) { const p = performance.now(); a.beacon.rotation.y += dt * 2.5; a.beacon.scale.setScalar(1 + Math.sin(p / 180) * .18); a.beacon.position.y = a.beaconY + Math.sin(p / 300) * .05;
     const flash = Math.sin(p / 200) > 0 ? STATUS.waiting.hex : sceneT.screenOff; a.lapScreen.color.set(flash);
     if (a.spot && a.spot.screen && !a.gone && a.floor === curFloor) a.spot.screen.color.set(flash); }
@@ -3074,7 +3144,8 @@ rosterEl.addEventListener('pointerdown', rosterPick); rosterEl.addEventListener(
 const OPEN_ICON = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M6 3h7v7M13 3 5.5 10.5M11 13H3V5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 function row(a) {
   const sub = a.kind === 'sub';
-  const act = (a.where ? a.where + ' · ' : '') + a.activity + (a.pending.length ? ` · ${a.pending.length} queued` : '');
+  const cl = clashesOf(a)[0], flag = a.stuck && a.busy ? '↻ Going in circles · ' : cl ? `⚠ Same file as ${(cl.a === a ? cl.b : cl.a).name} · ` : '';
+  const act = flag + (a.where ? a.where + ' · ' : '') + a.activity + (a.pending.length ? ` · ${a.pending.length} queued` : '');
   // The group header already names the project; a subagent's type is only worth showing when it isn't its name.
   const meta = sub ? (a.subType && a.subType !== a.name ? esc(a.subType) : '') : a.live ? `<span class="entry">${whereFrom(a)}</span>` : '';
   return `<button class="agent-row${sub ? ' sub' : ''}${a === selected ? ' sel' : ''}" data-id="${a.id}">
@@ -3130,6 +3201,12 @@ function renderDetail() {
   const pill = $('#d-pill'); pill.className = 'pill s-' + a.state; pill.textContent = STATUS[a.state].label;
   $('#d-activity').textContent = a.activity + (a.pending.length ? ` (${a.pending.length} task${a.pending.length > 1 ? 's' : ''} queued)` : '');
   const perm = $('#d-perm'); perm.hidden = !a.approval; $('#d-activity').hidden = !!a.approval;
+  const alerts = clashesOf(a).map(c => `<div>⚠ <b>${esc((c.a === a ? c.b : c.a).name)}</b> is also editing <code>${esc(c.file)}</code>. One may overwrite the other's work.</div>`);
+  if (a.stuck && a.busy) alerts.unshift(`<div>↻ <b>Going in circles:</b> <code>${esc(a.stuck.label)}</code> failed ${a.stuck.n} times without once working. It may need a hint from you.</div>`);
+  const al = $('#d-alert'); al.hidden = !alerts.length; al.innerHTML = alerts.join('');
+  const ctx = a.kind === 'main' && a.context, cx = $('#d-ctx'); cx.hidden = !ctx;
+  if (ctx) { const k = ctxShare(ctx); cx.style.setProperty('--c', ctxColor(ctx)); $('#d-ctx-bar').style.width = `${Math.round(k * 100)}%`;
+    $('#d-ctx-text').textContent = `${kTok(ctx.used)} of ${kTok(ctx.max)} · ${Math.round(k * 100)}%`; }
   if (a.approval) { $('#d-perm-tool').textContent = a.approval.tool; $('#d-perm-cmd').textContent = a.approval.cmd || a.approval.tool; }
   $('#d-defer').hidden = !(a.approval && a.approval.live);
   renderChat(a);
@@ -3410,9 +3487,11 @@ function setModeLine() {
 
 function poseFor(a) {
   if (a.state === 'waiting') return 'raise';
+  if (a.stuck && a.busy) return 'raise';                 // going in circles: hand up so you look
   if (a.state === 'thinking') return 'think';
   if (a.state === 'working') return a.spot && a.spot.type === 'library' ? 'read' : 'type';
   if (a.spot && a.spot.type === 'hoops') return 'shoot';
+  if (a.spot && a.spot.type === 'arcade') return 'arcade';
   if (canDance(a)) return 'dance';
   return 'idle';
 }
@@ -3427,7 +3506,7 @@ function applyStatus(a, state, activity) {
   if (state === 'done' || state === 'idle') a.idleSince = a.idleSince || performance.now(); else { a.idleSince = 0; a.nextRoam = 0; }
 }
 // Go to a spot, but stay put for a minimum time unless it's urgent.
-const BREAK_SPOTS = new Set(['hoops', 'beanbag', 'pouf', 'coffee']);
+const BREAK_SPOTS = new Set(['hoops', 'arcade', 'beanbag', 'pouf', 'coffee']);
 function onBreak(a) {
   if (a.onRoof) return true;
   const s = a.dest || a.spot;
@@ -3459,6 +3538,79 @@ function spotForTool(a, tool, session) {
   a.streak = 0;
   if (WEB_TOOLS.has(tool)) return spotOfType(a, ['sofa', 'armchair']) || workSpot(a);
   return workSpot(a);
+}
+
+/* ---------- watchdogs: two agents on one file, an agent going in circles, a filling memory ---------- */
+const CLASH_MS = 5 * 60 * 1000;                 // two agents edited the same file within this long: they may undo each other's work
+const STUCK_AFTER = 3;                          // the same call failed this many times without once working: going in circles
+const CTX_WARN = .8;                            // memory this full: warn once that Claude Code will compact it soon
+const edits = new Map();                        // file → Map(agent → when it last edited it)
+const clashes = [];                             // { a, b, file, at, mesh }
+const LOST = '#E5534B';
+const clashMat = new THREE.MeshBasicMaterial({ color: LOST, transparent: true, opacity: .8, depthWrite: false });
+const clashGeo = new THREE.CylinderGeometry(.03, .03, 1, 6).rotateX(Math.PI / 2);   // along z, so lookAt points it
+const fileKey = (a, file) => file.startsWith('/') ? file : `${(a.parent || a).cwd || ''}/${file}`;
+const clashesOf = a => clashes.filter(c => c.a === a || c.b === a);
+const gone = a => a.gone || a.leaving || a.exiting;
+function noteEdit(who, file, replay) {
+  if (!file) return;
+  const key = fileKey(who, file), now = Date.now(), m = edits.get(key) || new Map();
+  edits.set(key, m);
+  for (const [o, t] of m) if (gone(o) || now - t > CLASH_MS) m.delete(o);
+  m.set(who, now);
+  for (const o of m.keys()) if (o !== who) addClash(who, o, file, now, replay);
+}
+function addClash(a, b, file, now, replay) {
+  const c = clashes.find(c => c.file === file && (c.a === a && c.b === b || c.a === b && c.b === a));
+  if (c) { c.at = now; return; }
+  const mesh = new THREE.Mesh(clashGeo, clashMat); mesh.visible = false; scene.add(mesh);
+  clashes.push({ a, b, file, at: now, mesh }); uiDirty = true; detailDirty = true;
+  for (const x of [a, b]) emit(x, 'SameFile', `${file} · also edited by ${(x === a ? b : a).name}`);
+  if (replay) return;
+  toast(`${a.name} and ${b.name} are both editing ${file}. They may overwrite each other.`, 'Show me', () => select(a, true), a, 'waiting');
+  chime('needs', a.parent || a); nudgeTitle(`⚠ ${a.name} and ${b.name} share a file`);
+}
+// A red bar between the two agents while they share a file; it goes once the overlap is CLASH_MS old or one leaves.
+function updateClashes() {
+  const now = Date.now();
+  for (let i = clashes.length - 1; i >= 0; i--) {
+    const c = clashes[i];
+    if (gone(c.a) || gone(c.b) || now - c.at > CLASH_MS) { scene.remove(c.mesh); clashes.splice(i, 1); uiDirty = true; detailDirty = true; continue; }
+    const pa = c.a.g.position, pb = c.b.g.position, show = c.a.g.visible && c.b.g.visible && !c.a.onRoof && !c.b.onRoof;
+    c.mesh.visible = show; if (!show) continue;
+    const len = Math.hypot(pb.x - pa.x, pb.z - pa.z); c.mesh.visible = len > .3;
+    c.mesh.position.set((pa.x + pb.x) / 2, 1.75, (pa.z + pb.z) / 2); c.mesh.lookAt(pb.x, 1.75, pb.z); c.mesh.scale.set(1, 1, len);
+  }
+  clashMat.opacity = .55 + .3 * Math.sin(performance.now() / 260);
+}
+// The same tool call failing again and again (a test that keeps failing, a build that won't pass) means the agent may be stuck.
+// Counts reset when that call works, on a new prompt, and when the agent finishes.
+function noteResult(who, e, replay) {
+  const key = `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}`, fails = who.fails || (who.fails = new Map());
+  if (!e.failed) { fails.delete(key); if (who.stuck && who.stuck.key === key) setStuck(who, null); return; }
+  const n = (fails.get(key) || 0) + 1; fails.set(key, n);
+  if (n >= STUCK_AFTER) setStuck(who, { key, n, label: e.tool === 'Bash' && e.summary || key }, replay);
+}
+function setStuck(a, v, replay) {
+  const was = a.stuck; a.stuck = v; a.pose = poseFor(a); a.labelDirty = true; uiDirty = true; detailDirty = true;
+  if (!v || replay || (was && was.key === v.key)) return;
+  emit(a, 'GoingInCircles', `${v.label} failed ${v.n} times`);
+  toast(`${a.name} may be going in circles: ${v.label} failed ${v.n} times in a row`, 'Show me', () => select(a, true), a, 'waiting');
+  chime('needs', a.parent || a); nudgeTitle(`↻ ${a.name} is going in circles`);
+}
+function unstick(a) { if (a.fails) a.fails.clear(); if (a.stuck) setStuck(a, null); }
+const ctxShare = c => c && c.max ? clamp(c.used / c.max, 0, 1) : 0;
+const ctxColor = c => { const k = ctxShare(c); return k >= CTX_WARN ? LOST : k >= .5 ? STATUS.waiting.hex : STATUS.done.hex; };
+const kTok = n => n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : `${Math.round(n / 1000)}k`;
+function setContext(a, c, replay) {
+  if (!c || (a.context && a.context.used === c.used && a.context.max === c.max)) return;
+  const before = ctxShare(a.context); a.context = c; a.labelDirty = true; if (a === selected) detailDirty = true;
+  const k = ctxShare(c);
+  if (k < .5) a.ctxWarned = false;
+  if (k >= CTX_WARN && before < CTX_WARN && !a.ctxWarned && !replay) {
+    a.ctxWarned = true;
+    toast(`${a.name}'s memory is ${Math.round(k * 100)}% full. Claude Code will compact it soon and details get summarized.`, 'Show me', () => select(a, true), a, 'waiting');
+  }
 }
 
 function liveMain(s, instant) {
@@ -3579,6 +3731,8 @@ async function reviewSubs(a) {
   }
   a.review = null;
   if (a.exiting) return;
+  // It had already finished (a background subagent reported back later): finished again, not stuck "Reviewing".
+  if (a.reported && (a.reported[0] === 'done' || a.reported[0] === 'idle')) applyStatus(a, ...a.reported);
   const next = a.afterReview || workSpot(a); a.afterReview = null;
   place(a, next, true);
 }
@@ -3608,8 +3762,9 @@ function onLiveEvent(e, replay) {
   if (s.chat) a.hostChat = s.chat;
   retitle(a, s.title);
   if (s.messages) { a.messages = s.messages; if (a === selected) detailDirty = true; }
+  setContext(a, s.context, replay);
   if ('merged' in s) a.merged = !!s.merged;
-  a.permissionMode = s.permissionMode;
+  a.permissionMode = s.permissionMode; a.reported = [s.status, s.activity];
   const who = e.agentId ? liveSub(a, e.agentId, e.agentType, replay, e.agentTask) : a;
   const label = `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}`;
   const agentResult = e.type.startsWith('PostToolUse') && (e.tool === 'Task' || e.tool === 'Agent');
@@ -3621,7 +3776,7 @@ function onLiveEvent(e, replay) {
       if (e.message) emit(a, 'SessionFound', `${e.message} · ${whereFrom(a)} · ${a.cwd}`, e.at);
       applyStatus(a, s.status, s.activity); break;
     case 'UserPromptSubmit':
-      emit(a, 'UserPromptSubmit', `"${e.prompt || ''}"`, e.at); seeAgent(a);
+      emit(a, 'UserPromptSubmit', `"${e.prompt || ''}"`, e.at); seeAgent(a); unstick(a);
       a.ws = chooseWorkspot(a); a.streak = 0;
       applyStatus(a, 'thinking', e.prompt || 'New prompt');
       place(a, s.permissionMode === 'plan' ? (spotOfType(a, ['meeting']) || a.ws) : a.ws, true);
@@ -3633,10 +3788,12 @@ function onLiveEvent(e, replay) {
       place(who, who === a ? spotForTool(a, e.tool, s) : (READ_TOOLS.has(e.tool) && Math.random() < .6 ? spotOfType(who, ['library']) : null) || who.ws);
       if (e.tool === 'Bash' && !replay) termPush(who, '$ ' + e.summary, '#F3F7F8');
       if (EDIT_TOOLS.has(e.tool) && !replay) boardPush(who, e.summary);
+      if (EDIT_TOOLS.has(e.tool)) noteEdit(who, e.summary, replay);
       break;
     case 'PostToolUse': case 'PostToolUseFailure':
       if (e.failed) emit(who, 'PostToolUseFailure', label, e.at);
       if (e.tool === 'Bash' && !replay) termPush(who, e.failed ? '✗ failed' : '✓ done', e.failed ? '#FF7B72' : '#6FD69A');
+      noteResult(who, e, replay);
       if (who.state !== 'waiting') applyStatus(who, 'thinking', e.failed ? `${e.tool} failed, rethinking` : who.review && !who.reviewDone ? reviewLabel(who.review) : 'Thinking');
       if (e.merged) { emit(who, 'Merged', label, e.at); if (!replay) { celebrate(who); chime('merged', a); } }
       break;
@@ -3649,7 +3806,7 @@ function onLiveEvent(e, replay) {
         if (!replay) { toast(`${a.name} needs your permission in the ${whereFrom(a).toLowerCase()}`, 'Show me', () => select(who, true), who, 'waiting'); chime('needs', a); nudgeTitle(`✋ ${a.name} needs you`); }
       } else if (e.notificationType === 'idle_prompt') applyStatus(a, 'idle', 'Waiting for your input');
       break; }
-    case 'Stop': emit(a, 'Stop', 'Finished responding', e.at); applyStatus(a, 'done', a.merged ? 'Finished · merged' : 'Finished');
+    case 'Stop': emit(a, 'Stop', 'Finished responding', e.at); unstick(a); applyStatus(a, 'done', a.merged ? 'Finished · merged' : 'Finished');
       if (!replay) { chime('done', a); nudgeTitle(`✓ ${a.name} is done`); if (a.floor !== curFloor || viewMode !== 'floor') { unseenOf(a.floor).add(a.id); uiDirty = true; } }
       if (!replay) toast(`${a.name} finished in ~/${a.project.key}`, hostName(a) ? [[opensChat(a) ? 'Open chat' : `Open in ${hostName(a)}`, () => openHost(a), true], ['Show me', () => select(a, true)]] : 'Show me', () => select(a, true), a, 'done');
       break;
@@ -3675,8 +3832,12 @@ function onSnapshot(msg) {
     retitle(a, s.title);
     a.merged = !!s.merged;
     if (s.messages) a.messages = s.messages;
-    applyStatus(a, s.status, s.activity);
+    setContext(a, s.context, true);
+    applyStatus(a, s.status, s.activity); a.reported = [s.status, s.activity];
     for (const sub of s.subagents || []) { const x = liveSub(a, sub.id, sub.type, true, sub.task); applyStatus(x, sub.status, sub.activity); }
+    // Finished while the page was disconnected (the Mac slept, the app restarted): its SubagentStop never reached us.
+    const still = new Set((s.subagents || []).map(x => x.id));
+    for (const [id, sub] of a.subs) if (!still.has(id) && !sub.awaitingReview) leaveOffice(sub, `Reported back to ${a.name}`);
   }
   for (const e of msg.recent || []) {                       // refill the feed without replaying movement
     const a = live.byId.get(e.sessionId); if (!a) continue;
@@ -3944,7 +4105,7 @@ function step(dt) {
   yOff += (yOffTarget - yOff) * (reduced ? 1 : 1 - Math.exp(-dt * 5)); building.position.y = city.position.y = yOff;
   floorGlow();
   for (const a of agents.slice()) updateAgent(a, dt, sdt);
-  updateHoops(dt); updateParty(dt);
+  updateHoops(dt); updateArcade(dt); updateParty(dt); updateClashes();
   { let want = 0; for (const a of agents) if (a.floor === curFloor && !a.onRoof && Math.hypot(a.g.position.x - 12.6, a.g.position.z + 1.8) < 1.9) want = 1;
     lift.open += (want - lift.open) * (1 - Math.exp(-dt * 6));
     lift.l.position.z = -1.8 - .275 - lift.open * .5; lift.r.position.z = -1.8 + .275 + lift.open * .5;

@@ -7,7 +7,7 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::discover::{Found, FOUND_WINDOW_MS};
-use crate::transcript::{read_transcript, Message, Transcript, MESSAGE_CHARS};
+use crate::transcript::{read_transcript, Context, Message, Transcript, MESSAGE_CHARS};
 
 const STALE_MS: u64 = 6 * 60 * 60 * 1000; // forget sessions that went silent (crashed without SessionEnd)
 const RECENT_MAX: usize = 200;
@@ -176,6 +176,8 @@ pub struct Session {
     pub merged: bool,
     /// The chat's last few messages (see transcript.rs).
     pub messages: Vec<Message>,
+    /// How full the context window is (see transcript.rs).
+    pub context: Option<Context>,
     #[serde(skip)]
     pub transcript_title: Option<String>,
     #[serde(skip)]
@@ -334,7 +336,7 @@ impl Store {
                 self.sessions.push(Session {
                     id: f.id, agent: f.agent, cwd: f.cwd, project, entrypoint: entrypoint_label(f.entrypoint.as_deref()), started_at: f.at, last_event_at: f.at,
                     status: f.status, activity: f.activity, permission_mode: "default".into(), subagents: vec![], tool: None,
-                    app: None, term: None, tty: None, chat: None, title: f.title.clone(), merged: false, messages: f.messages,
+                    app: None, term: None, tty: None, chat: None, title: f.title.clone(), merged: false, messages: f.messages, context: None,
                     transcript_title: f.title, first_prompt: None, transcript_checked_at: 0, pending_tasks: vec![], from_log: true,
                 });
                 (self.sessions.len() - 1, true)
@@ -389,7 +391,7 @@ impl Store {
                     status: "idle".into(), activity: "Session started".into(),
                     permission_mode: if pm.is_empty() { "default".into() } else { pm.into() }, subagents: vec![], tool: None,
                     app: None, term: None, tty: None, chat: None,
-                    title: None, merged: false, messages: vec![], transcript_title: None, first_prompt: None, transcript_checked_at: 0, pending_tasks: vec![],
+                    title: None, merged: false, messages: vec![], context: None, transcript_title: None, first_prompt: None, transcript_checked_at: 0, pending_tasks: vec![],
                     from_log: false,
                 });
                 self.sessions.len() - 1
@@ -432,6 +434,7 @@ impl Store {
                 if let Some(t) = read(tp) {
                     if t.title.is_some() { s.transcript_title = t.title; }
                     if !t.messages.is_empty() && kind != "UserPromptSubmit" { s.messages = t.messages; }
+                    if t.context.is_some() { s.context = t.context; }
                 }
             }
             s.title = s.transcript_title.clone().or_else(|| s.first_prompt.clone());
@@ -570,6 +573,7 @@ impl Store {
         e.insert("session".into(), json!({
             "id": s.id, "agent": s.agent, "cwd": s.cwd, "project": s.project, "title": s.title, "merged": s.merged, "entrypoint": s.entrypoint,
             "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": s.app, "term": s.term, "chat": s.chat,
+            "context": s.context,
         }));
         if chat_changed {
             if let Some(Value::Object(o)) = e.get_mut("session") { o.insert("messages".into(), json!(s.messages)); }
@@ -720,7 +724,7 @@ mod tests {
     #[test]
     fn names_a_session_after_its_chat_title_or_first_prompt() {
         fn untitled(_: &str) -> Option<Transcript> { None }
-        fn titled(_: &str) -> Option<Transcript> { Some(Transcript { title: Some("Fix cart total rounding".into()), messages: vec![] }) }
+        fn titled(_: &str) -> Option<Transcript> { Some(Transcript { title: Some("Fix cart total rounding".into()), messages: vec![], context: None }) }
         let mut st = Store::default();
         st.read = Some(untitled);
         let tp = "/Users/me/.claude/projects/shop/s1.jsonl";
@@ -794,7 +798,7 @@ mod tests {
 
     #[test]
     fn sends_the_chat_only_when_it_changes_and_shows_a_new_prompt_right_away() {
-        fn hi(_: &str) -> Option<Transcript> { Some(Transcript { title: None, messages: vec![Message { role: "assistant".into(), text: "Hi".into() }] }) }
+        fn hi(_: &str) -> Option<Transcript> { Some(Transcript { title: None, messages: vec![Message { role: "assistant".into(), text: "Hi".into() }], context: None }) }
         let mut st = Store::default();
         st.read = Some(hi);
         let tp = json!({ "transcript_path": "/Users/me/.claude/projects/shop/s1.jsonl" });

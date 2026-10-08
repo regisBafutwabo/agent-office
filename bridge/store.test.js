@@ -200,6 +200,17 @@ test('keeps the chat: prompts and text replies, not tools, thinking, subagents o
   assert.deepEqual(parseTranscript(text).messages, [{ role: 'user', text: 'fix the cart' }, { role: 'assistant', text: 'Fixed it.\n\n- rounding' }]);
 });
 
+test('reads how full the context window is from the last main-chain reply', async () => {
+  const { parseTranscript } = await import('./transcript.js');
+  const L = o => JSON.stringify(o), usage = (n, extra = {}) => ({ type: 'assistant', ...extra, message: { content: [], usage: { input_tokens: 2, cache_read_input_tokens: n, output_tokens: 8 } } });
+  assert.equal(parseTranscript(L({ type: 'user', message: { content: 'hi' } })).context, null);
+  assert.deepEqual(parseTranscript([L(usage(40_000)), L(usage(90_000)), L(usage(5, { isSidechain: true }))].join('\n')).context, { used: 90_010, max: 200_000 });
+  assert.deepEqual(parseTranscript(L(usage(300_000))).context, { used: 300_010, max: 1_000_000 });   // past 200k: the chat has the 1M window
+  const st = new Store(() => ({ title: null, messages: [], context: { used: 50, max: 200_000 } }));
+  const e = st.ingest({ ...base, transcript_path: '/Users/me/.claude/projects/shop/s1.jsonl', hook_event_name: 'Stop' });
+  assert.deepEqual(e.session.context, { used: 50, max: 200_000 });
+});
+
 test('sends the chat only when it changes, and shows a new prompt right away', () => {
   let messages = [{ role: 'assistant', text: 'Hi' }];
   const st = new Store(() => ({ title: null, messages }));

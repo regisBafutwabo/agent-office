@@ -3,6 +3,7 @@
 //   Title: the latest "custom-title" wins, else the latest "ai-title"; both repeat as the chat goes on.
 //   Messages: your prompts and Claude's text replies. Tool calls, tool results, thinking and subagent
 //   (sidechain) turns are left out; the live feed already shows tool calls.
+//   Context: how much of the context window the chat fills, from the last main-chain reply's token usage.
 use serde::Serialize;
 use serde_json::Value;
 use std::fs::File;
@@ -13,6 +14,8 @@ use std::path::{Component, Path};
 const TAIL_BYTES: [u64; 3] = [256 * 1024, 1024 * 1024, 4 * 1024 * 1024];
 pub const MESSAGES_MAX: usize = 12;
 pub const MESSAGE_CHARS: usize = 600;
+/// Transcripts don't say how big the window is: 200k unless the chat already holds more, then the 1M window.
+pub const CONTEXT_WINDOWS: [u64; 2] = [200_000, 1_000_000];
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub struct Message {
@@ -20,10 +23,26 @@ pub struct Message {
     pub text: String,
 }
 
+#[derive(Serialize, Clone, Copy, Debug, PartialEq)]
+pub struct Context {
+    pub used: u64,
+    pub max: u64,
+}
+
 #[derive(Default, Debug)]
 pub struct Transcript {
     pub title: Option<String>,
     pub messages: Vec<Message>,
+    pub context: Option<Context>,
+}
+
+/// Everything the model read for that reply plus what it wrote is what the next turn starts from.
+fn context_of(o: &Value) -> Option<Context> {
+    if o["type"] != "assistant" || o["isSidechain"] == true { return None; }
+    let u = &o["message"]["usage"];
+    let used: u64 = ["input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens"].iter().filter_map(|k| u[*k].as_u64()).sum();
+    if used == 0 { return None; }
+    Some(Context { used, max: CONTEXT_WINDOWS.into_iter().find(|w| used <= *w).unwrap_or(used) })
 }
 
 /// Keeps line breaks (replies are often lists), trims runs of blank lines, cuts long messages.
@@ -71,7 +90,7 @@ fn message_of(o: &Value) -> Option<Message> {
 }
 
 pub fn parse_transcript(text: &str) -> Transcript {
-    let (mut custom, mut ai, mut messages) = (None::<String>, None::<String>, Vec::new());
+    let (mut custom, mut ai, mut messages, mut context) = (None::<String>, None::<String>, Vec::new(), None);
     for line in text.lines() {
         if !line.starts_with('{') {
             continue;
@@ -81,12 +100,15 @@ pub fn parse_transcript(text: &str) -> Transcript {
         match o["type"].as_str() {
             Some("custom-title") if s("customTitle").is_some() => custom = s("customTitle"),
             Some("ai-title") if s("aiTitle").is_some() => ai = s("aiTitle"),
-            _ => { if let Some(m) = message_of(&o) { messages.push(m); } }
+            _ => {
+                if let Some(m) = message_of(&o) { messages.push(m); }
+                context = context_of(&o).or(context);
+            }
         }
     }
     let title = custom.or(ai).map(|t| t.split_whitespace().collect::<Vec<_>>().join(" ")).filter(|t| !t.is_empty());
     let skip = messages.len().saturating_sub(MESSAGES_MAX);
-    Transcript { title, messages: messages.split_off(skip) }
+    Transcript { title, messages: messages.split_off(skip), context }
 }
 
 /// Only transcripts in the user's home folder: the path comes from a hook payload.
@@ -148,6 +170,15 @@ mod tests {
             Message { role: "user".into(), text: "fix the cart".into() },
             Message { role: "assistant".into(), text: "Fixed it.\n\n- rounding".into() },
         ]);
+    }
+
+    #[test]
+    fn reads_how_full_the_context_window_is_from_the_last_main_chain_reply() {
+        let usage = |n: u64, side: bool| json!({ "type": "assistant", "isSidechain": side, "message": { "content": [], "usage": { "input_tokens": 2, "cache_read_input_tokens": n, "output_tokens": 8 } } }).to_string();
+        assert_eq!(parse_transcript(r#"{"type":"user","message":{"content":"hi"}}"#).context, None);
+        let text = [usage(40_000, false), usage(90_000, false), usage(5, true)].join("\n");
+        assert_eq!(parse_transcript(&text).context, Some(Context { used: 90_010, max: 200_000 }));
+        assert_eq!(parse_transcript(&usage(300_000, false)).context, Some(Context { used: 300_010, max: 1_000_000 }));
     }
 
     #[test]

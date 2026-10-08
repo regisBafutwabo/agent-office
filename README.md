@@ -78,7 +78,7 @@ web/index.html    ── the 3D office (Three.js)
 
 - The plugin's hook script posts each event to `http://127.0.0.1:4747/hook`. It gives up after one second and never blocks or changes what Claude Code does.
 - The bridge only listens on `127.0.0.1`, so nothing leaves your machine. Prompts and file names are shown in the office, so treat it like your terminal.
-- Where agents go is decided by placement rules in `web/index.html` (search for "Placement rules"): three or more file reads in a row send an agent to the library, web research goes to the lounge, plan mode goes to the war room, and finished agents take a break after 45 seconds and then drift between the lounge, coffee bar, ping-pong and the rooftop. Agents look around, stretch and sip coffee while they work.
+- Where agents go is decided by placement rules in `web/index.html` (search for "Placement rules"): three or more file reads in a row send an agent to the library, web research goes to the lounge, plan mode goes to the war room, and finished agents take a break after 45 seconds and then drift between the lounge, coffee bar, basketball machines, the arcade and the rooftop. Agents look around, stretch and sip coffee while they work.
 
 ## Characters
 
@@ -119,6 +119,16 @@ The desktop app asks once for permission to control Terminal or iTerm. It only e
 ## App logos
 
 Floors and agents show the logo of the tool they come from (Claude, Codex, Cursor…) in the Floors list, the agent list and on the floor signs. The logos are the real icons of the apps installed on your Mac, read from macOS by the local office, so no artwork ships with this repo. Tools without an installed app, and the claude.ai preview, show a lettered badge.
+
+## Heads-ups
+
+The office points out three things you'd want to know about before they bite:
+
+- **Same file:** two agents edited the same file within 5 minutes. A red bar joins them, and both cards say who else is editing it, since one may overwrite the other's work.
+- **Going in circles:** the same tool call (say, `npm test`) failed 3 times without once working. The agent raises its hand with a red marker and a "?" on its face. A new prompt, a passing run or finishing clears it.
+- **Memory:** a cup on each Claude Code agent's name tag drains as its chat fills the context window, and the card shows the token count. At 80% you get a heads-up that Claude Code will compact it soon. Transcripts don't say how big the window is, so the office assumes 200k until a chat holds more, then 1M.
+
+The first two live in the open office page: reloading it forgets them, and they don't count toward the menu-bar badge.
 
 ## Approving from the office
 
