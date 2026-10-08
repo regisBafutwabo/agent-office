@@ -106,7 +106,7 @@ export class Store {
     if (p.transcript_path && due) {
       this.transcriptChecks.set(s.id, now);
       const t = this.read(p.transcript_path);
-      if (t) { if (t.title) s.transcriptTitle = t.title; if (t.messages.length && type !== 'UserPromptSubmit') s.messages = t.messages; }
+      if (t) { if (t.title) s.transcriptTitle = t.title; if (t.messages.length && type !== 'UserPromptSubmit') s.messages = t.messages; if (t.context) s.context = t.context; }
     }
     s.title = s.transcriptTitle || s.firstPrompt || null;
     return JSON.stringify(s.messages || []) !== before;
@@ -238,7 +238,7 @@ export class Store {
       case 'SessionEnd': e.reason = p.reason; this.ended.add(sid); this.sessions.delete(sid); this.transcriptChecks.delete(sid); this.pendingTasks.delete(sid); break;
       default: break;
     }
-    e.session = { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, cwd: s.cwd, project: s.project, title: s.title || null, merged: !!s.merged, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity };
+    e.session = { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, cwd: s.cwd, project: s.project, title: s.title || null, merged: !!s.merged, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity, context: s.context || null };
     if (chatChanged) e.session.messages = s.messages;
     this.recent.push(e); if (this.recent.length > RECENT_MAX) this.recent.shift();
     return e;
