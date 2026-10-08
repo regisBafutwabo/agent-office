@@ -2020,6 +2020,7 @@ async function goRoof(a) {
   const s = pickRoof(); if (!s) return false; s.by = a.id;
   setState(a, 'idle', 'Heading up to the roof');
   await walkTo(a, DOOR); a.leaving = true; await wait(.6);
+  if (a.review) { a.leaving = false; s.by = null; return false; }   // a subagent reported back meanwhile: the review walk wins
   roofGroup.add(a.g); a.onRoof = true; a.spot = ROOF_LIFT; a.leaving = false; a.appear = 0;
   a.g.position.set(ROOF_LIFT.x, ROOF_Y, ROOF_LIFT.z); a.yaw = a.yawT = -Math.PI / 2;
   await roofWalkTo(a, s);
@@ -3579,6 +3580,8 @@ async function reviewSubs(a) {
   }
   a.review = null;
   if (a.exiting) return;
+  // It had already finished (a background subagent reported back later): finished again, not stuck "Reviewing".
+  if (a.reported && (a.reported[0] === 'done' || a.reported[0] === 'idle')) applyStatus(a, ...a.reported);
   const next = a.afterReview || workSpot(a); a.afterReview = null;
   place(a, next, true);
 }
@@ -3609,7 +3612,7 @@ function onLiveEvent(e, replay) {
   retitle(a, s.title);
   if (s.messages) { a.messages = s.messages; if (a === selected) detailDirty = true; }
   if ('merged' in s) a.merged = !!s.merged;
-  a.permissionMode = s.permissionMode;
+  a.permissionMode = s.permissionMode; a.reported = [s.status, s.activity];
   const who = e.agentId ? liveSub(a, e.agentId, e.agentType, replay, e.agentTask) : a;
   const label = `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}`;
   const agentResult = e.type.startsWith('PostToolUse') && (e.tool === 'Task' || e.tool === 'Agent');
@@ -3675,8 +3678,11 @@ function onSnapshot(msg) {
     retitle(a, s.title);
     a.merged = !!s.merged;
     if (s.messages) a.messages = s.messages;
-    applyStatus(a, s.status, s.activity);
+    applyStatus(a, s.status, s.activity); a.reported = [s.status, s.activity];
     for (const sub of s.subagents || []) { const x = liveSub(a, sub.id, sub.type, true, sub.task); applyStatus(x, sub.status, sub.activity); }
+    // Finished while the page was disconnected (the Mac slept, the app restarted): its SubagentStop never reached us.
+    const still = new Set((s.subagents || []).map(x => x.id));
+    for (const [id, sub] of a.subs) if (!still.has(id) && !sub.awaitingReview) leaveOffice(sub, `Reported back to ${a.name}`);
   }
   for (const e of msg.recent || []) {                       // refill the feed without replaying movement
     const a = live.byId.get(e.sessionId); if (!a) continue;
