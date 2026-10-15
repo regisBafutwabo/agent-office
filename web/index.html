@@ -101,7 +101,7 @@ button{font:inherit;color:inherit}
 .brand p{margin:0;font:400 11px/14px var(--font-b);color:var(--muted);white-space:nowrap}
 .stats{display:flex;align-items:center;gap:12px;padding:0 12px;border-radius:var(--r-lg);font:400 12px/16px var(--font-b);color:var(--muted)}
 .stats b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
-.stats .warn b{color:var(--s-wait)}
+.stats .warn b{color:color-mix(in srgb,var(--s-wait) var(--pill-k),var(--ink))}
 .spacer{flex:1;pointer-events:none}
 .topbar .seg{align-self:stretch;align-items:stretch;flex-wrap:nowrap;padding:4px;border-radius:var(--r-lg);background:var(--glass)}
 .topbar .seg button{height:auto;padding:0 12px;border-radius:var(--r-md);font-size:13px}
@@ -146,15 +146,18 @@ button{font:inherit;color:inherit}
 .av-app{position:absolute;right:-5px;bottom:-5px;width:15px;height:15px;border-radius:4px;object-fit:contain;box-shadow:0 0 0 1.5px var(--panel);background:var(--panel)}
 .av-app.mono{display:grid;place-items:center;background:var(--ink);color:var(--panel);font:700 8px/1 var(--font-d)}
 .who{min-width:0}
-.nm{display:flex;gap:6px;align-items:baseline;font:600 13px/18px var(--font-b);white-space:nowrap}
+.nm{display:flex;gap:6px;align-items:baseline;min-width:0;overflow:hidden;font:600 13px/18px var(--font-b);white-space:nowrap}
+.nm-t{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .act,.proj{font:400 12px/16px var(--font-b);color:var(--muted)}
-.proj{overflow:hidden;text-overflow:ellipsis}
-.proj .entry{font:inherit;letter-spacing:0}
+.proj{flex:0 1000 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}   /* the project tag gives way before the name */
+.act .entry{font-weight:500;color:var(--ink-2)}
 .act{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .row-end{display:flex;align-items:center;gap:6px}
-.row-open{display:grid;place-items:center;width:24px;height:24px;border:0;border-radius:var(--r-sm);color:var(--muted)}
+.row-wrap{position:relative}
+.row-slot{width:24px;flex:none}
+.row-open{position:absolute;right:8px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:24px;height:24px;border:0;padding:0;background:transparent;border-radius:var(--r-sm);color:var(--muted);cursor:pointer}
 .row-open:hover{color:var(--ink);background:var(--panel)}
-@media (hover:hover){ .row-open{opacity:0} .agent-row:hover .row-open,.agent-row:focus-visible .row-open{opacity:1} }
+@media (hover:hover){ .row-open{opacity:0} .row-wrap:hover .row-open,.row-wrap:focus-within .row-open{opacity:1} }
 .app-ico{width:22px;height:22px;border-radius:var(--r-sm);flex:none;object-fit:contain}
 .app-ico.mono{display:inline-grid;place-items:center;background:var(--ink);color:var(--panel);font:700 10px/1 var(--font-d)}
 
@@ -267,7 +270,7 @@ pre.json{margin:0;padding:12px;background:var(--panel-2);border:1px solid var(--
 .chat li{max-width:88%;padding:8px 12px;border-radius:var(--r-md);font:400 13px/18px var(--font-b);white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
 .chat .user{align-self:flex-end;background:color-mix(in srgb,var(--accent) 16%,transparent)}
 .chat .assistant{align-self:flex-start;background:var(--panel-2);border:1px solid var(--line)}
-.chat .empty{align-self:stretch;max-width:none;padding:2px 0;color:var(--muted)}
+.chat .empty{position:static;transform:none;width:auto;z-index:auto;border-radius:0;align-self:stretch;max-width:none;padding:2px 0;color:var(--muted)}   /* not the floating .empty card */
 .log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
 .log li{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:8px;align-items:center;font-size:12px}
 .log time{font:400 11px/16px var(--font-m);color:var(--muted);font-variant-numeric:tabular-nums}
@@ -340,14 +343,16 @@ body.live .speed-top, body.live .demo-only{display:none}
   .tabpane{padding-inline:8px}
   .detail{top:112px;left:16px;right:16px;bottom:auto;width:auto;max-width:none;max-height:40%}
   .toasts{top:auto;bottom:calc(44% + 36px);left:16px;right:16px;max-width:none;align-items:stretch}
-  .city-credit{bottom:calc(44% + 8px);left:16px;right:auto}
+  .city-credit{bottom:calc(44% + 8px);left:16px;right:auto;max-width:calc(100% - 32px);display:block;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .empty{top:38%;left:50%;width:calc(100% - 32px)}
-  .lift{top:var(--top);left:16px;right:16px;width:auto;height:40px;max-height:none;padding:4px;overflow-x:auto;display:flex;align-items:center}
+  .lift{top:var(--top);left:16px;right:16px;width:auto;height:40px;max-height:none;padding:4px;overflow:hidden;display:flex;align-items:center}
   .lift-head{height:auto;padding-left:4px;flex:none}
   .lift-title{display:none}
   .lift.collapsed{right:auto}
   .panel-tab{display:none}
-  #lift-list{flex-direction:row}
+  /* only the floors scroll (the hide button stays put); no scrollbars, soft edges say there's more */
+  #lift-list{flex-direction:row;flex:1;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;padding:0 16px;-webkit-mask-image:linear-gradient(to right,transparent,#000 16px,#000 calc(100% - 16px),transparent);mask-image:linear-gradient(to right,transparent,#000 16px,#000 calc(100% - 16px),transparent)}
+  #lift-list::-webkit-scrollbar{display:none}
   .lift-btn{width:auto;height:30px;flex:none;grid-template-columns:auto auto}
   .lift-btn .fl-count{display:none}
 }
@@ -376,7 +381,7 @@ body.live .speed-top, body.live .demo-only{display:none}
       <button id="view-3d" aria-pressed="true">3D</button>
       <button id="view-plan" aria-pressed="false">Plan</button>
     </div>
-    <button class="btn music-btn glass" id="music-btn" hidden aria-pressed="false">
+    <button class="btn music-btn glass" id="music-btn" hidden aria-pressed="false" aria-label="Play my music">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
       <span id="music-label">Play my music</span>
     </button>
@@ -385,7 +390,7 @@ body.live .speed-top, body.live .demo-only{display:none}
       <button data-speed="1" aria-pressed="true">1×</button>
       <button data-speed="3" aria-pressed="false">3×</button>
     </div>
-    <button class="btn vr-btn glass" id="vr-btn">
+    <button class="btn vr-btn glass" id="vr-btn" aria-label="Enter VR">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h13A2.5 2.5 0 0 1 21 8.5v6a2.5 2.5 0 0 1-2.5 2.5h-3l-2-2.5h-3L8.5 17h-3A2.5 2.5 0 0 1 3 14.5z"/><circle cx="8" cy="11.5" r="1.5"/><circle cx="16" cy="11.5" r="1.5"/></svg>
       <span>Enter VR</span>
     </button>
@@ -458,7 +463,7 @@ body.live .speed-top, body.live .demo-only{display:none}
     </div>
   </aside>
 
-  <section class="detail glass" id="detail" hidden aria-live="polite">
+  <section class="detail glass" id="detail" hidden aria-label="Agent details">
     <div class="d-head">
       <div class="av" id="d-av"></div>
       <div style="min-width:0"><h2 id="d-name"></h2><p id="d-sub"></p></div>
@@ -505,7 +510,7 @@ body.live .speed-top, body.live .demo-only{display:none}
     </ol>
   </div>
   <div class="hint glass" id="hint">Drag to orbit · Scroll to zoom · Click an agent · <kbd>[</kbd><kbd>]</kbd> panels</div>
-  <div class="toasts" id="toasts"></div>
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
   <a class="city-credit" id="city-credit" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" hidden>© OpenStreetMap contributors</a>
   <dialog class="city-picker welcome" id="welcome" aria-labelledby="welcome-title" aria-describedby="welcome-description">
     <h2 id="welcome-title">Who’s on your team?</h2>
@@ -1000,6 +1005,7 @@ function updateMusicBtn() {
   b.hidden = !(viewMode === 'roof' && MODE === 'live' && live.connected && musicSupported);
   b.setAttribute('aria-pressed', musicOn);
   $('#music-label').textContent = musicOn ? 'My music is on' : 'Play my music';
+  b.setAttribute('aria-label', $('#music-label').textContent);
   b.title = musicOn ? 'The DJ plays your Spotify or Apple Music song. Click to stop.' : 'Let the DJ play the song Spotify or Apple Music is playing on this Mac';
 }
 function setMusicOn(on) {
@@ -2330,6 +2336,11 @@ function ensureFloor(key, name, remember) {
 }
 const ROOF_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="10" r="4"/><path d="M12 2v2M4.9 4.9l1.4 1.4M2 12h2M20 12h2M17.7 6.3l1.4-1.4M3 20h18"/></svg>';
 const BUILDING_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="1.5"/><path d="M9 6h2M13 6h2M9 10h2M13 10h2M9 14h2M13 14h2M10 22v-4h4v4"/></svg>';
+// On a phone the floors are one scrolling row: keep the current one in view.
+function liftToCurrent() {
+  const el = $('#lift-list'), on = el && el.querySelector('.on');
+  if (on && isMobile()) el.scrollLeft = on.offsetLeft - el.offsetLeft - (el.clientWidth - on.offsetWidth) / 2;
+}
 function renderLift() {
   const el = $('#lift-list'); if (!el) return;
   const rows = floors.slice().reverse().map(f => {
@@ -2341,7 +2352,7 @@ function renderLift() {
   const up = roofAgents();
   const html = `<button class="lift-btn bld${viewMode === 'building' ? ' on' : ''}" data-floor="building"><span class="fl-num">${BUILDING_ICON}</span><span class="fl-name">Whole building</span></button>`
     + `<button class="lift-btn roof${viewMode === 'roof' ? ' on' : ''}" data-floor="roof"><span class="fl-num${isParty() ? ' party' : ''}">${ROOF_ICON}</span><span class="fl-name">${isParty() ? 'Rooftop party' : 'Rooftop terrace'}</span><span class="fl-count">${up.length || ''}</span></button>` + rows;
-  if (html !== el._html) { el.innerHTML = html; el._html = html; }
+  if (html !== el._html) { el.innerHTML = html; el._html = html; liftToCurrent(); }
   const cur = viewMode === 'building' ? `<span class="fl-num">${BUILDING_ICON}</span>Whole building`
     : viewMode === 'roof' ? `<span class="fl-num${isParty() ? ' party' : ''}">${ROOF_ICON}</span>Rooftop` : `${floorBadge(curFloor, false)}${esc(curFloor.name)}`;
   const ce = $('#lift-current'); if (ce._html !== cur) { ce.innerHTML = cur; ce._html = cur; }
@@ -3107,6 +3118,7 @@ addEventListener('keydown', e => {
   if (e.key === '[') setLiftOpen(liftEl.classList.contains('collapsed'));
   if (e.key === ']') setPanelOpen(!panelOpen());
   if (e.key === '\\') { const show = liftEl.classList.contains('collapsed') && !panelOpen(); setLiftOpen(show); setPanelOpen(show); }
+  if (e.target.closest('.panel,.detail,.lift,.toasts,[role=tablist]')) return;   // let focused lists scroll and tabs take arrows
   if (e.key === 'PageUp') { goToFloor(Math.min(floors.length - 1, curFloor.i + 1)); e.preventDefault(); }
   if (e.key === 'PageDown') { goToFloor(Math.max(0, curFloor.i - 1)); e.preventDefault(); }
   const k = e.key.toLowerCase(); if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)) { keys.add(k); e.preventDefault(); hideHint(); }
@@ -3120,6 +3132,12 @@ function keyPan(dt) {
 }
 
 /* ---------- UI ---------- */
+document.querySelectorAll('[role=tablist]').forEach(tl => tl.addEventListener('keydown', e => {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  const tabs = [...tl.querySelectorAll('[role=tab]')].filter(t => !t.hidden), i = tabs.indexOf(document.activeElement); if (i < 0) return;
+  const n = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+  tabs[n].focus(); tabs[n].click(); e.preventDefault();
+}));
 document.querySelectorAll('.tabs [role=tab]').forEach(b => b.addEventListener('click', () => {
   const was = b.getAttribute('aria-selected') === 'true';
   if (isMobile() && was) { panel.classList.toggle('collapsed'); layout(); return; }
@@ -3147,11 +3165,14 @@ function row(a) {
   const cl = clashesOf(a)[0], flag = a.stuck && a.busy ? '↻ Going in circles · ' : cl ? `⚠ Same file as ${(cl.a === a ? cl.b : cl.a).name} · ` : '';
   const act = flag + (a.where ? a.where + ' · ' : '') + a.activity + (a.pending.length ? ` · ${a.pending.length} queued` : '');
   // The group header already names the project; a subagent's type is only worth showing when it isn't its name.
-  const meta = sub ? (a.subType && a.subType !== a.name ? esc(a.subType) : '') : a.live ? `<span class="entry">${whereFrom(a)}</span>` : '';
-  return `<button class="agent-row${sub ? ' sub' : ''}${a === selected ? ' sel' : ''}" data-id="${a.id}">
+  // Where a live session runs leads the second line, so a long name never pushes it out of sight.
+  const meta = sub && a.subType && a.subType !== a.name ? esc(a.subType) : '';
+  const from = !sub && a.live ? `<span class="entry">${esc(whereFrom(a))}</span> · ` : '';
+  const open = !sub && a.live && hostName(a) ? esc(openLabel(a)) : '';
+  return `<div class="row-wrap"><button class="agent-row${sub ? ' sub' : ''}${a === selected ? ' sel' : ''}" data-id="${a.id}">
     <span class="av" style="--c:${a.color}">${faceImg(a)}${a.live ? appBadge(a, 'av-app') : ''}</span>
-    <span class="who"><span class="nm">${esc(a.name)}${meta ? ` <span class="proj">${meta}</span>` : ''}</span><span class="act">${esc(act)}</span></span>
-    <span class="row-end">${!sub && a.live && hostName(a) ? `<span class="row-open" data-open="${a.id}" title="${esc(openLabel(a))}" aria-label="${esc(openLabel(a))}">${OPEN_ICON}</span>` : ''}<span class="pill s-${a.state}">${STATUS[a.state].label}</span></span></button>`;
+    <span class="who"><span class="nm"><span class="nm-t" title="${esc(a.name)}">${esc(a.name)}</span>${meta ? ` <span class="proj">${meta}</span>` : ''}</span><span class="act">${from}${esc(act)}</span></span>
+    <span class="row-end"><span class="pill s-${a.state}">${STATUS[a.state].label}</span>${open ? '<span class="row-slot"></span>' : ''}</span></button>${open ? `<button class="row-open" data-open="${a.id}" title="${open}" aria-label="${open}">${OPEN_ICON}</button>` : ''}</div>`;
 }
 function renderUI() {
   const mains = agents.filter(a => a.kind === 'main');
@@ -3215,11 +3236,11 @@ function renderDetail() {
   $('#d-form').hidden = !main || !!a.live; $('#d-spawn').hidden = !main || !!a.live;
   const host = a.live ? hostName(a) : null, openBtn = $('#d-open');
   openBtn.hidden = !host; if (host) openBtn.textContent = openLabel(a);
-  const note = $('#d-note'); note.hidden = !a.live;
-  if (a.live) { const w = a.state === 'waiting'; note.classList.toggle('warn', w);
+  // While a held request shows Allow/Deny, the note would only contradict it.
+  const note = $('#d-note'); note.hidden = !a.live || !!(a.approval && a.approval.live);
+  if (!note.hidden) { const w = a.state === 'waiting'; note.classList.toggle('warn', w);
     const src = a.parent || a, app = AGENT_NAMES[src.agentName] || `Claude Code (${(ENTRY[src.entrypoint] || 'Claude Code').toLowerCase()})`;
-    note.textContent = w ? `Answer this in ${app}. Approving from the office comes next.`
-                         : 'Watching this session live. Sending tasks from the office comes in a later step.'; }
+    note.textContent = w ? `Answer this in ${app}.` : `Watching this session live. Reply to it in ${app}.`; }
 }
 // The card shows the agent's chat; its hook events sit one tab over, under Activity.
 let detailTab = 'chat';
@@ -3266,7 +3287,7 @@ $('#d-spawn').onclick = async () => {
 };
 
 /* toasts */
-function toast(msg, action, fn, who, mood) {
+function toast(msg, action, fn, who, mood, approvalId) {
   const actions = Array.isArray(action) ? action : action ? [[action, fn, true]] : [];
   const el = document.createElement('div'); el.className = 'toast glass';
   const face = who && faceShot(who, mood);
@@ -3274,7 +3295,10 @@ function toast(msg, action, fn, who, mood) {
   el.innerHTML = `${face ? `<span class="toast-av"><img class="toast-face" style="--c:${who.color}" src="${face}" alt="">${badge}</span>` : ''}<span>${esc(msg)}</span>`;
   for (const [label, run, primary] of actions) { const b = document.createElement('button'); b.className = primary ? 'btn primary' : 'btn'; b.textContent = label; b.onclick = () => { run(); el.remove(); }; el.appendChild(b); }
   if (actions.length) el.dataset.keep = '1';
-  const wrap = $('#toasts'); wrap.prepend(el); while (wrap.children.length > 3) wrap.lastChild.remove();
+  if (approvalId) { el.dataset.approval = approvalId; el.setAttribute('role', 'alert'); }
+  // Over three, drop the oldest plain toast first, then the oldest one with buttons; a held permission request stays.
+  const wrap = $('#toasts'); wrap.prepend(el);
+  while (wrap.children.length > 3) { const kids = [...wrap.children].reverse(), old = kids.find(t => !t.dataset.keep) || kids.find(t => !t.dataset.approval); if (!old) break; old.remove(); }
   setTimeout(() => el.remove(), el.dataset.keep ? 45000 : 6000);   // toasts with buttons stay up as long as a request is held
 }
 
@@ -3391,6 +3415,7 @@ function setLiftOpen(open) {
   liftEl.classList.toggle('collapsed', !open);
   const b = $('#lift-toggle'); b.setAttribute('aria-expanded', open); b.setAttribute('aria-label', open ? 'Hide floors' : 'Show floors'); b.title = open ? 'Hide floors  [' : 'Show floors  [';
   uiPrefs.lift = open; saveUi();
+  if (open) liftToCurrent();
 }
 $('#lift-toggle').onclick = () => setLiftOpen(liftEl.classList.contains('collapsed'));
 $('#lift-current').onclick = () => setLiftOpen(true);
@@ -3897,12 +3922,12 @@ function onApproval(ap, fresh) {
   applyStatus(who, 'waiting', `Needs permission: ${who.approval.cmd}`);
   detailDirty = true; uiDirty = true;
   if (fresh) toast(`${who.name} on floor ${floorNum(who.floor)} wants to run ${who.approval.cmd}`,
-    [['Allow', () => decide(who, 'allow'), true], ['Deny', () => decide(who, 'deny')], ['Show me', () => select(who, true)]], null, who, 'waiting');
+    [['Allow', () => decide(who, 'allow'), true], ['Deny', () => decide(who, 'deny')], ['Show me', () => select(who, true)]], null, who, 'waiting', ap.id);
 }
 function onApprovalResolved(msg) {
   for (const a of agents) if (a.approval && a.approval.live && a.approval.id === msg.id) { a.approval = null; detailDirty = true; uiDirty = true;
     if (msg.decision === 'defer') setState(a, 'waiting', 'Waiting for an answer in Claude Code'); }
-  document.querySelectorAll('.toast').forEach(t => { if (t.textContent.includes('wants to run')) t.remove(); });
+  document.querySelectorAll('.toast[data-approval]').forEach(t => { if (t.dataset.approval === String(msg.id)) t.remove(); });
 }
 /* Connect agents: the desktop app can install the Claude Code plugin and add Codex / Cursor hooks in one click
    (GET /api/setup, POST /api/setup/<tool>). The Node bridge doesn't offer this, so the buttons stay hidden there. */
