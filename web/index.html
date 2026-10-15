@@ -166,9 +166,9 @@ button{font:inherit;color:inherit}
 .feed li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 12px;padding:8px;border-bottom:1px solid var(--line);font:400 12px/16px var(--font-b)}
 .feed time{grid-row:span 2;font:400 11px/16px var(--font-m);color:var(--muted);font-variant-numeric:tabular-nums}
 .feed .top{display:flex;gap:8px;align-items:center;min-width:0}
-.hook{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:var(--r-sm);font:500 11px/1 var(--font-m);background:var(--panel-2);border:1px solid var(--line);white-space:nowrap}
+.hook{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:var(--r-sm);font:500 11px/1 var(--font-b);background:var(--panel-2);border:1px solid var(--line);white-space:nowrap}
 .hook.warn{color:color-mix(in srgb,var(--s-wait) var(--pill-k),var(--ink));border-color:color-mix(in srgb,var(--s-wait) 45%,transparent)}
-.feed .by{font-weight:600;color:var(--ink);white-space:nowrap}
+.feed .by{min-width:0;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .feed .by::before{content:"";display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--c);margin-right:6px;vertical-align:0}
 .feed .what{font:400 12px/16px var(--font-b);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
@@ -341,19 +341,29 @@ body.live .speed-top, body.live .demo-only{display:none}
   .panel.collapsed{height:auto}
   .panel.collapsed .tabpane{display:none}
   .tabpane{padding-inline:8px}
-  .detail{top:112px;left:16px;right:16px;bottom:auto;width:auto;max-width:none;max-height:40%}
+  .detail{top:120px;left:16px;right:16px;bottom:auto;width:auto;max-width:none;max-height:40%}
   .toasts{top:auto;bottom:calc(44% + 36px);left:16px;right:16px;max-width:none;align-items:stretch}
   .city-credit{bottom:calc(44% + 8px);left:16px;right:auto;max-width:calc(100% - 32px);display:block;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .empty{top:38%;left:50%;width:calc(100% - 32px)}
-  .lift{top:var(--top);left:16px;right:16px;width:auto;height:40px;max-height:none;padding:4px;overflow:hidden;display:flex;align-items:center}
+  .panel.collapsed ~ .city-credit{bottom:56px}   /* follow the folded sheet down */
+  .panel.collapsed ~ .toasts{bottom:84px}
+  .lift{top:var(--top);left:16px;right:16px;width:auto;height:48px;max-height:none;padding:2px 4px;overflow:hidden;display:flex;align-items:center}
   .lift-head{height:auto;padding-left:4px;flex:none}
   .lift-title{display:none}
   .lift.collapsed{right:auto}
   .panel-tab{display:none}
+  #panel-hide svg{transform:rotate(90deg);transition:transform .2s}
+  .panel.collapsed #panel-hide svg{transform:rotate(-90deg)}
   /* only the floors scroll (the hide button stays put); no scrollbars, soft edges say there's more */
-  #lift-list{flex-direction:row;flex:1;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;padding:0 16px;-webkit-mask-image:linear-gradient(to right,transparent,#000 16px,#000 calc(100% - 16px),transparent);mask-image:linear-gradient(to right,transparent,#000 16px,#000 calc(100% - 16px),transparent)}
+  #lift-list{flex-direction:row;align-self:stretch;align-items:center;flex:1;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;padding:0 16px;-webkit-mask-image:linear-gradient(to right,transparent,#000 16px,#000 calc(100% - 16px),transparent);mask-image:linear-gradient(to right,transparent,#000 16px,#000 calc(100% - 16px),transparent)}
   #lift-list::-webkit-scrollbar{display:none}
-  .lift-btn{width:auto;height:30px;flex:none;grid-template-columns:auto auto}
+  .lift-btn{width:auto;height:32px;flex:none;grid-template-columns:auto auto}
+  /* touch targets: an invisible 44px hit area around small controls */
+  .icon-btn.sm,.topbar .seg button,.lift-btn,.d-tabs button,.btn.sm,.toast .btn,.tabs button{position:relative}
+  .icon-btn.sm::after,.topbar .seg button::after,.lift-btn::after,.d-tabs button::after,.btn.sm::after,.toast .btn::after,.tabs button::after,.row-open::after{content:"";position:absolute;left:50%;top:50%;width:max(100%,44px);height:max(100%,44px);transform:translate(-50%,-50%)}
+  .floor-row{min-height:44px;padding-top:12px}
+  .row-open{right:4px;width:32px;height:32px}
+  .row-slot{width:28px}
   .lift-btn .fl-count{display:none}
 }
 @media (prefers-reduced-motion: reduce){
@@ -2772,12 +2782,18 @@ const clock = t => { const s = Math.floor(BASE + t); return [s / 3600 | 0, (s / 
 const feedEl = $('#feed');
 const wallClock = ms => new Date(ms).toLocaleTimeString([], { hour12: false });
 const stamp = e => e.at ? wallClock(e.at) : clock(e.t);
+// Hook names are for developers; the feed says what happened in plain words (the hook name stays on hover).
+const HOOK_WORDS = { SessionStart: 'Joined', SessionFound: 'Joined', SessionEnd: 'Left', UserPromptSubmit: 'Got a prompt', PreToolUse: 'Started',
+  PostToolUse: 'Finished', PostToolUseFailure: 'Failed', PermissionRequest: 'Asked to run', PermissionResolved: 'Answered', Notification: 'Needs you',
+  Stop: 'Done', SubagentStart: 'Subagent in', SubagentStop: 'Subagent out', PreCompact: 'Compacting', GoingInCircles: 'Going in circles',
+  SameFile: 'Same file', Merged: 'Merged' };
+const hookTag = (hook, warn) => `<code class="hook${warn ? ' warn' : ''}" title="${esc(hook)}">${esc(HOOK_WORDS[hook] || hook)}</code>`;
 function emit(a, hook, detail, at) {
   const e = { t: simTime, at, hook, detail, a };
   a.log.unshift(e); a.log.length = Math.min(a.log.length, 6);
   const li = document.createElement('li');
   const warn = hook === 'Notification' || /denied/.test(detail);
-  li.innerHTML = `<time>${stamp(e)}</time><div class="top"><code class="hook${warn ? ' warn' : ''}">${hook}</code><span class="by" style="--c:${a.color}">${esc(a.name)}</span></div><div class="what" title="${esc(detail)}">${esc(detail)}</div>`;
+  li.innerHTML = `<time>${stamp(e)}</time><div class="top">${hookTag(hook, warn)}<span class="by" style="--c:${a.color}" title="${esc(a.name)}">${esc(a.name)}</span></div><div class="what" title="${esc(detail)}">${esc(detail)}</div>`;
   feedEl.prepend(li); while (feedEl.children.length > 80) feedEl.lastChild.remove();
   if (a === selected) detailDirty = true;
 }
@@ -3056,7 +3072,7 @@ function updateCam(dt) {
   if (viewMode === 'building') goal.target.y = yOff + (floors.length - 1) * FLOOR_H / 2 + 1.7;
   else if (viewMode === 'roof') goal.target.y = yOff + (floors.length - 1) * FLOOR_H + ROOF_Y;
   else goal.target.y = 0;
-  if (follow && selected) { const p = worldPos(selected); goal.target.x += (p.x - goal.target.x) * (1 - Math.exp(-dt * 4)); goal.target.z += (p.z - goal.target.z) * (1 - Math.exp(-dt * 4)); }
+  if (follow && selected && !flight) { const p = worldPos(selected); goal.target.x += (p.x - goal.target.x) * (1 - Math.exp(-dt * 4)); goal.target.z += (p.z - goal.target.z) * (1 - Math.exp(-dt * 4)); }
   const k = reduced ? 1 : 1 - Math.exp(-dt * 8);
   cam.theta += (goal.theta - cam.theta) * k; cam.phi += (goal.phi - cam.phi) * k; cam.radius += (goal.radius - cam.radius) * k;
   cam.target.lerp(goal.target, k); applyCam();
@@ -3160,10 +3176,12 @@ const liftPick = e => { const b = e.target.closest('.lift-btn'); if (!b) return;
 $('#lift-list').addEventListener('click', liftPick);
 rosterEl.addEventListener('pointerdown', rosterPick); rosterEl.addEventListener('click', rosterPick);
 const OPEN_ICON = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M6 3h7v7M13 3 5.5 10.5M11 13H3V5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+// The status pill already says "Thinking" or "Working"; an activity that only repeats it adds nothing.
+const activityText = a => a.activity === STATUS[a.state].label ? '' : a.activity;
 function row(a) {
   const sub = a.kind === 'sub';
   const cl = clashesOf(a)[0], flag = a.stuck && a.busy ? '↻ Going in circles · ' : cl ? `⚠ Same file as ${(cl.a === a ? cl.b : cl.a).name} · ` : '';
-  const act = flag + (a.where ? a.where + ' · ' : '') + a.activity + (a.pending.length ? ` · ${a.pending.length} queued` : '');
+  const act = flag + (a.where ? a.where + (activityText(a) ? ' · ' : '') : '') + activityText(a) + (a.pending.length ? ` · ${a.pending.length} queued` : '');
   // The group header already names the project; a subagent's type is only worth showing when it isn't its name.
   // Where a live session runs leads the second line, so a long name never pushes it out of sight.
   const meta = sub && a.subType && a.subType !== a.name ? esc(a.subType) : '';
@@ -3193,18 +3211,27 @@ function renderUI() {
 
 /* detail card */
 const detail = $('#detail');
+// Open the card at once, so picking an agent answers right away while the camera is still on its way.
+function showCard(a) {
+  selected = a; uiDirty = true; detailDirty = true; renderDetail(); detail.hidden = false;
+  $('#d-prompt').placeholder = a.kind === 'sub' ? '' : `Give ${a.name} a task`;
+  fitCardOnPhone();
+}
 function select(a, focus) {
   seeAgent(a);
-  if (flight && a && focus) { flight.then = () => select(a, true); return; }   // mid-flight: open the card after landing
-  if (a && a.onRoof) { if (viewMode !== 'roof') { goRoofView(); if (focus && !reduced && view === '3d') { land(() => select(a, true)); return; } } }
+  if (!a && flight && flight.then && flight.then.card) flight.then = null;   // closed mid-flight: don't reopen it on landing
+  const arrive = () => select(a, true); arrive.card = true;
+  if (flight && a && focus) { showCard(a); flight.then = arrive; return; }   // mid-flight: head for this agent after landing
+  if (a && a.onRoof) { if (viewMode !== 'roof') { goRoofView(); if (focus && !reduced && view === '3d') { showCard(a); land(arrive); return; } } }
   else if (a && a.floor && (a.floor !== curFloor || (focus && viewMode !== 'floor'))) {
-    if (focus) { flyToFloor(a.floor.i, () => select(a, true), a); return; }   // fly to the agent; the card opens once the camera arrives
+    if (focus) { showCard(a); flyToFloor(a.floor.i, arrive, a); return; }   // the camera flies to the agent with the card already open
     goToFloor(a.floor.i);
   }
   if (a && !a.onRoof && focus && viewMode !== 'floor') { viewMode = 'floor'; renderLift(); }
   selected = a || null; uiDirty = true; detailDirty = true;
   if (selected) renderDetail();                                     // fill the card before showing it, so it never flashes the previous agent
   detail.hidden = !selected;
+  fitCardOnPhone();
   if (selected) {
     $('#d-prompt').placeholder = selected.kind === 'sub' ? '' : `Give ${selected.name} a task`;
     if (focus) { const p = worldPos(selected); goal.target.x = p.x; goal.target.z = p.z; if (view === '3d') goal.radius = Math.min(goal.radius, 15); }
@@ -3219,8 +3246,10 @@ function renderDetail() {
   const av = $('#d-av'); av.style.setProperty('--c', a.color); av.innerHTML = faceImg(a) + (a.live ? appBadge(a, 'av-app') : '');
   $('#d-name').textContent = a.name;
   $('#d-sub').textContent = `Floor ${floorNum(a.floor)} · ` + (a.kind === 'sub' ? `${a.subType} subagent of ${a.parent.name}` : a.live ? `${a.cwd} · ${whereFrom(a)}` : `~/Documents/${a.project.key}`) + (a.where ? ` · ${a.where}` : '');
+  $('#d-sub').title = $('#d-sub').textContent; $('#d-name').title = a.name;   // the card cuts long paths and names short
   const pill = $('#d-pill'); pill.className = 'pill s-' + a.state; pill.textContent = STATUS[a.state].label;
-  $('#d-activity').textContent = a.activity + (a.pending.length ? ` (${a.pending.length} task${a.pending.length > 1 ? 's' : ''} queued)` : '');
+  $('#d-activity').textContent = activityText(a) + (a.pending.length ? ` (${a.pending.length} task${a.pending.length > 1 ? 's' : ''} queued)` : '');
+  $('#d-activity').hidden = !$('#d-activity').textContent;
   const perm = $('#d-perm'); perm.hidden = !a.approval; $('#d-activity').hidden = !!a.approval;
   const alerts = clashesOf(a).map(c => `<div>⚠ <b>${esc((c.a === a ? c.b : c.a).name)}</b> is also editing <code>${esc(c.file)}</code>. One may overwrite the other's work.</div>`);
   if (a.stuck && a.busy) alerts.unshift(`<div>↻ <b>Going in circles:</b> <code>${esc(a.stuck.label)}</code> failed ${a.stuck.n} times without once working. It may need a hint from you.</div>`);
@@ -3231,7 +3260,7 @@ function renderDetail() {
   if (a.approval) { $('#d-perm-tool').textContent = a.approval.tool; $('#d-perm-cmd').textContent = a.approval.cmd || a.approval.tool; }
   $('#d-defer').hidden = !(a.approval && a.approval.live);
   renderChat(a);
-  $('#d-log').innerHTML = a.log.map(e => `<li><time>${stamp(e)}</time><code class="hook${e.hook === 'Notification' ? ' warn' : ''}">${e.hook}</code><span class="what" title="${esc(e.detail)}">${esc(e.detail)}</span></li>`).join('');
+  $('#d-log').innerHTML = a.log.map(e => `<li><time>${stamp(e)}</time>${hookTag(e.hook, e.hook === 'Notification')}<span class="what" title="${esc(e.detail)}">${esc(e.detail)}</span></li>`).join('');
   const main = a.kind === 'main';
   $('#d-form').hidden = !main || !!a.live; $('#d-spawn').hidden = !main || !!a.live;
   const host = a.live ? hostName(a) : null, openBtn = $('#d-open');
@@ -3292,7 +3321,7 @@ function toast(msg, action, fn, who, mood, approvalId) {
   const el = document.createElement('div'); el.className = 'toast glass';
   const face = who && faceShot(who, mood);
   const badge = face && (who.parent || who).live ? appBadge(who, 'av-app') : '';
-  el.innerHTML = `${face ? `<span class="toast-av"><img class="toast-face" style="--c:${who.color}" src="${face}" alt="">${badge}</span>` : ''}<span>${esc(msg)}</span>`;
+  el.innerHTML = `${face ? `<span class="toast-av"><img class="toast-face" style="--c:${who.color}" src="${face}" alt="">${badge}</span>` : ''}<span title="${esc(msg)}">${esc(msg)}</span>`;
   for (const [label, run, primary] of actions) { const b = document.createElement('button'); b.className = primary ? 'btn primary' : 'btn'; b.textContent = label; b.onclick = () => { run(); el.remove(); }; el.appendChild(b); }
   if (actions.length) el.dataset.keep = '1';
   if (approvalId) { el.dataset.approval = approvalId; el.setAttribute('role', 'alert'); }
@@ -3407,7 +3436,7 @@ const uiPrefs = (() => { try { return JSON.parse(localStorage.getItem('agent-off
 const saveUi = () => { try { localStorage.setItem('agent-office:ui', JSON.stringify(uiPrefs)); } catch (_) {} };
 const panelOpen = () => isMobile() ? !panel.classList.contains('collapsed') : !appEl.classList.contains('panel-off');
 function setPanelOpen(open) {
-  if (isMobile()) panel.classList.toggle('collapsed', !open);
+  if (isMobile()) { panel.classList.toggle('collapsed', !open); cardFolded = false; }
   else { appEl.classList.toggle('panel-off', !open); $('#panel-show').hidden = open; panel.inert = !open; }
   uiPrefs.panel = open; saveUi(); layout();
 }
@@ -3419,17 +3448,31 @@ function setLiftOpen(open) {
 }
 $('#lift-toggle').onclick = () => setLiftOpen(liftEl.classList.contains('collapsed'));
 $('#lift-current').onclick = () => setLiftOpen(true);
-$('#panel-hide').onclick = () => setPanelOpen(false);
+$('#panel-hide').onclick = () => setPanelOpen(isMobile() ? panel.classList.contains('collapsed') : false);   // on a phone it folds the sheet up and down
 $('#panel-show').onclick = () => setPanelOpen(true);
 // the camera's framing slides over when the panel opens or closes instead of jumping
 const vo = { x: 0, y: 0, tx: 0, ty: 0, w: 1, h: 1, init: false };
 function applyViewOffset() { camera.setViewOffset(vo.w, vo.h, vo.x, vo.y, vo.w, vo.h); camera.updateProjectionMatrix(); }
+// On a phone the card (top) and the agent list (bottom) would cover the whole scene, so the list folds away while a card is open.
+let cardFolded = false;
+function fitCardOnPhone() {
+  if (isMobile()) {
+    if (selected && !panel.classList.contains('collapsed')) { panel.classList.add('collapsed'); cardFolded = true; }
+    else if (!selected && cardFolded) { panel.classList.remove('collapsed'); cardFolded = false; }
+  }
+  layout();
+}
 function layout() {
   const w = stage.clientWidth, h = stage.clientHeight; if (!w || !h) return;
   renderer.setSize(w, h, false); camera.aspect = w / h;
   let ox = 0, oy = 0;
-  if (isMobile()) oy = Math.max(0, panel.getBoundingClientRect().height / 2 - 24);
-  else ox = appEl.classList.contains('panel-off') ? 0 : (panel.offsetWidth + 16) / 2;
+  if (isMobile()) {
+    const st = stage.getBoundingClientRect(), pr = panel.getBoundingClientRect(), folded = panel.classList.contains('collapsed'), hb = $('#panel-hide');
+    hb.setAttribute('aria-label', folded ? 'Show the panel' : 'Fold the panel down'); hb.title = hb.getAttribute('aria-label');
+    if (detail.hidden) oy = Math.max(0, pr.height / 2 - 24);
+    else oy = h / 2 - (detail.getBoundingClientRect().bottom + pr.top) / 2 + st.top;   // centre the view in the gap between card and list
+  }
+  else { ox = appEl.classList.contains('panel-off') ? 0 : (panel.offsetWidth + 16) / 2; const hb = $('#panel-hide'); hb.setAttribute('aria-label', 'Hide panel'); hb.title = 'Hide panel  ]'; }
   Object.assign(vo, { tx: ox, ty: oy, w, h });
   if (!vo.init || reduced) { vo.x = ox; vo.y = oy; vo.init = true; }
   applyViewOffset();
@@ -3501,7 +3544,7 @@ function setModeLine() {
   else { const fl = new Set(agents.filter(a => a.kind === 'main').map(a => a.floor)).size; el.textContent = `Live · ${mains} session${mains === 1 ? '' : 's'} on ${fl} floor${fl === 1 ? '' : 's'}`; }
   const sw = $('#mode-switch'); sw.textContent = MODE === 'demo' ? 'Switch to live' : 'Switch to demo'; sw.href = MODE === 'demo' ? location.pathname : '?demo';
   const empty = $('#empty');
-  empty.hidden = !(MODE === 'live' && (mains === 0 || !live.connected));
+  empty.hidden = !(MODE === 'live' && (live.connected ? mains === 0 && live.gotSnapshot : live.everConnected));   // first handshake: no error yet
   if (!empty.hidden) {
     $('#empty-title').textContent = live.connected ? 'No Claude Code sessions yet' : 'Can’t reach the bridge';
     $('#empty-body').textContent = live.connected ? 'Start a session in the Claude desktop app or in your terminal. Its agent will ride up in the lift and take a desk.'
@@ -3846,6 +3889,7 @@ function onLiveEvent(e, replay) {
 }
 
 function onSnapshot(msg) {
+  if (!live.gotSnapshot) { live.gotSnapshot = true; rosterEl._html = null; uiDirty = true; setTimeout(setModeLine); }
   musicSupported = !!msg.musicSupported; music = musicOn && msg.music || null; updateMusicBtn();
   const ids = new Set(msg.sessions.map(s => s.id));
   for (const [id, a] of live.byId) if (!ids.has(id)) leaveOffice(a);
@@ -3933,7 +3977,8 @@ function onApprovalResolved(msg) {
    (GET /api/setup, POST /api/setup/<tool>). The Node bridge doesn't offer this, so the buttons stay hidden there. */
 const setup = { tools: null, busy: null };
 async function loadSetup() {
-  try { const r = await fetch('/api/setup'); setup.tools = r.ok ? (await r.json()).tools : null; } catch (_) { setup.tools = null; }
+  if (setup.missing) return;
+  try { const r = await fetch('/api/setup'); if (r.status === 404) setup.missing = true; setup.tools = r.ok ? (await r.json()).tools : null; } catch (_) { setup.tools = null; }
   renderSetup();
 }
 async function connectTool(id) {
@@ -3951,7 +3996,8 @@ function renderSetup() {
   // With no agents yet, the Agents tab says what to do next.
   const card = $('#setup-card'), empty = MODE === 'live' && !agents.some(a => a.kind === 'main');
   card.hidden = !empty;
-  if (empty) card.innerHTML = todo.length
+  if (empty && !live.gotSnapshot) card.innerHTML = `<b>Connecting…</b><span>Looking for your Claude Code sessions.</span>`;
+  else if (empty) card.innerHTML = todo.length
     ? `<b>Connect your coding agents</b><span>Agent Office adds a small hook that reports what each session is doing. Nothing leaves your Mac.</span><div class="btns">${todo.map((t, i) => btn(t, i === 0)).join('')}</div>`
     : `<b>No agents yet</b><span>Start a new ${tools.some(t => t.id === 'claude-code' && t.status === 'connected') ? 'Claude Code ' : ''}session and send a prompt. Its agent rides up in the lift.</span>`;
   renderGuideTools();
