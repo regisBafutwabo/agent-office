@@ -135,6 +135,14 @@ export class Store {
     return e;
   }
 
+  // Chats archived in the Claude desktop app (discover.js archivedChats) leave now: no SessionEnd arrives for them.
+  // Not added to `ended`, so a chat you unarchive and pick up again comes back with its next hook. Returns their ids.
+  dropArchived(ids) {
+    const gone = [...this.sessions.keys()].filter(id => ids.has(id));
+    for (const id of gone) { this.sessions.delete(id); this.transcriptChecks.delete(id); this.pendingTasks.delete(id); }
+    return gone;
+  }
+
   // A chat found in its log (discover.js): add it, or refresh it while no hook has reported on it.
   // Returns a SessionFound event when something on screen changes; hooks always win over logs.
   adopt(f) {

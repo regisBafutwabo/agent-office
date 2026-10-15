@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { scan, encode, decode, settle, FOUND_WINDOW_MS } from './discover.js';
+import { scan, encode, decode, settle, archivedChats, desktopSessionsDir, FOUND_WINDOW_MS } from './discover.js';
 
 const tmp = name => fs.mkdtempSync(path.join(os.tmpdir(), `agent-office-discover-${name}-`));
 const write = (file, lines) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, lines.map(l => JSON.stringify(l) + '\n').join('')); };
@@ -53,4 +53,18 @@ test('decodes folder names by walking the disk', () => {
 test('a quiet log mid-turn reads as waiting on you', () => {
   assert.equal(settle('working', 'Working', 0, 3 * 60 * 1000 + 1)[0], 'idle');
   assert.equal(settle('done', 'Finished', 0, 3 * 60 * 1000 + 1)[0], 'done');
+});
+
+test('skips chats archived in the Claude desktop app, even though archiving writes to their log', () => {
+  const home = tmp('archived'), shop = path.join(home, 'code', 'shop');
+  fs.mkdirSync(shop, { recursive: true });
+  const folder = path.join(home, '.claude', 'projects', encode(shop));
+  for (const id of ['kept', 'gone']) write(path.join(folder, `${id}.jsonl`), [{ type: 'user', cwd: shop, entrypoint: 'claude-desktop', message: { content: 'hi' } }]);
+  const account = path.join(desktopSessionsDir(home), 'org', 'me');
+  fs.mkdirSync(account, { recursive: true });
+  fs.writeFileSync(path.join(account, 'local_a.json'), JSON.stringify({ sessionId: 'local_a', cliSessionId: 'gone', cwd: shop, isArchived: true, title: 'x'.repeat(9000) }));
+  fs.writeFileSync(path.join(account, 'local_b.json'), JSON.stringify({ sessionId: 'local_b', cliSessionId: 'kept', cwd: shop, isArchived: false }));
+  fs.writeFileSync(path.join(account, 'local_c.json'), JSON.stringify({ sessionId: 'local_c', isArchived: true }));   // never started: no CLI session
+  assert.deepEqual([...archivedChats(home)], ['gone']);
+  assert.deepEqual(scan(home).map(f => f.id), ['kept']);
 });

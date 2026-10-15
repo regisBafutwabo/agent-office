@@ -308,6 +308,14 @@ impl Store {
         gone
     }
 
+    /// Chats archived in the Claude desktop app (discover::archived_chats) leave now: no SessionEnd arrives for them.
+    /// Not added to `ended`, so a chat you unarchive and pick up again comes back with its next hook. Returns their ids.
+    pub fn drop_archived(&mut self, ids: &HashSet<String>) -> Vec<String> {
+        let gone: Vec<String> = self.sessions.iter().filter(|s| ids.contains(&s.id)).map(|s| s.id.clone()).collect();
+        self.sessions.retain(|s| !ids.contains(&s.id));
+        gone
+    }
+
     /// A chat found in its log (discover.rs): add it, or refresh it while no hook has reported on it.
     /// Returns a SessionFound event when something on screen changes; hooks always win over logs.
     pub fn adopt(&mut self, f: Found) -> Option<Value> {
@@ -809,5 +817,15 @@ mod tests {
         assert!(e["session"].get("messages").is_none());
         let e = st.ingest(&with(json!({ "hook_event_name": "UserPromptSubmit", "prompt": "next" })), None, None).unwrap();
         assert_eq!(e["session"]["messages"][1], json!({ "role": "user", "text": "next" }));
+    }
+    #[test]
+    fn chats_archived_in_the_desktop_app_leave_but_come_back_with_their_next_hook() {
+        let mut st = Store::default();
+        st.ingest(&base(json!({ "hook_event_name": "SessionStart" })), None, None);
+        st.ingest(&json!({ "session_id": "s2", "cwd": "/Users/me/code/shop", "hook_event_name": "SessionStart" }), None, None);
+        assert_eq!(st.drop_archived(&HashSet::from(["s1".to_string(), "nobody".to_string()])), ["s1"]);
+        assert_eq!(st.sessions.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(), ["s2"]);
+        st.ingest(&base(json!({ "hook_event_name": "UserPromptSubmit", "prompt": "back again" })), None, None);
+        assert!(st.sessions.iter().any(|s| s.id == "s1"));
     }
 }

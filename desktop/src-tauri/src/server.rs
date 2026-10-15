@@ -184,7 +184,7 @@ async fn watch_logs(st: AppState) {
     tick.tick().await; // the first scan already ran in router()
     loop {
         tick.tick().await;
-        let (found, models) = tokio::task::spawn_blocking(|| (discover::scan_home(store::now_ms()), ollama_models())).await.unwrap_or_default();
+        let (found, models, archived) = tokio::task::spawn_blocking(|| (discover::scan_home(store::now_ms()), ollama_models(), discover::archived_home())).await.unwrap_or_default();
         let mut store = st.store.lock().unwrap();
         let keep: Vec<String> = models.iter().map(|f| f.id.clone()).collect();
         for f in found.into_iter().chain(models) {
@@ -192,6 +192,9 @@ async fn watch_logs(st: AppState) {
                 (st.on_change)(&store, &e);
                 broadcast(&st, json!({ "type": "event", "event": e }));
             }
+        }
+        for id in store.drop_archived(&archived) {
+            broadcast(&st, json!({ "type": "event", "event": { "type": "SessionEnd", "sessionId": id, "at": store::now_ms(), "reason": "Archived in the Claude app" } }));
         }
         // Models Ollama has loaded are agents too (ollama.rs); one walks out as soon as Ollama unloads it.
         for id in store.retire("ollama", &keep) {

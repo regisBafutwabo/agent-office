@@ -4,12 +4,15 @@
 //   Claude Code  ~/.claude/projects/<project>/<session id>.jsonl
 //   Codex        ~/.codex/sessions/YYYY/MM/DD/rollout-…-<thread id>.jsonl (first line: session_meta)
 //   Cursor       ~/.cursor/projects/<project>/agent-transcripts/<chat id>/<chat id>.jsonl
+// Chats you archived in the Claude desktop app are skipped: archiving writes to the log, which would bring them back.
 // Only logs written to in the last FOUND_WINDOW_MS count. The ids match what each tool's hooks send
 // (Codex and Cursor ones unverified against their hooks), so a hook takes over the same agent.
 use serde_json::Value;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 use std::time::UNIX_EPOCH;
 
 use crate::store::clip;
@@ -107,11 +110,58 @@ fn settle(status: &str, activity: &str, at: u64, now: u64) -> (String, String) {
     }
 }
 
-fn claude(home: &Path, now: u64, out: &mut Vec<Found>) {
+/// The Claude desktop app keeps a file per chat (<app data>/claude-code-sessions/<org>/<account>/local_<id>.json).
+/// Archiving a chat sets isArchived there; cliSessionId is the Claude Code session id the hooks send.
+pub fn desktop_sessions_dir(home: &Path) -> PathBuf {
+    let app = if cfg!(target_os = "macos") { "Library/Application Support/Claude" } else if cfg!(windows) { "AppData/Roaming/Claude" } else { ".config/Claude" };
+    home.join(app).join("claude-code-sessions")
+}
+
+/// What follows `"key":` in a JSON text, without parsing all of it.
+fn field<'a>(text: &'a str, key: &str) -> Option<&'a str> {
+    let at = text.find(&format!("\"{key}\""))? + key.len() + 2;
+    text[at..].trim_start().strip_prefix(':').map(str::trim_start)
+}
+
+/// Claude Code session ids of the chats archived in the desktop app. The files run to megabytes, but both fields sit
+/// in the first few hundred bytes, and a file is re-read only when it changes. Mirrors archivedChats in bridge/discover.js.
+pub fn archived_chats(home: &Path) -> HashSet<String> {
+    static CACHE: OnceLock<Mutex<HashMap<PathBuf, (u64, Option<String>, bool)>>> = OnceLock::new();
+    let mut cache = CACHE.get_or_init(Default::default).lock().unwrap();
+    let mut ids = HashSet::new();
+    for account in dirs(&desktop_sessions_dir(home)).iter().flat_map(|d| dirs(d)) {
+        let Ok(rd) = fs::read_dir(&account) else { continue };
+        for file in rd.flatten().map(|e| e.path()) {
+            let name = file.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            if !name.starts_with("local_") || !name.ends_with(".json") { continue; }
+            let Some(mtime) = mtime_ms(&file) else { continue };
+            let entry = cache.entry(file.clone()).or_insert((u64::MAX, None, false));
+            if entry.0 != mtime {
+                let mut buf = Vec::new();
+                if let Ok(f) = File::open(&file) { let _ = f.take(4096).read_to_end(&mut buf); }
+                let head = String::from_utf8_lossy(&buf);
+                let id = field(&head, "cliSessionId").and_then(|v| v.strip_prefix('"')).and_then(|v| v.split('"').next()).map(String::from);
+                *entry = (mtime, id, field(&head, "isArchived").is_some_and(|v| v.starts_with("true")));
+            }
+            if let (_, Some(id), true) = &*entry { ids.insert(id.clone()); }
+        }
+    }
+    ids
+}
+
+pub fn archived_home() -> HashSet<String> {
+    match std::env::var("HOME") {
+        Ok(h) if !h.is_empty() => archived_chats(Path::new(&h)),
+        _ => HashSet::new(),
+    }
+}
+
+fn claude(home: &Path, now: u64, out: &mut Vec<Found>, archived: &HashSet<String>) {
     for proj in dirs(&home.join(".claude/projects")) {
         let folder = proj.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
         for (log, at) in recent_logs(&proj, now) {
             let Some(id) = log.file_stem().map(|s| s.to_string_lossy().to_string()) else { continue };
+            if archived.contains(&id) { continue; }
             let lines = tail(&log);
             let Some(info) = lines.iter().rev().find(|o| o["cwd"].is_string()) else { continue };
             let entrypoint = info["entrypoint"].as_str().map(String::from);
@@ -192,7 +242,7 @@ fn cursor(home: &Path, now: u64, out: &mut Vec<Found>) {
 /// Every chat whose log was written to in the last 30 minutes.
 pub fn scan(home: &Path, now: u64) -> Vec<Found> {
     let mut out = Vec::new();
-    claude(home, now, &mut out);
+    claude(home, now, &mut out, &archived_chats(home));
     codex(home, now, &mut out);
     cursor(home, now, &mut out);
     out
@@ -281,5 +331,22 @@ mod tests {
     fn a_quiet_log_mid_turn_reads_as_waiting_on_you() {
         assert_eq!(settle("working", "Working", 0, QUIET_MS + 1).0, "idle");
         assert_eq!(settle("done", "Finished", 0, QUIET_MS + 1).0, "done");
+    }
+    #[test]
+    fn skips_chats_archived_in_the_claude_desktop_app() {
+        let home = tmp("archived");
+        let shop = home.join("code/shop");
+        fs::create_dir_all(&shop).unwrap();
+        let folder = home.join(".claude/projects").join(encode(&shop.to_string_lossy()));
+        for id in ["kept", "gone"] {
+            write(&folder.join(format!("{id}.jsonl")), &[json!({ "type": "user", "cwd": shop, "entrypoint": "claude-desktop", "message": { "content": "hi" } })]);
+        }
+        let account = desktop_sessions_dir(&home).join("org/me");
+        fs::create_dir_all(&account).unwrap();
+        fs::write(account.join("local_a.json"), json!({ "sessionId": "local_a", "cliSessionId": "gone", "isArchived": true, "title": "x".repeat(9000) }).to_string()).unwrap();
+        fs::write(account.join("local_b.json"), json!({ "sessionId": "local_b", "cliSessionId": "kept", "isArchived": false }).to_string()).unwrap();
+        fs::write(account.join("local_c.json"), json!({ "sessionId": "local_c", "isArchived": true }).to_string()).unwrap();
+        assert_eq!(archived_chats(&home), HashSet::from(["gone".to_string()]));
+        assert_eq!(scan(&home, now_ms()).iter().map(|f| f.id.as_str()).collect::<Vec<_>>(), ["kept"]);
     }
 }
