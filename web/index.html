@@ -673,7 +673,7 @@ const mats = {
   chair: M('#3a4146', { roughness:.8 }), steel: M('#B9C0C4', { roughness:.3, metalness:.6 }), brass: M('#C9A45C', { roughness:.35, metalness:.7 }),
   bezel: M('#15191C', { roughness:.35 }), visor: M('#1a2126', { roughness:.25, metalness:.2 }), puck: M('#39444b', { roughness:.5 }),
   pot: M('#D8D2C8', { roughness:.6 }), pot2: M('#B5694A', { roughness:.8 }), leaf: M('#4E8A4E'), leaf2: M('#6FAA62'), leaf3: M('#2F6B45'),
-  mug: M('#F4F4F2'), marble: M('#F1EFEA', { roughness:.25 }), pingpong: M('#1F5E8C', { roughness:.6 }), line: M('#FFFFFF'),
+  mug: M('#F4F4F2'), cupSleeve: M('#A0714A', { roughness:.9 }), cupLid: M('#2B3034', { roughness:.5 }), marble: M('#F1EFEA', { roughness:.25 }), pingpong: M('#1F5E8C', { roughness:.6 }), line: M('#FFFFFF'),
   glass: new THREE.MeshStandardMaterial({ color:'#CFE6EE', transparent:true, opacity:.2, roughness:.05, metalness:.1, depthWrite:false }),
   window: new THREE.MeshBasicMaterial({ color:'#DDEFF7', transparent:true, opacity:.1, depthWrite:false }),
   slab: M('#B9BAB4', { roughness:.9 }), beanA: M('#C9744F', { roughness:1 }), beanB: M('#6F8F7A', { roughness:1 }),
@@ -763,8 +763,9 @@ function route(fx, fz, tx, tz) {
 
 /* ---------- spots (places agents can be) ---------- */
 const SPOTS = {};
-// A seat's `table` ({ y: top height, d: near edge ahead of the seat }) is where a laptop goes instead of the lap.
-// A desk's `keys` ({ y: top, d: centre ahead of the seat }) is its keyboard.
+// A seat's `table` ({ y: top height, d: near edge ahead of the seat }) is where a laptop goes instead of the lap,
+// and where a coffee is set down to type. A desk's `keys` ({ y: top, d: centre ahead of the seat }) is its keyboard.
+// A seat's `rest` ({ y, x: to the left }) is a spot for the cup on the seat itself.
 function spot(type, x, z, face, o = {}) { const s = Object.assign({ type, x, z, face, by: null, from: 'back', y: 0 }, o); (SPOTS[type] = SPOTS[type] || []).push(s); return s; }
 function approach(s) {
   if (s.ax !== undefined) return { x: s.ax, z: s.az };
@@ -1706,9 +1707,12 @@ function workbench(cx, cz, seatXs, homeChairs) {
     const screen = new THREE.MeshBasicMaterial({ color:'#1E262B' });
     const sp = new THREE.Mesh(new THREE.PlaneGeometry(.66, .37), screen); sp.position.set(0, 1.12, .017); mon.add(sp);
     box(.44, .02, .14, mats.bezel, x + f[0] * .45, .78, z + f[1] * .45);
-    if (Math.random() > .5) box(.08, .1, .08, mats.mug, x + .45, .82, z + f[1] * .5);
+    if (Math.random() > .5) {   // a mug: round, with a handle
+      cyl(.045, .04, .1, mats.mug, x + .45, .84, z + f[1] * .5, scene, 14);
+      part(new THREE.TorusGeometry(.028, .009, 6, 12), mats.mug, scene, x + .5, .845, z + f[1] * .5);   // the handle stands on its side
+    }
     const chairMat = M('#3a4146', { roughness:.8 });
-    const s = spot('desk', x, z, f, { screen, y: .16, chairMat, laptop: false, keys: { y: .79, d: .45 } });
+    const s = spot('desk', x, z, f, { screen, y: .16, chairMat, laptop: false, table: { y: .77, d: .3 }, keys: { y: .79, d: .45 } });
     s.chair = taskChair(x, z, f, chairMat); seats.push(s);
   }));
   return seats;
@@ -1800,10 +1804,11 @@ const board = canvasTex(768, 280); board.items = [];
     block(x, z, alongX ? len : .06, alongX ? .06 : len, .22);
   };
   glassWall(1.05, -4.6, 5.7, true); glassWall(-1.8, -6.8, 4.4, false); glassWall(5.2, -6.8, 4.4, false);
+  const MEETING_TABLE = { y: .79, d: .35 };
   box(3.4, .06, 1.2, mats.oak, 1.4, .76, -6.9); [[-1.4, 0], [1.4, 0]].forEach(([dx]) => { box(.08, .72, .9, mats.black, 1.4 + dx, .37, -6.9); });
   block(1.4, -6.9, 3.4, 1.2);
-  [.3, 1.4, 2.5].forEach(x => { const a = spot('meeting', x, -7.85, [0, 1], { y: .16 }); a.chair = taskChair(x, -7.85, [0, 1], mats.chair);
-    const b = spot('meeting', x, -5.95, [0, -1], { y: .16 }); b.chair = taskChair(x, -5.95, [0, -1], mats.chair); });
+  [.3, 1.4, 2.5].forEach(x => { const a = spot('meeting', x, -7.85, [0, 1], { y: .16, table: MEETING_TABLE }); a.chair = taskChair(x, -7.85, [0, 1], mats.chair);
+    const b = spot('meeting', x, -5.95, [0, -1], { y: .16, table: MEETING_TABLE }); b.chair = taskChair(x, -5.95, [0, -1], mats.chair); });
   plantBush(-1.25, -5.2, .7);
   // freestanding displays in front of the glass
   const st = grp(.8, -8.55); [-1.75, 1.75].forEach(x => { box(.06, 2.3, .06, mats.black, x, 1.15, 0, st); box(.5, .04, .5, mats.black, x, .02, 0, st); });
@@ -1887,8 +1892,9 @@ booth(0.1, 2.4, mats.felt1); booth(1.75, 2.4, mats.felt2);
 { const rg = box(8.2, .015, 6.2, mats.rug, 9.3, .008, 5.3, scene, false); rg.castShadow = false;
   sofa(12.95, 5.2, 5.2, [-1, 0]); block(12.95, 5.2, .95, 5.2, .15);
   sofa(11.78, 8.3, 3.3, [0, -1], .34); block(11.78, 8.3, 3.3, .95, .15);
-  [3.3, 4.5, 5.7, 6.9].forEach(z => spot('sofa', 12.8, z, [-1, 0], { y: .2, from: 'front', laptop: true }));
-  [10.6, 11.7].forEach(x => spot('sofa', x, 8.15, [0, -1], { y: .2, from: 'front', laptop: true }));
+  const cushion = { y: .47, x: -.55 };   // a cup goes on the cushion beside the hip
+  [3.3, 4.5, 5.7, 6.9].forEach(z => spot('sofa', 12.8, z, [-1, 0], { y: .2, from: 'front', laptop: true, rest: cushion }));
+  [10.6, 11.7].forEach(x => spot('sofa', x, 8.15, [0, -1], { y: .2, from: 'front', laptop: true, rest: cushion }));
   // cushions
   [[13.2, 3.0, '#E9D8BE'], [13.2, 7.3, '#3E5C6B']].forEach(([x, z, c]) => { const p = box(.16, .34, .34, M(c, { roughness: 1 }), x, .62, z); p.rotation.z = -.15; });
   // coffee table
@@ -1896,7 +1902,8 @@ booth(0.1, 2.4, mats.felt1); booth(1.75, 2.4, mats.felt2);
   box(.36, .06, .26, mats.bookB, 10.2, .48, 5.0); box(.32, .05, .22, mats.bookG, 10.22, .53, 5.02); snakePlant(10.75, .445, 5.4);
   block(10.4, 5.2, 1.44, 1.44, .15);
   armchair(7.6, 3.9, [1, 0]); armchair(7.6, 6.4, [1, 0]);
-  spot('armchair', 7.62, 3.9, [1, 0], { y: .2, from: 'front', laptop: true }); spot('armchair', 7.62, 6.4, [1, 0], { y: .2, from: 'front', laptop: true });
+  const armrest = { y: .62, x: -.42 };   // a cup goes on the left armrest
+  spot('armchair', 7.62, 3.9, [1, 0], { y: .2, from: 'front', laptop: true, rest: armrest }); spot('armchair', 7.62, 6.4, [1, 0], { y: .2, from: 'front', laptop: true, rest: armrest });
   cyl(.25, .25, .5, mats.oak, 7.6, .25, 5.15, scene, 20); block(7.6, 5.15, .5, .5, .12);
   [[9.7, 3.0], [11.1, 3.0]].forEach(([x, z]) => { cyl(.32, .32, .4, mats.fabric2, x, .2, z, scene, 24); spot('pouf', x, z, [0, 1], { y: .1 }); block(x, z, .5, .5, .1); });
   // arc lamp
@@ -2482,6 +2489,8 @@ function randomLook(color) {
 // Subagents look like a smaller "intern" version of their parent.
 const internLook = (parent, color) => ({ ...parent.look, color, intern: true, accessories: parent.look.accessories.filter(a => a !== 'mug' && a !== 'backpack') });
 
+// Takeaway cup inside the coffee group: held by its side (x, inward of the left hand), a little forward (z); lid height.
+const CUP = { x: .09, z: .1, lid: .16 };
 const ARM = .36;   // shoulder to hand
 // Aims the left arm (shoulder at (-sx, sy, 0) in the body's frame) at a hand target: rotation.x, rotation.z and how far
 // the arm telescopes. The robots' arms are shorter than their bellies are deep, so reaching out stretches them a little.
@@ -2493,6 +2502,13 @@ function armReach(sx, sy, tx, ty, tz, most = 1.5) {
 function keysAt(a, sp) {
   const K = sp.keys, y = K.y / a.scale - (sp.y + .29), z = K.d / a.scale;
   return armReach(a.shoulder.sx, a.shoulder.sy, -.12, y + .06, z - .03, 1.8);
+}
+// Where a coffee is set down (body frame): on the seat's table to the left, or on the seat's own rest.
+function cupDownAt(a, sp) {
+  const T = sp.table;
+  if (T) return { x: -.45, y: T.y / a.scale - (sp.y + .29), z: T.d / a.scale + .12 };
+  const R = sp.rest;
+  return R ? { x: R.x / a.scale, y: R.y / a.scale - (sp.y + .29), z: 0 } : null;   // nowhere to put it: it stays out of sight
 }
 // Where the laptop sits (body frame) and where the hands reach to type: on the seat's table if it has one, else on the lap.
 // Its keys can overhang the table's edge a little, but never sink into the belly.
@@ -2594,6 +2610,16 @@ function buildRig(a) {
     const tail = part(new THREE.BoxGeometry(.1, .26, .05), mAcc, pelvis, .1, S.h - .13, bodyRadius(S, .86) + .06); tail.rotation.z = .15; }
   if (A.includes('backpack')) part(roundedBox(.34, .34, .1, .08, .03), mAcc, pelvis, 0, S.h * .55, -(bodyRadius(S, .55) + .06));
   if (A.includes('mug')) { const hand = a.armL.userData.hand; part(new THREE.CylinderGeometry(.05, .045, .11, 14), mats.mug, hand, 0, 0, .08); part(new THREE.TorusGeometry(.03, .01, 6, 10), mats.mug, hand, .055, 0, .08); }
+  // a takeaway coffee in the left hand, from the coffee bar until it's finished (updateAgent shows it and keeps it upright)
+  a.hasMug = A.includes('mug'); a.coffee = null;
+  if (!a.hasMug) {
+    const c = a.coffee = new THREE.Group(); a.armL.userData.hand.add(c);
+    part(new THREE.CylinderGeometry(.08, .064, .2, 16), mats.mug, c, CUP.x, .05, CUP.z);
+    part(new THREE.CylinderGeometry(.082, .072, .08, 16), mats.cupSleeve, c, CUP.x, .035, CUP.z);
+    part(new THREE.CylinderGeometry(.086, .086, .025, 16), mats.cupLid, c, CUP.x, CUP.lid, CUP.z);
+    c.visible = false;
+    a.cupDown = c.clone(); pelvis.add(a.cupDown); a.cupSpot = null;   // the same cup, set down
+  }
   if (L.intern) { const ly = part(new THREE.TorusGeometry(.13, .012, 6, 20), mAcc, pelvis, 0, S.h - .02, .02); ly.rotation.x = Math.PI / 2 - .35;
     part(new THREE.BoxGeometry(.1, .13, .012), mats.mug, pelvis, 0, S.h * .62, bodyRadius(S, .62) + .02);
     part(new THREE.BoxGeometry(.1, .03, .014), mAcc, pelvis, 0, S.h * .62 + .045, bodyRadius(S, .62) + .021); }
@@ -2606,7 +2632,10 @@ function buildRig(a) {
   a.lapScreen = new THREE.MeshBasicMaterial({ color: '#1E262B' });
   const ls = new THREE.Mesh(new THREE.PlaneGeometry(.32, .19), a.lapScreen); ls.position.set(0, .115, .007); lid.add(ls);
   a.laptop.visible = false;
-  a.shoulder = { sx, sy: S.h * .72 }; a.lap0 = { y: S.h * .5, z: bodyRadius(S, .5) + .135 }; a.lapSpot = null;
+  // Where the left arm goes to sip (lid at the lower face) and to type (hand on the near keys); the right arm mirrors it.
+  const sy = S.h * .72, faceY = S.h + .34;   // sx: the shoulders, from the arms above
+  a.reach = { sip: armReach(sx, sy, -.06 - CUP.x, faceY - .12 - CUP.lid, .3 - CUP.z) };
+  a.shoulder = { sx, sy }; a.lap0 = { y: S.h * .5, z: bodyRadius(S, .5) + .135 }; a.lapSpot = null;
   a.lap = laptopAt(a, null);
   // closed laptop carried in the right hand while walking around the office (never on the roof)
   a.carry = new THREE.Group(); a.carry.position.set(.03, -.14, 0); a.carry.scale.setScalar(1.4); a.armR.userData.hand.add(a.carry);
@@ -2982,6 +3011,8 @@ function removeAgent(a) {
 
 /* ---------- per-frame agent update ---------- */
 const lerpAngle = (a, b, t) => { let d = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI; if (d < -Math.PI) d += Math.PI * 2; return a + d * t; };
+const COFFEE_MS = 2 * 60 * 1000;                                   // how long a coffee from the bar lasts
+const sipTip = new THREE.Quaternion(), X_AXIS = new THREE.Vector3(1, 0, 0);
 function animationPose(a, moving) {
   if (moving) return 'walk';
   if (a.cheerUntil > performance.now()) return 'cheer';
@@ -3030,10 +3061,27 @@ function updateAgent(a, dt, sdt) {
     const T = typeOn, j = Math.sin(t * 17) * .07, k2 = Math.sin(t * 17 + 1.7) * .07;
     l = T.x + j; r = T.x + k2; lz = T.z + .12; rz = -T.z - .12; ls = rs = T.s;
   }
-  let headYaw = 0;
+  // Coffee: picked up at the coffee bar and held for a while after, sipped while idling or thinking; put down to type or read.
+  const now = performance.now();
+  if (!moving && a.spot && a.spot.type === 'coffee' && !a.onRoof) a.coffeeUntil = now + COFFEE_MS;
+  const hasCoffee = !!a.coffee && !a.onRoof && now < (a.coffeeUntil || 0);
+  const holdsCup = hasCoffee && !['type', 'read', 'raise', 'shoot', 'cheer', 'dance', 'arcade', 'play'].includes(pose);
+  // Hands busy: set the cup down on the table (or the seat) and pick it up again after.
+  let cupDown = false;
+  if (hasCoffee && !holdsCup && !moving && a.spot) {
+    if (a.cupSpot !== a.spot) { a.cupSpot = a.spot; const at = cupDownAt(a, a.spot); a.cupDownAt = at;
+      if (at) a.cupDown.position.set(at.x - CUP.x, at.y + .05, at.z - CUP.z); }   // the cup's bottom sits .05 below its group
+    cupDown = !!a.cupDownAt;
+  }
+  if (holdsCup) l = moving ? -.9 + Math.sin(t * 9) * .08 : -1.0;
+  const sipLeft = holdsCup || a.hasMug;   // sip from the hand that holds something
+  let headYaw = 0, sipW = 0;
   if (!moving && ['idle', 'think', 'type', 'read'].includes(pose)) {
     a.fidgetIn = (a.fidgetIn ?? rand(3, 10)) - sdt;
-    if (a.fidgetIn <= 0) { a.fidget = pick(pose === 'type' || pose === 'read' ? ['look', 'sip', 'look'] : ['look', 'stretch', 'sip', 'look']); a.fidgetT = 0; a.fidgetIn = rand(6, 16); }
+    if (a.fidgetIn <= 0) {
+      a.fidget = pick(holdsCup ? ['sip', 'sip', 'look'] : pose === 'type' || pose === 'read' ? ['look', 'sip', 'look'] : ['look', 'stretch', 'sip', 'look']);
+      a.fidgetT = 0; a.fidgetIn = holdsCup ? rand(2.5, 6) : rand(6, 16);
+    }
   }
   if (a.fidget) {
     const dur = { look: 2.6, stretch: 1.9, sip: 1.7 }[a.fidget];
@@ -3043,7 +3091,11 @@ function updateAgent(a, dt, sdt) {
       const w = Math.sin(Math.PI * a.fidgetT / dur);          // eases in and out
       if (a.fidget === 'look') headYaw = Math.sin(a.fidgetT * 2.4) * .75 * w;
       if (a.fidget === 'stretch') { l = r = l + (-3.0 - l) * w; bob += .05 * w; tilt += (-.25 - tilt) * w; }
-      if (a.fidget === 'sip') { r += (-2.0 - r) * w; tilt += (-.18 - tilt) * w; }
+      if (a.fidget === 'sip') {
+        if (holdsCup) { const S = a.reach.sip; l += (S.x - l) * w; lz += (S.z + .12 - lz) * w; ls += (S.s - ls) * w; tilt += (-.08 - tilt) * w; }   // the lid to the lower face
+        else { if (sipLeft) l += (-2.0 - l) * w; else r += (-2.0 - r) * w; tilt += (-.18 - tilt) * w; }
+        sipW = w;
+      }
     }
   }
   // legs swing when walking and point forward when sitting; the body rests on the seat
@@ -3064,6 +3116,9 @@ function updateAgent(a, dt, sdt) {
   a.tilt += (tilt - a.tilt) * k; a.head.rotation.x = a.tilt; a.head.rotation.y += (headYaw - a.head.rotation.y) * k;
   a.pivot.position.y = a.pelvisY + bob;
   a.carry.visible = carrying;
+  if (a.cupDown) a.cupDown.visible = cupDown;
+  if (a.coffee) { a.coffee.visible = holdsCup;
+    if (holdsCup) a.coffee.quaternion.copy(a.armL.quaternion).invert().multiply(sipTip.setFromAxisAngle(X_AXIS, -.7 * sipW)); }   // upright, tipped toward the face to sip
   a.laptop.visible = !moving && a.busy && !!a.spot && !!a.spot.laptop && pose !== 'raise' && pose !== 'read';
   a.ring.material.color.set(STATUS[a.state].hex);
   const waiting = a.state === 'waiting', lost = !waiting && !!a.stuck && a.busy;
