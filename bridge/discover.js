@@ -4,6 +4,7 @@
 //   Claude Code  ~/.claude/projects/<project>/<session id>.jsonl
 //   Codex        ~/.codex/sessions/YYYY/MM/DD/rollout-…-<thread id>.jsonl (first line: session_meta)
 //   Cursor       ~/.cursor/projects/<project>/agent-transcripts/<chat id>/<chat id>.jsonl
+// Chats you archived in the Claude desktop app are skipped: archiving writes to the log, which would bring them back.
 // Only logs written to in the last FOUND_WINDOW_MS count. The ids match what each tool's hooks send
 // (Codex and Cursor ones unverified against their hooks), so a hook takes over the same agent.
 import fs from 'node:fs';
@@ -64,10 +65,36 @@ export function decode(name) {
 export const settle = (status, activity, at, now) =>
   status !== 'done' && now - at > QUIET_MS ? ['idle', 'Quiet for a few minutes'] : [status, activity];
 
-function claude(home, now, out) {
+// The Claude desktop app keeps a file per chat (<app data>/claude-code-sessions/<org>/<account>/local_<id>.json).
+// Archiving a chat sets isArchived there; cliSessionId is the Claude Code session id the hooks send.
+// The files run to megabytes, but both fields sit in the first few hundred bytes, and a file is re-read only when it changes.
+const APP_DATA = { darwin: 'Library/Application Support/Claude', win32: 'AppData/Roaming/Claude', linux: '.config/Claude' };
+const archiveCache = new Map();   // file -> { mtime, id, archived }
+export const desktopSessionsDir = home => path.join(home, APP_DATA[process.platform] || APP_DATA.linux, 'claude-code-sessions');
+export function archivedChats(home = os.homedir()) {
+  const ids = new Set(), root = desktopSessionsDir(home);
+  for (const account of dirs(root).flatMap(dirs)) {
+    let names; try { names = fs.readdirSync(account); } catch { continue; }
+    for (const n of names) {
+      if (!n.startsWith('local_') || !n.endsWith('.json')) continue;
+      const file = path.join(account, n); let mtime; try { mtime = fs.statSync(file).mtimeMs; } catch { continue; }
+      let c = archiveCache.get(file);
+      if (!c || c.mtime !== mtime) {
+        const head = readSlice(file, false, 4096);
+        c = { mtime, id: head.match(/"cliSessionId"\s*:\s*"([^"]+)"/)?.[1], archived: /"isArchived"\s*:\s*true/.test(head) };
+        archiveCache.set(file, c);
+      }
+      if (c.archived && c.id) ids.add(c.id);
+    }
+  }
+  return ids;
+}
+
+function claude(home, now, out, archived) {
   for (const proj of dirs(path.join(home, '.claude', 'projects'))) {
     const folder = path.basename(proj);
     for (const { file, at } of recentLogs(proj, now)) {
+      if (archived.has(path.basename(file, '.jsonl'))) continue;
       const lines = tail(file), info = [...lines].reverse().find(o => typeof o.cwd === 'string');
       if (!info) continue;
       if (String(info.entrypoint || '').startsWith('sdk')) continue;   // background helpers run through the Agent SDK, not chats you opened
@@ -126,6 +153,6 @@ function cursor(home, now, out) {
 // Every chat whose log was written to in the last 30 minutes.
 export function scan(home = os.homedir(), now = Date.now()) {
   const out = [];
-  claude(home, now, out); codex(home, now, out); cursor(home, now, out);
+  claude(home, now, out, archivedChats(home)); codex(home, now, out); cursor(home, now, out);
   return out;
 }

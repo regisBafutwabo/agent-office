@@ -245,3 +245,12 @@ test('ended chats stay gone and unheard ones leave when their log goes quiet', (
   st.prune();
   assert.equal(st.sessions.size, 0);
 });
+
+test('chats archived in the desktop app leave, but come back with their next hook', () => {
+  const st = new Store();
+  st.ingest({ ...base, hook_event_name: 'SessionStart' }); st.ingest({ ...base, session_id: 's2', hook_event_name: 'SessionStart' });
+  assert.deepEqual(st.dropArchived(new Set(['s1', 'nobody'])), ['s1']);
+  assert.deepEqual(st.snapshot().sessions.map(s => s.id), ['s2']);
+  st.ingest({ ...base, hook_event_name: 'UserPromptSubmit', prompt: 'back again' });
+  assert.ok(st.snapshot().sessions.some(s => s.id === 's1'));
+});

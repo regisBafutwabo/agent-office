@@ -9,7 +9,7 @@ import { Store } from './store.js';
 import { normalize } from './adapters.js';
 import { focus, appIcon } from './focus.js';
 import { watchMusic } from './music.js';
-import { scan } from './discover.js';
+import { scan, archivedChats } from './discover.js';
 import { pollOllama } from './ollama.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -151,6 +151,7 @@ for (const f of scan()) store.adopt(f);
 syncOllama();
 setInterval(() => {
   for (const f of scan()) { const e = store.adopt(f); if (e) broadcast({ type: 'event', event: e }); }
+  for (const id of store.dropArchived(archivedChats())) broadcast({ type: 'event', event: { type: 'SessionEnd', sessionId: id, at: Date.now(), reason: 'Archived in the Claude app' } });
   syncOllama();
   const before = [...store.sessions.keys()]; store.prune();
   for (const id of before) if (!store.sessions.has(id)) broadcast({ type: 'event', event: { type: 'SessionEnd', sessionId: id, at: Date.now(), reason: 'No news for a while' } });
