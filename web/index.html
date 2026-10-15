@@ -2491,30 +2491,39 @@ const internLook = (parent, color) => ({ ...parent.look, color, intern: true, ac
 
 // Takeaway cup inside the coffee group: held by its side (x, inward of the left hand), a little forward (z); lid height.
 const CUP = { x: .09, z: .1, lid: .16 };
-const ARM = .36;   // shoulder to hand
-// Aims the left arm (shoulder at (-sx, sy, 0) in the body's frame) at a hand target: rotation.x, rotation.z and how far
-// the arm telescopes. The robots' arms are shorter than their bellies are deep, so reaching out stretches them a little.
-function armReach(sx, sy, tx, ty, tz, most = 1.5) {
-  const dx = tx + sx, dy = ty - sy, L = Math.hypot(dx, dy, tz);
-  return { x: Math.atan2(-tz, -dy), z: Math.asin(dx / L), s: clamp(L / ARM, .85, most) };
+// How big the body really is: the agent's size times its rig's (interns' rigs are smaller).
+const bodyScale = a => a.scale * a.rig.scale.y;
+const UPPER = .2, FORE = .2;   // shoulder to elbow, elbow to hand
+// Puts the left hand on a target (shoulder at (-sx, sy, 0) in the body's frame): the shoulder's rotation.x and .z, and
+// the elbow's bend e (negative folds the forearm forward). The right arm mirrors it (z flips, e stays). Only a target
+// beyond the arm's reach (round bellies are deep) stretches it, by s, up to `most`.
+function armReach(sx, sy, tx, ty, tz, most = 1.3) {
+  const Tx = tx + sx, Ty = ty - sy, D = Math.hypot(Tx, Ty, tz);
+  const s = clamp(D / (UPPER + FORE) / .98, 1, most), U = UPPER * s, F = FORE * s, d = Math.min(D, (U + F) * .98), k = d / D;
+  const e = -(Math.PI - Math.acos(clamp((U * U + F * F - d * d) / (2 * U * F), -1, 1)));
+  const hy = -U - F * Math.cos(e), hz = -F * Math.sin(e);                    // the hand in the arm's own frame
+  const z = Math.asin(clamp(Tx * k / -hy, -1, 1)), Y = hy * Math.cos(z);   // swing out or in, then up or forward
+  return { x: Math.atan2(tz * k, Ty * k) - Math.atan2(hz, Y), z, e, s };
 }
-// Hands on a desk's keyboard (body frame). The keyboard sits right at the belly, so the arms reach a long way round it.
+// Hands on a desk's keyboard (body frame). The keyboard sits right at the belly, so the agent leans in (LEAN) to reach it:
+// the target is worked out in the leaning body's frame.
+const LEAN = .2;
 function keysAt(a, sp) {
-  const K = sp.keys, y = K.y / a.scale - (sp.y + .29), z = K.d / a.scale;
-  return armReach(a.shoulder.sx, a.shoulder.sy, -.12, y + .06, z - .03, 1.8);
+  const K = sp.keys, y = K.y / bodyScale(a) - (sp.y + .29) + .06, z = K.d / bodyScale(a) - .03, c = Math.cos(LEAN), s = Math.sin(LEAN);
+  return armReach(a.shoulder.sx, a.shoulder.sy, -.12, y * c + z * s, z * c - y * s, 1.4);
 }
 // Where a coffee is set down (body frame): on the seat's table to the left, or on the seat's own rest.
 function cupDownAt(a, sp) {
   const T = sp.table;
-  if (T) return { x: -.45, y: T.y / a.scale - (sp.y + .29), z: T.d / a.scale + .12 };
+  if (T) return { x: -.45, y: T.y / bodyScale(a) - (sp.y + .29), z: T.d / bodyScale(a) + .12 };
   const R = sp.rest;
-  return R ? { x: R.x / a.scale, y: R.y / a.scale - (sp.y + .29), z: 0 } : null;   // nowhere to put it: it stays out of sight
+  return R ? { x: R.x / bodyScale(a), y: R.y / bodyScale(a) - (sp.y + .29), z: 0 } : null;   // nowhere to put it: it stays out of sight
 }
 // Where the laptop sits (body frame) and where the hands reach to type: on the seat's table if it has one, else on the lap.
 // Its keys can overhang the table's edge a little, but never sink into the belly.
 function laptopAt(a, sp) {
   const T = sp && sp.table, L = a.lap0;
-  const y = T ? T.y / a.scale - (sp.y + .29) + .011 : L.y, z = T ? Math.max(L.z, T.d / a.scale + .045) : L.z;
+  const y = T ? T.y / bodyScale(a) - (sp.y + .29) + .011 : L.y, z = T ? Math.max(L.z, T.d / bodyScale(a) + .045) : L.z;
   return { y, z, type: armReach(a.shoulder.sx, a.shoulder.sy, -.2, y + .07, z - .1) };
 }
 function part(geo, mat, parent, x = 0, y = 0, z = 0, shadow = true) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = shadow; m.receiveShadow = shadow; parent.add(m); return m; }
@@ -2583,9 +2592,12 @@ function buildRig(a) {
   const sx = bodyRadius(S, .72) + .045;
   [a.armL, a.armR] = [-1, 1].map(s => { const sh = new THREE.Group(); sh.position.set(s * sx, S.h * .72, 0); sh.rotation.z = s * .12; pelvis.add(sh);
     part(new THREE.SphereGeometry(.07, 12, 10), mBody, sh);
-    sh.userData.arm = part(new THREE.CylinderGeometry(.055, .048, .32, 10), mBody, sh, 0, -.17);
-    const hand = new THREE.Group(); hand.position.y = -.36; sh.add(hand); part(new THREE.SphereGeometry(animal ? .09 : .072, 12, 10), fur || mTrim, hand);
-    sh.userData.hand = hand; return sh; });
+    // upper arm, elbow, forearm, hand: office code turns the shoulder (sh) and bends the elbow
+    const upper = part(new THREE.CylinderGeometry(.055, .05, UPPER, 10), mBody, sh, 0, -UPPER / 2);
+    const elbow = new THREE.Group(); elbow.position.y = -UPPER; sh.add(elbow); part(new THREE.SphereGeometry(.052, 10, 8), mBody, elbow);
+    const fore = part(new THREE.CylinderGeometry(.05, .045, FORE, 10), mBody, elbow, 0, -FORE / 2);
+    const hand = new THREE.Group(); hand.position.y = -FORE; elbow.add(hand); part(new THREE.SphereGeometry(animal ? .09 : .072, 12, 10), fur || mTrim, hand);
+    Object.assign(sh.userData, { hand, elbow, upper, fore }); return sh; });
   // neck and screen head
   part(new THREE.CylinderGeometry(.075, .085, .09, 14), JOINT, pelvis, 0, S.h + .02);
   const head = a.head = new THREE.Group(); head.position.y = S.h + .07 + .27; pelvis.add(head);
@@ -2618,7 +2630,7 @@ function buildRig(a) {
     part(new THREE.CylinderGeometry(.082, .072, .08, 16), mats.cupSleeve, c, CUP.x, .035, CUP.z);
     part(new THREE.CylinderGeometry(.086, .086, .025, 16), mats.cupLid, c, CUP.x, CUP.lid, CUP.z);
     c.visible = false;
-    a.cupDown = c.clone(); pelvis.add(a.cupDown); a.cupSpot = null;   // the same cup, set down
+    a.cupDown = c.clone(); pelvis.parent.add(a.cupDown); a.cupSpot = null;   // the same cup, set down (beside the body, so it doesn't lean with it)
   }
   if (L.intern) { const ly = part(new THREE.TorusGeometry(.13, .012, 6, 20), mAcc, pelvis, 0, S.h - .02, .02); ly.rotation.x = Math.PI / 2 - .35;
     part(new THREE.BoxGeometry(.1, .13, .012), mats.mug, pelvis, 0, S.h * .62, bodyRadius(S, .62) + .02);
@@ -3011,6 +3023,7 @@ function removeAgent(a) {
 
 /* ---------- per-frame agent update ---------- */
 const lerpAngle = (a, b, t) => { let d = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI; if (d < -Math.PI) d += Math.PI * 2; return a + d * t; };
+const ELBOW_REST = -.15;                                           // arms hang with a slight bend
 const COFFEE_MS = 2 * 60 * 1000;                                   // how long a coffee from the bar lasts
 const sipTip = new THREE.Quaternion(), X_AXIS = new THREE.Vector3(1, 0, 0);
 function animationPose(a, moving) {
@@ -3030,7 +3043,7 @@ function updateAgent(a, dt, sdt) {
   const targetAppear = a.leaving ? 0 : 1; a.appear += (targetAppear - a.appear) * (1 - Math.exp(-sdt * 6));
   g.scale.setScalar(a.scale * Math.max(.001, a.appear));
   a.animT += sdt; const t = a.animT; const moving = a.path.length > 0;
-  let bob = 0, l = 0, r = 0, rz = 0, lz = 0, ls = 1, rs = 1, tilt = 0;
+  let bob = 0, l = 0, r = 0, rz = 0, lz = 0, ls = 1, rs = 1, le = ELBOW_REST, re = ELBOW_REST, tilt = 0, lean = 0;
   const pose = animationPose(a, moving), carrying = moving && !a.onRoof;
   const onLaptop = !moving && a.busy && !!a.spot && !!a.spot.laptop;
   switch (pose) {
@@ -3059,7 +3072,8 @@ function updateAgent(a, dt, sdt) {
   const typeOn = pose !== 'type' || moving ? null : onLaptop ? a.lap.type : a.spot && a.spot.keys ? a.keys : null;
   if (typeOn) {                                            // hands on the keys, not the air in front of them
     const T = typeOn, j = Math.sin(t * 17) * .07, k2 = Math.sin(t * 17 + 1.7) * .07;
-    l = T.x + j; r = T.x + k2; lz = T.z + .12; rz = -T.z - .12; ls = rs = T.s;
+    l = T.x + j; r = T.x + k2; lz = T.z + .12; rz = -T.z - .12; ls = rs = T.s; le = re = T.e;
+    if (!onLaptop) lean = LEAN;                             // at a desk: lean in over the keyboard
   }
   // Coffee: picked up at the coffee bar and held for a while after, sipped while idling or thinking; put down to type or read.
   const now = performance.now();
@@ -3070,10 +3084,10 @@ function updateAgent(a, dt, sdt) {
   let cupDown = false;
   if (hasCoffee && !holdsCup && !moving && a.spot) {
     if (a.cupSpot !== a.spot) { a.cupSpot = a.spot; const at = cupDownAt(a, a.spot); a.cupDownAt = at;
-      if (at) a.cupDown.position.set(at.x - CUP.x, at.y + .05, at.z - CUP.z); }   // the cup's bottom sits .05 below its group
+      if (at) a.cupDown.position.set(at.x - CUP.x, at.y + .05 + a.spot.y + .29, at.z - CUP.z); }   // the cup's bottom sits .05 below its group; the body sits at the seat
     cupDown = !!a.cupDownAt;
   }
-  if (holdsCup) l = moving ? -.9 + Math.sin(t * 9) * .08 : -1.0;
+  if (holdsCup) { l = moving ? -.5 + Math.sin(t * 9) * .08 : -.45; le = -1.1; }   // forearm up, the cup in front
   const sipLeft = holdsCup || a.hasMug;   // sip from the hand that holds something
   let headYaw = 0, sipW = 0;
   if (!moving && ['idle', 'think', 'type', 'read'].includes(pose)) {
@@ -3092,7 +3106,7 @@ function updateAgent(a, dt, sdt) {
       if (a.fidget === 'look') headYaw = Math.sin(a.fidgetT * 2.4) * .75 * w;
       if (a.fidget === 'stretch') { l = r = l + (-3.0 - l) * w; bob += .05 * w; tilt += (-.25 - tilt) * w; }
       if (a.fidget === 'sip') {
-        if (holdsCup) { const S = a.reach.sip; l += (S.x - l) * w; lz += (S.z + .12 - lz) * w; ls += (S.s - ls) * w; tilt += (-.08 - tilt) * w; }   // the lid to the lower face
+        if (holdsCup) { const S = a.reach.sip; l += (S.x - l) * w; lz += (S.z + .12 - lz) * w; ls += (S.s - ls) * w; le += (S.e - le) * w; tilt += (-.08 - tilt) * w; }   // the lid to the lower face
         else { if (sipLeft) l += (-2.0 - l) * w; else r += (-2.0 - r) * w; tilt += (-.18 - tilt) * w; }
         sipW = w;
       }
@@ -3106,19 +3120,23 @@ function updateAgent(a, dt, sdt) {
   else if (pose === 'shoot') { const u = a.shootU || 0; if (u > .36 && u < .46) legL = legR = -.35; }
   a.pelvisY += ((seated ? a.spot.y + .29 : LEG) - a.pelvisY) * (1 - Math.exp(-dt * 10));
   const k = 1 - Math.exp(-dt * 12);
-  const A = a.arms; A.lz ??= 0; A.ls ??= 1; A.rs ??= 1;
+  const A = a.arms; A.lz ??= 0; A.ls ??= 1; A.rs ??= 1; A.le ??= ELBOW_REST; A.re ??= ELBOW_REST;
   A.l += (l - A.l) * k; A.r += (r - A.r) * k; A.rz += (rz - A.rz) * k; A.lz += (lz - A.lz) * k; A.ls += (ls - A.ls) * k; A.rs += (rs - A.rs) * k;
+  A.le += (le - A.le) * k; A.re += (re - A.re) * k;
   a.armL.rotation.x = A.l; a.armR.rotation.x = A.r; a.armR.rotation.z = .12 + A.rz; a.armL.rotation.z = -.12 + A.lz;
-  for (const [sh, st] of [[a.armL, A.ls], [a.armR, A.rs]]) {   // telescoping: the upper arm lengthens and the hand moves out
-    sh.userData.arm.scale.y = st; sh.userData.arm.position.y = -.17 * st; sh.userData.hand.position.y = -ARM * st;
+  for (const [sh, st, bend] of [[a.armL, A.ls, A.le], [a.armR, A.rs, A.re]]) {
+    const u = sh.userData; u.elbow.rotation.x = bend;
+    // a reach past the arm's length telescopes both halves a little
+    u.upper.scale.y = u.fore.scale.y = st; u.upper.position.y = -UPPER * st / 2; u.elbow.position.y = -UPPER * st; u.fore.position.y = -FORE * st / 2; u.hand.position.y = -FORE * st;
   }
   a.legs.l += (legL - a.legs.l) * k; a.legs.r += (legR - a.legs.r) * k; a.hips[0].rotation.x = a.legs.l; a.hips[1].rotation.x = a.legs.r;
   a.tilt += (tilt - a.tilt) * k; a.head.rotation.x = a.tilt; a.head.rotation.y += (headYaw - a.head.rotation.y) * k;
   a.pivot.position.y = a.pelvisY + bob;
+  a.lean = (a.lean || 0) + (lean - (a.lean || 0)) * k; a.pivot.rotation.x = a.lean;
   a.carry.visible = carrying;
   if (a.cupDown) a.cupDown.visible = cupDown;
   if (a.coffee) { a.coffee.visible = holdsCup;
-    if (holdsCup) a.coffee.quaternion.copy(a.armL.quaternion).invert().multiply(sipTip.setFromAxisAngle(X_AXIS, -.7 * sipW)); }   // upright, tipped toward the face to sip
+    if (holdsCup) a.coffee.quaternion.copy(a.armL.quaternion).multiply(a.armL.userData.elbow.quaternion).invert().multiply(sipTip.setFromAxisAngle(X_AXIS, -.7 * sipW)); }   // upright, tipped toward the face to sip
   a.laptop.visible = !moving && a.busy && !!a.spot && !!a.spot.laptop && pose !== 'raise' && pose !== 'read';
   a.ring.material.color.set(STATUS[a.state].hex);
   const waiting = a.state === 'waiting', lost = !waiting && !!a.stuck && a.busy;
