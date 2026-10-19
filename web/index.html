@@ -776,10 +776,14 @@ function approach(s) {
 // inside the lift car; agents always leave and enter straight through the lift doors
 const DOOR = { x: 13.3, z: -1.8, face: [-1, 0], from: null, ax: 11.6, az: -1.8 };
 // Over the shoulder of whoever sits at a seat, looking at their screen: where a main agent stands to review a subagent's work.
+// Seats can sit closer together than that (meeting chairs, sofas), so pick the spot farthest from any other seat.
 function besideSpot(s) {
   const f = s.face || [0, 1], p = [-f[1], f[0]];
-  const at = k => ({ x: s.x - f[0] * .35 + k * p[0] * .8, z: s.z - f[1] * .35 + k * p[1] * .8 });
-  let o = at(1); if (!isFree(ci(o.x), cj(o.z))) { const q = at(-1); if (isFree(ci(q.x), cj(q.z))) o = q; }
+  const at = (k, back = .35) => ({ x: s.x - f[0] * back + k * p[0] * .8, z: s.z - f[1] * back + k * p[1] * .8 });
+  const seats = Object.values(SPOTS).flat();
+  const room = o => !isFree(ci(o.x), cj(o.z)) ? -1 : Math.min(9, ...seats.filter(t => t.x !== s.x || t.z !== s.z).map(t => Math.hypot(t.x - o.x, t.z - o.z)));
+  let o = at(1), best = room(o);
+  for (const q of [at(-1), at(.5), at(-.5), at(.5, .8), at(-.5, .8), at(0, 1)]) { if (best >= .8) break; const r = room(q); if (r > best) { o = q; best = r; } }
   const dx = s.x + f[0] * .85 - o.x, dz = s.z + f[1] * .85 - o.z, d = Math.hypot(dx, dz) || 1;
   return { x: o.x, z: o.z, face: [dx / d, dz / d], from: null, y: 0 };
 }
