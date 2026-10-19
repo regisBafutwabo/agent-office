@@ -1,58 +1,194 @@
 # <img src="desktop/src-tauri/icons/128x128@2x.png" alt="Agent Office logo" width="48" height="48" align="absmiddle"> Agent Office
 
-A 3D office where your Claude Code agents work. Every session you run in the **Claude desktop app** or in the **terminal** becomes an agent that rides up in the lift, takes a desk, walks to the library when it researches, raises a hand when it needs your permission, and heads to the lounge when it's done. Subagents show up as smaller teammates. When one finishes, it stays at its desk while its main agent walks over to review the work, then lets it go.
+Agent Office shows your coding agents as characters in a 3D office.
 
-Works in any browser on your computer. Phone and VR headset support comes next (see the roadmap).
+Each Claude Code session is one agent. The session can be in the **Claude desktop app** or in the **terminal**. The agent comes up in the lift and sits at a desk. It goes to the library when it reads many files. It lifts a hand when it needs your permission. It goes to the lounge when it is done.
 
-![Agent Office demo: agents working on a sunlit office floor overlooking Seoul](docs/images/office-seoul.png)
+Subagents are smaller teammates. When a subagent is done, it stays at its desk. Its main agent walks to it, looks at the work, and then lets it go.
 
-*The actual demo scene, exported at 3000 × 1800 with fictional projects and the artistic Seoul skyline. City footprints © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright). Click the image for full resolution.*
+The office works in a browser on your computer. Support for phones and VR headsets is on the roadmap.
 
-> **Preview.** Agent Office is early and Mac-first. The desktop app is signed and notarized by Apple. **Open chat** relies on how the Claude and Codex apps open their chats today; that isn't documented by either app and could change, in which case the button still brings the app forward. Issues and ideas are welcome.
+![Agent Office demo: agents work on a sunlit office floor above Seoul](docs/images/office-seoul.png)
+
+*This is the demo scene, at 3000 × 1800 pixels. The projects are not real. The Seoul skyline is artistic. City footprints © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright). Click the image to see the full size.*
+
+> **Preview.** Agent Office is new. It works best on a Mac. Apple signs and notarizes the desktop app.
+>
+> The **Open chat** button uses the way the Claude app and the Codex app open chats today. These apps do not document this. If they change it, the button only brings the app to the front.
+>
+> We welcome issues and ideas.
+
+## Contents
+
+- [Features](#features)
+- [Quick start](#quick-start)
+- [Other coding agents](#other-coding-agents)
+- [Desktop app (macOS)](#desktop-app-macos)
+- [How it works](#how-it-works)
+- [Characters](#characters)
+- [Day and night](#day-and-night)
+- [Rooftop DJ](#rooftop-dj)
+- [Open an agent's chat](#open-an-agents-chat)
+- [App logos](#app-logos)
+- [Warnings](#warnings)
+- [Approve from the office](#approve-from-the-office)
+- [Options](#options)
+- [Remove the hooks](#remove-the-hooks)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
+- [Roadmap](#roadmap)
+
+## Features
+
+### Agents in the office
+
+- Each Claude Code session is one agent. Sessions from the desktop app and from the terminal both show.
+- Each project has its own floor.
+- Agents that already run when the office starts move in at once. The office reads the logs of Claude Code, Codex and Cursor for this.
+- The name of an agent is the title of its chat. If the chat has no title, the office uses the first prompt.
+- Subagents are smaller "intern" versions of their main agent. The name of a subagent is its task.
+- A main agent reviews the work of a finished subagent before the subagent leaves.
+- Chats that you archive in the Claude desktop app do not show in the office.
+- When an agent merges a pull request or a branch, it cheers. The office shows a message and a "Merged" line in the live feed.
+
+### Where agents go
+
+- Agents walk to a desk, the library, the lounge, the war room, the coffee bar, the basketball machines, the arcade and the rooftop.
+- An agent that reads three or more files in a row goes to the library.
+- An agent that does web research goes to the lounge.
+- An agent in plan mode goes to the war room.
+- A finished agent takes a break after 45 seconds.
+- Agents look around, stretch and drink coffee while they work.
+- Agents get coffee at the coffee bar and hold it for two minutes.
+- Agents hold a closed laptop when they walk on an office floor.
+- An agent that thinks at a desk sits back and turns its chair slowly.
+
+### Characters
+
+- Two crews: **Pets** and **Robots**.
+- Pets: bear, cat, rabbit, Maltese, raccoon and duck.
+- Change the face, body shape, colors and accessories of each agent.
+- Accessories: headphones, beanie, cap, glasses, antenna, scarf, backpack and mug.
+- The face and a chest light show the status of the agent.
+
+### The office
+
+- A **3D** view and a **Plan** view.
+- The camera flies between floors in one smooth movement.
+- **Day and night** themes. The **Auto** theme follows your clock.
+- City views: **Seoul**, **San Francisco** or **Generic city**.
+- A rooftop party at night, with a DJ, a dance floor, a bar and a fire pit.
+- The rooftop DJ can show the song that plays in Spotify or Apple Music.
+- A first-visit tour. You can skip it or start it again.
+- A demo mode with sample agents.
+
+### Panels and cards
+
+- An **Agents** list, a **Live feed** and a **Customize** panel.
+- Each agent has a card with a **Chat** tab and an **Activity** tab.
+- The **Chat** tab shows your prompts and the replies of Claude.
+- An **Open chat** button takes you to the chat of the agent in its app.
+- The office shows the logo of the tool for each floor and agent.
+- A soft sound plays when an agent is done, needs you, or merges. You can turn it off in **Customize → Sounds**.
+- The layout works on phones.
+
+### Warnings
+
+- **Same file:** two agents edit the same file in 5 minutes.
+- **Repeated failures:** the same tool call fails 3 times.
+- **Memory:** the chat of an agent fills the context window.
+
+### Permissions
+
+- Allow or deny a Claude Code permission request from the office.
+
+### Desktop app (macOS)
+
+- A menu-bar app with the office server in it. You do not need Node.
+- The menu-bar icon shows how many agents need you.
+- macOS notifications when an agent asks for permission or is done.
+- **Connect agents** installs the hooks for Claude Code, Codex and Cursor with one click.
+- The app updates itself. It also updates the Claude Code plugin.
+
+### Other tools
+
+- Codex CLI, Cursor, Gemini CLI, GitHub Copilot CLI, Qwen Code, Factory Droid, Goose, Kiro, Windsurf, Cline, OpenCode and Amp can send their status to the office.
+- Models that Ollama has loaded show as agents on an Ollama floor.
+
+### Privacy
+
+- The server listens only on `127.0.0.1`. No data goes out of your computer.
 
 ## Quick start
 
-**On a Mac:** download the DMG from the [latest release](https://github.com/regisBafutwabo/agent-office/releases/latest) and drag **Agent Office** to **Applications**. Open it and click **Connect Claude Code**. See the [installation guide](INSTALL.md) for details.
+### On a Mac
 
-In **Customize → Connect agents**, each **Connect** button installs that tool's hooks. Start a new agent session afterward.
+1. Download the DMG file from the [latest release](https://github.com/regisBafutwabo/agent-office/releases/latest).
+2. Drag **Agent Office** to **Applications**.
+3. Open **Agent Office**.
+4. Click **Connect Claude Code**.
+5. Start a new agent session.
 
-Full setup, including building from source and troubleshooting, is in **[INSTALL.md](INSTALL.md)**. From source, the short version is:
+To connect other tools, go to **Customize → Connect agents**. Each **Connect** button installs the hooks for one tool. Start a new agent session after you connect a tool.
 
-```bash
-git clone https://github.com/regisBafutwabo/agent-office.git
-cd agent-office
-npm install
-npm start                # starts the office at http://localhost:4747
-```
+For more information, see the [installation guide](INSTALL.md).
 
-Then install the hooks once, so Claude Code reports what it's doing:
+### From source
 
-```bash
-claude plugin marketplace add "$(pwd)"
-claude plugin install agent-office@agent-office
-```
+The [installation guide](INSTALL.md) has the full steps and help for problems. These are the short steps.
 
-Open a **new** Claude Code session (desktop app or terminal) and send a prompt. Its agent appears in the office.
+1. Get the code and start the office:
 
-To try it without Claude Code, open <http://localhost:4747/?demo> for simulated agents.
+   ```bash
+   git clone https://github.com/regisBafutwabo/agent-office.git
+   cd agent-office
+   npm install
+   npm start                # starts the office at http://localhost:4747
+   ```
+
+2. Install the hooks one time. The hooks tell the office what Claude Code does.
+
+   ```bash
+   claude plugin marketplace add "$(pwd)"
+   claude plugin install agent-office@agent-office
+   ```
+
+3. Open a **new** Claude Code session in the desktop app or in the terminal.
+4. Send a prompt. Its agent comes into the office.
+
+To try the office without Claude Code, open <http://localhost:4747/?demo>. This shows agents that are not real.
 
 ## Other coding agents
 
-Codex CLI, Cursor, Gemini CLI, GitHub Copilot CLI, Qwen Code, Factory Droid, Goose, Kiro, Windsurf, Cline, OpenCode and Amp can report to the office too, through `adapters/hook.sh`. The desktop app connects Codex and Cursor in one click (**Connect agents** in the menu bar or in Customize). Setup for the others is in [docs/adapters.md](docs/adapters.md). Works with both the desktop app and `npm start`.
+These tools can also send their status to the office: Codex CLI, Cursor, Gemini CLI, GitHub Copilot CLI, Qwen Code, Factory Droid, Goose, Kiro, Windsurf, Cline, OpenCode and Amp. They use `adapters/hook.sh`.
 
-**Ollama** needs no setup. Each model Ollama has loaded shows up on an Ollama floor: busy while it answers, idle while it waits, gone when Ollama unloads it. Ollama doesn't say which tool or project sent a prompt, so these agents can't ask for permission or show the chat.
+The desktop app connects Codex and Cursor with one click. Use **Connect agents** in the menu bar or in **Customize**. For the other tools, see [docs/adapters.md](docs/adapters.md). This works with the desktop app and with `npm start`.
+
+**Ollama** needs no setup. Each model that Ollama has loaded shows on an Ollama floor.
+
+- The agent is busy when the model answers.
+- The agent is idle when the model waits.
+- The agent goes away when Ollama unloads the model.
+
+Ollama does not tell which tool or project sent a prompt. Thus Ollama agents cannot ask for permission and cannot show the chat.
 
 ## Desktop app (macOS)
 
-A 4 MB menu-bar app with the office server built in, so you don't need `npm start` or Node:
+The desktop app is a 4 MB menu-bar app. The office server is in the app. Thus you do not need `npm start` or Node.
 
-- The menu-bar icon shows how many agents need you, and macOS notifies you when one asks for permission.
-- **Connect agents** installs the Claude Code plugin and adds Codex or Cursor hooks in one click, so you don't need this repo. Newer app versions update the plugin by themselves.
-- **Open Agent Office** shows the 3D office in a window. Closing the window frees its memory; the server keeps running in the menu bar until you quit.
-- The app updates itself. To get a new version right away, choose **Check for Updates…** from the menu-bar icon or the Agent Office menu.
-- Phones and browsers can still open <http://localhost:4747>.
+- The menu-bar icon shows how many agents need you.
+- macOS tells you when an agent asks for permission.
+- **Connect agents** installs the Claude Code plugin with one click. It can also add the hooks for Codex or Cursor. You do not need this repository.
+- New versions of the app update the plugin automatically.
+- **Open Agent Office** shows the 3D office in a window.
+- When you close the window, the app frees its memory. The server continues to run in the menu bar until you quit.
+- The app updates itself. To get a new version now, choose **Check for Updates…**. This item is in the menu-bar menu and in the Agent Office menu.
+- Phones and browsers can also open <http://localhost:4747>.
 
-Build it (needs Rust: `brew install rustup && rustup default stable`):
+### Build the desktop app
+
+You need Rust. To install Rust, run `brew install rustup && rustup default stable`.
 
 ```bash
 cd desktop
@@ -61,7 +197,7 @@ npm run dev      # run it
 npm run build    # Agent Office.app and a .dmg in src-tauri/target/release/bundle/
 ```
 
-A build of your own is ad-hoc signed, so other Macs may warn that the developer can't be verified. Follow the [first-launch instructions](INSTALL.md#allow-the-first-launch).
+Your own build has an ad-hoc signature. Thus other Macs can show a warning that Apple cannot verify the developer. To open the app, follow the [first-launch steps](INSTALL.md#allow-the-first-launch).
 
 ## How it works
 
@@ -76,81 +212,159 @@ bridge/server.js  ── keeps live state of every session and subagent
 web/index.html    ── the 3D office (Three.js)
 ```
 
-- The plugin's hook script posts each event to `http://127.0.0.1:4747/hook`. It gives up after one second and never blocks or changes what Claude Code does.
-- The bridge only listens on `127.0.0.1`, so nothing leaves your machine. Prompts and file names are shown in the office, so treat it like your terminal.
-- Where agents go is decided by placement rules in `web/index.html` (search for "Placement rules"): three or more file reads in a row send an agent to the library, web research goes to the lounge, plan mode goes to the war room, and finished agents take a break after 45 seconds and then drift between the lounge, coffee bar, basketball machines, the arcade and the rooftop. Agents look around, stretch and sip coffee while they work.
+- The hook script of the plugin sends each event to `http://127.0.0.1:4747/hook`.
+- The hook script stops after one second. It does not block Claude Code. It does not change what Claude Code does.
+- The bridge listens only on `127.0.0.1`. No data goes out of your computer.
+- The office shows your prompts and file names. Keep it as private as your terminal.
+- Placement rules in `web/index.html` tell agents where to go. Search for "Placement rules" in that file.
 
 ## Characters
 
-Agents are small robots with a screen for a face, and the face shows what the agent is doing: eyes looking up with "…" while thinking, focused while working, a big "!" when it needs you, happy ^ ^ when done, sleepy zZ when idle, and a frown when something failed. A light on the chest shows the same status color.
+Agents are small robots with a screen as a face. The face shows what the agent does:
 
-Pick **Pets** or **Robots** when you first open the office. Pets include a bear, cat, rabbit, Maltese, raccoon, and duck. Change crews anytime in **Customize → Agents**, and customize each agent's animal or robot face, body shape, colors, and accessories (headphones, beanie, cap, glasses, antenna, scarf, backpack, mug). Looks are remembered per project. Subagents automatically look like a smaller "intern" version of their parent, and agents from other tools get a default accessory (Cursor wears headphones, Codex a cap, and so on). Try looks side by side in `prototype/character-lab.html`.
+| Face | Status |
+|---|---|
+| Eyes look up, with "…" | Thinks |
+| Focused eyes | Works |
+| A large "!" | Needs you |
+| Happy ^ ^ | Done |
+| Sleepy zZ | Idle |
+| A frown | Failed |
 
-The first-visit tour shows how project floors, agent activity, tool connections, and permission requests work. Skip it anytime or replay it from **Customize → Getting started**. With no agents running, **Try demo** opens a sample team; the tour can then take you back to your live office to connect your own tools.
+A light on the chest shows the same status color.
+
+When you open the office for the first time, select **Pets** or **Robots**. Pets are a bear, a cat, a rabbit, a Maltese, a raccoon and a duck.
+
+To change the crew, go to **Customize → Agents**. You can change these items for each agent:
+
+- The animal or robot face
+- The body shape
+- The colors
+- The accessories: headphones, beanie, cap, glasses, antenna, scarf, backpack and mug
+
+The office keeps these settings for each project.
+
+Subagents look like a smaller "intern" version of their main agent. Agents from other tools get an accessory automatically. For example, Cursor agents wear headphones and Codex agents wear a cap. To compare looks, open `prototype/character-lab.html`.
+
+### First-visit tour
+
+The tour shows how these items work:
+
+- Project floors
+- Agent activity
+- Tool connections
+- Permission requests
+
+You can skip the tour at any time. To see it again, go to **Customize → Getting started**. If no agents run, click **Try demo** to see a sample team. The tour can then take you back to your live office to connect your tools.
 
 ## Day and night
 
-The office follows your clock by default (**Customize → Office theme → Auto**): night until 5:00, dawn into daylight by 8:00, daylight until 17:00, then golden hour and night by 20:00. Colors and light blend through the transitions, the sun crosses the sky during the day, and the city lights come on at dusk. Pick any other theme to keep it fixed; your choice is remembered.
+By default, the office follows your clock (**Customize → Office theme → Auto**):
 
-Choose **Seoul**, **San Francisco**, or **Generic city** on your first visit, or change it under **Customize → City**. City views combine bundled OpenStreetMap footprints with stylized landmarks and artistic scenery, with windows that light up at night. Your choice is saved on this device. See [the city data notes](web/cities/README.md) to change the office centers and rebake the snapshots.
+| Time | Light |
+|---|---|
+| 0:00 to 5:00 | Night |
+| 5:00 to 8:00 | Dawn, then daylight |
+| 8:00 to 17:00 | Daylight |
+| 17:00 to 20:00 | Golden hour, then night |
+| 20:00 to 24:00 | Night |
+
+The colors and light change slowly between these times. The sun moves across the sky in the day. The city lights come on in the evening.
+
+To keep one theme, select a different theme. The office keeps your selection.
+
+### City
+
+On your first visit, select **Seoul**, **San Francisco** or **Generic city**. To change it later, go to **Customize → City**.
+
+City views use OpenStreetMap footprints, landmarks and artistic scenery. The windows light up at night. The office keeps your selection on this device. To change the office centers or bake the city data again, see [the city data notes](web/cities/README.md).
 
 ## Rooftop DJ
 
-[![Rooftop party in demo mode with a robot DJ, illuminated dance floor, bar, and fire pit](docs/images/rooftop-party.png)](docs/images/rooftop-party.png)
+[![Rooftop party in demo mode with a robot DJ, a lit dance floor, a bar and a fire pit](docs/images/rooftop-party.png)](docs/images/rooftop-party.png)
 
-*A lossless export of the demo's night scene. City footprints © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).*
+*The night scene of the demo. City footprints © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).*
 
-The rooftop DJ can play what you're listening to. It's off until you go up to the rooftop and click **Play my music** at the top: macOS then asks once whether Agent Office may see Spotify and Music. From then on, the office asks the Spotify app for its current song, then Apple Music, and shows it on the front of the DJ booth. With your music on, the DJ plays by day too; the full party (lights, fire, bar) still waits for dark. With nothing playing, the DJ spins its own office mix of made-up tracks.
+The rooftop DJ can play the music that you listen to. It is off by default.
 
-It only checks while an office page has it turned on, never opens Spotify or Music, and nothing leaves your machine. Click the button again to stop. The permission belongs to Agent Office (or your terminal, with `npm start`); to change it later, go to **System Settings → Privacy & Security → Automation**. The dance floor keeps its own beat, because Spotify no longer shares a song's tempo.
+To turn it on:
 
-## Jumping to an agent's chat
+1. Go to the rooftop.
+2. Click **Play my music** at the top.
+3. macOS asks one time if Agent Office can see Spotify and Music. Allow it.
 
-Every live agent has an **↗** button in the agent list, and an **Open chat** / **Open in …** button on its card. When an agent finishes, a toast pops up with the same button, so one click takes you back to it.
+The office then asks the Spotify app for the current song. If Spotify plays nothing, it asks Apple Music. The song shows on the front of the DJ booth.
 
-- **Claude desktop app:** opens that exact chat (the plugin passes the app's session id; needs plugin 0.4.0).
-- **Codex app:** opens that exact thread.
-- **Terminal and iTerm:** selects the tab running that session.
-- **Cursor, VS Code, Windsurf, Zed:** opens that project's window, where its agent chat lives.
-- **Anything else on the list:** brings the app forward.
+- When your music is on, the DJ also plays in the day.
+- The full party (lights, fire and bar) starts only when it is dark.
+- When no music plays, the DJ plays its own office mix. These songs are not real.
 
-The desktop app asks once for permission to control Terminal or iTerm. It only ever opens apps from a fixed list of coding tools, and chat links are built from validated ids only (see `desktop/src-tauri/src/focus.rs`), on macOS.
+The office checks for music only when an office page has music turned on. It does not open Spotify or Music. No data goes out of your computer. To stop, click the button again.
+
+The permission belongs to Agent Office. With `npm start`, it belongs to your terminal. To change it, go to **System Settings → Privacy & Security → Automation**.
+
+The dance floor uses its own beat, because Spotify does not share the tempo of a song.
+
+## Open an agent's chat
+
+Each live agent has an **↗** button in the agent list. Its card has an **Open chat** or **Open in …** button. When an agent is done, a message shows with the same button. One click takes you back to the agent.
+
+| App | What the button does |
+|---|---|
+| Claude desktop app | Opens that chat. You need plugin 0.4.0 or later. |
+| Codex app | Opens that thread. |
+| Terminal and iTerm | Selects the tab of that session. |
+| Cursor, VS Code, Windsurf, Zed | Opens the window of that project. The agent chat is in that window. |
+| Other apps | Brings the app to the front. |
+
+The desktop app asks one time for permission to control Terminal or iTerm. It opens only apps from a fixed list of coding tools. It makes chat links only from validated IDs. See `desktop/src-tauri/src/focus.rs`. This feature works on macOS only.
 
 ## App logos
 
-Floors and agents show the logo of the tool they come from (Claude, Codex, Cursor…) in the Floors list, the agent list and on the floor signs. The logos are the real icons of the apps installed on your Mac, read from macOS by the local office, so no artwork ships with this repo. Tools without an installed app, and the claude.ai preview, show a lettered badge.
+The floors and agents show the logo of their tool (Claude, Codex, Cursor and others). You see the logos in the **Floors** list, in the agent list and on the floor signs.
 
-## Heads-ups
+The office reads the icons of the apps on your Mac from macOS. Thus this repository does not include logo images. Tools without an app on your Mac show a badge with a letter. The claude.ai preview also shows a badge.
 
-The office points out three things you'd want to know about before they bite:
+## Warnings
 
-- **Same file:** two agents edited the same file within 5 minutes. A red bar joins them, and both cards say who else is editing it, since one may overwrite the other's work.
-- **Going in circles:** the same tool call (say, `npm test`) failed 3 times without once working. The agent raises its hand with a red marker and a "?" on its face. A new prompt, a passing run or finishing clears it.
-- **Memory:** a cup on each Claude Code agent's name tag drains as its chat fills the context window, and the card shows the token count. At 80% you get a heads-up that Claude Code will compact it soon. Transcripts don't say how big the window is, so the office assumes 200k until a chat holds more, then 1M.
+The office tells you about three problems:
 
-The first two live in the open office page: reloading it forgets them, and they don't count toward the menu-bar badge.
+- **Same file:** two agents edited the same file in 5 minutes. A red bar connects the two agents. Each card shows the other agent. One agent can overwrite the work of the other.
+- **Repeated failures:** the same tool call (for example, `npm test`) failed 3 times and never passed. The agent lifts its hand. It shows a red marker and a "?" on its face. A new prompt, a passed run, or the end of the task removes the warning.
+- **Memory:** each Claude Code agent has a cup on its name tag. The cup becomes empty as the chat fills the context window. The card shows the number of tokens. At 80%, the office tells you that Claude Code will compact the chat soon. Transcripts do not give the size of the window. Thus the office uses 200k tokens until a chat has more. Then it uses 1M tokens.
 
-## Approving from the office
+The first two warnings are only in the open office page. When you reload the page, they go away. They are not in the count on the menu-bar icon.
 
-When an agent needs permission, it raises its hand and its floor pulses amber. If the office is open on your screen, you can answer right there: **Allow**, **Deny**, or **Answer in Claude Code**. You can do this from the agent's card or from the pop-up alert.
+## Approve from the office
 
-- Claude Code runs its permission hook *before* showing its own dialog. So the office only holds a request while at least one office page is visible, and for at most 45 seconds. After that, or if nobody is watching, Claude Code asks you as usual with no delay.
-- Denied requests tell Claude "Denied from Agent Office", so it can try another way.
-- Only pages served by the office itself can connect. Requests from other websites are refused, so a web page can't approve commands on your machine.
+When an agent needs permission, it lifts its hand. Its floor flashes amber.
 
-This works with Claude Code today. Codex, Copilot CLI, Gemini CLI, Cursor and Factory hooks can also allow or deny, so they can be added the same way.
+If the office is open on your screen, you can answer in the office. Use the card of the agent or the alert. Click one of these buttons:
+
+- **Allow**
+- **Deny**
+- **Answer in Claude Code**
+
+Important information:
+
+- Claude Code runs its permission hook *before* it shows its own dialog. Thus the office holds a request only when one or more office pages are visible.
+- The office holds a request for a maximum of 45 seconds. After that time, Claude Code asks you as usual. If no office page is visible, Claude Code asks you immediately.
+- When you deny a request, Claude gets the message "Denied from Agent Office". Then Claude can try a different way.
+- Only pages from the office server can connect. The office refuses requests from other websites. Thus a web page cannot approve commands on your computer.
+
+This works with Claude Code now. The hooks of Codex, Copilot CLI, Gemini CLI, Cursor and Factory can also allow or deny. We can add them in the same way.
 
 ## Options
 
 | Setting | Default | What it does |
 |---|---|---|
-| `AGENT_OFFICE_PORT` | `4747` | Port for the bridge. Set it for Claude Code too if you change it, since the hook script reads it. |
-| `AGENT_OFFICE_HOST` | `127.0.0.1` | Interface the bridge listens on. |
-| `?demo` | | Simulated agents instead of live sessions. |
-| `?fast` | | Shorter idle timers, useful when testing. |
-| `?time=18:45` | | Preview the **Auto** theme at another hour. |
+| `AGENT_OFFICE_PORT` | `4747` | The port of the bridge. If you change it, also set it for Claude Code. The hook script reads it. |
+| `AGENT_OFFICE_HOST` | `127.0.0.1` | The network interface that the bridge listens on. |
+| `?demo` | | Shows agents that are not real, instead of live sessions. |
+| `?fast` | | Makes the idle timers shorter. Use it for tests. |
+| `?time=18:45` | | Shows the **Auto** theme at a different time. |
 
-## Uninstall the hooks
+## Remove the hooks
 
 ```bash
 claude plugin uninstall agent-office@agent-office
@@ -165,14 +379,22 @@ npm test                                  # bridge and city bake unit tests
 claude --plugin-dir ./plugin              # try the hooks in one session without installing them
 ```
 
+## Contributing
+
+We welcome your help. Read the [contributing guide](CONTRIBUTING.md) before you start.
+
+Send all pull requests to the `develop` branch. Do not send them to `main`.
+
 ## License
 
-[MIT](LICENSE). Agent Office isn't affiliated with Anthropic, OpenAI, Cursor or the other tools it works with. App logos in the office are read from the apps installed on your Mac, not shipped with this repo.
+[MIT](LICENSE).
+
+Agent Office is not part of Anthropic, OpenAI, Cursor or the other tools that it works with. The office reads app logos from the apps on your Mac. This repository does not include them.
 
 ## Roadmap
 
-1. ~~Live sessions from the desktop app and terminal (read-only)~~
-2. ~~Approve or deny permission requests from the office, desktop notifications~~
-3. Phone and VR over your local network (HTTPS for WebXR)
-4. Give agents tasks from the office (sessions started through the Agent SDK)
-5. ~~Desktop app (Tauri) with a menu-bar icon~~; custom 3D model packs and code signing next
+1. ~~Live sessions from the desktop app and the terminal (read-only)~~
+2. ~~Allow or deny permission requests from the office, and desktop notifications~~
+3. Phone and VR on your local network (HTTPS for WebXR)
+4. Give tasks to agents from the office (sessions that start through the Agent SDK)
+5. ~~Desktop app (Tauri) with a menu-bar icon~~ and ~~code signing~~. Next: custom 3D model packs.
