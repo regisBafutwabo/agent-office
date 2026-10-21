@@ -3641,6 +3641,7 @@ const IDLE_BREAK_MS = FAST ? 8000 : 45000;                         // finished f
 const IDLE_ROAM_MS = FAST ? [10000, 16000] : [50000, 90000];       // then drift between break spots every so often
 const THINK_WANDER_MS = FAST ? 8000 : 30000;                       // a long think: maybe go grab a coffee
 const REVIEW_MIN_S = 3, REVIEW_MAX_S = FAST ? 10 : 30;              // a main agent stands beside a finished subagent at least / at most this long
+const REVIEW_GIVEUP_MS = FAST ? 60000 : 180000;                    // a finished subagent nobody came to see by now leaves anyway
 const IDLE_ROOF_MS = FAST ? 20000 : 300000;                        // idle this long without a merge: head up to the terrace and chill
 let MODE = params.has('demo') ? 'demo' : 'live';
 const live = { byId: new Map(), connected: false, everConnected: false, demoStarted: false, tickT: 0 };
@@ -3906,7 +3907,7 @@ $('#opt-sound').onchange = e => { uiPrefs.sound = e.target.checked; saveUi(); if
 // A finished subagent stays at its seat until its main agent has come over and looked at the work, like a senior dev
 // reading over a junior's shoulder. The main agent lets it go once it moves on (its next tool call, reply or stop).
 function queueReview(a, sub) {
-  sub.awaitingReview = true; applyStatus(sub, 'done', `Done · waiting for ${a.name}`);
+  sub.awaitingReview = true; sub.reviewSince = performance.now(); applyStatus(sub, 'done', `Done · waiting for ${a.name}`);
   (a.reviewQ ||= []).push(sub);
   if (!a.review) reviewSubs(a);
 }
@@ -3916,11 +3917,12 @@ async function reviewSubs(a) {
   while (a.reviewQ.length && !a.exiting) {
     const sub = a.reviewQ.shift(); if (!sub.awaitingReview || sub.exiting) continue;
     a.review = sub;
-    while (a.comingDown) await wait(.3);
-    if (a.onRoof) { a.comingDown = true; await leaveRoof(a); a.comingDown = false; }
+    // Every step is capped: if a walk never arrives (another walk took over), the review still ends.
+    for (const t = simTime; a.comingDown && simTime - t < 20;) await wait(.3);
+    if (a.onRoof) { a.comingDown = true; await Promise.race([leaveRoof(a), wait(20)]); a.comingDown = false; }
     if (!a.reviewDone && a.state !== 'waiting') applyStatus(a, 'thinking', reviewLabel(sub));
     applyStatus(sub, 'done', `Done · ${a.name} is coming over`);
-    await walkTo(a, besideSpot(sub.dest || sub.spot || sub.home));
+    await Promise.race([walkTo(a, besideSpot(sub.dest || sub.spot || sub.home)), wait(30)]);
     a.where = `Beside ${sub.name}`; a.pose = poseFor(a);
     if (sub.awaitingReview) applyStatus(sub, 'done', `${a.name} is reviewing the work`);
     const t0 = simTime;
@@ -3930,8 +3932,8 @@ async function reviewSubs(a) {
   }
   a.review = null;
   if (a.exiting) return;
-  // It had already finished (a background subagent reported back later): finished again, not stuck "Reviewing".
-  if (a.reported && (a.reported[0] === 'done' || a.reported[0] === 'idle')) applyStatus(a, ...a.reported);
+  // It had already finished (a background subagent reported back later), or nothing new came in: not stuck "Reviewing".
+  if (a.reported && (a.reported[0] === 'done' || a.reported[0] === 'idle' || a.activity?.startsWith('Reviewing “'))) applyStatus(a, ...a.reported);
   const next = a.afterReview || workSpot(a); a.afterReview = null;
   place(a, next, true);
 }
@@ -4056,6 +4058,7 @@ function liveTick(dt) {
   }
   live.tickT += dt; if (live.tickT < 1) return; live.tickT = 0;
   const now = performance.now();
+  for (const a of agents.slice()) if (a.awaitingReview && now - a.reviewSince > REVIEW_GIVEUP_MS) { a.awaitingReview = false; leaveOffice(a, `Reported back to ${a.parent.name}`); }
   for (const a of agents) {
     if (!a.live || a.kind !== 'main' || a.exiting || a.comingDown || a.path.length || a.review) continue;
     // finished: take a break, then drift between break spots (lounge, coffee, ping-pong, rooftop)
