@@ -189,6 +189,10 @@ button{font:inherit;color:inherit}
 .city-card[aria-busy="true"]::after{content:"Loading…";margin-left:auto;font:400 12px/16px var(--font-b);color:var(--muted)}
 .city-card:focus:not(:focus-visible){outline:none}
 .city-views{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.pack-field{display:grid;grid-template-columns:88px minmax(0,1fr);gap:12px;align-items:center;margin:0 8px;font:500 12px/16px var(--font-b);color:var(--ink-2)}
+.pack-field select{width:100%;min-width:0}
+.pack-empty{margin:8px 8px 0;font:400 12px/18px var(--font-b);color:var(--muted)}
+.pack-empty code{font:500 11px/16px var(--font-m);word-break:break-all}
 details.cust-agent{border:0;padding:0;border-radius:var(--r-md)}
 details.cust-agent[open]{background:var(--panel-2)}
 details.cust-agent summary{display:flex;align-items:center;gap:10px;min-height:48px;padding:8px;cursor:pointer;list-style:none;border-radius:var(--r-md)}
@@ -441,6 +445,11 @@ body.live .speed-top, body.live .demo-only{display:none}
         <button class="btn sm" id="sf-skyline" hidden>View SF skyline</button>
         <button class="btn sm" id="sf-bridge" hidden>View Golden Gate</button>
       </div>
+      <div id="pack-setting">
+        <h3>Furniture</h3>
+        <label class="field pack-field">Model pack <select id="pack-select"><option value="">Built-in</option></select></label>
+        <p class="pack-empty" id="pack-empty" hidden>Add model packs to <code>~/Library/Application Support/Agent Office/packs</code>, then reopen the office.</p>
+      </div>
       <h3>Agents</h3>
       <div class="seg" id="crew-setting" role="group" aria-label="Agent characters"><button data-crew="pets">Pets</button><button data-crew="robots">Robots</button></div>
       <div id="cust-agents"></div>
@@ -690,6 +699,9 @@ function cyl(rt, rb, h, mat, x, y, z, parent = scene, seg = 20) {
   m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
 }
 function grp(x, z, rotY = 0, parent = scene) { const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = rotY; parent.add(g); return g; }
+// A piece of furniture a model pack can replace (see "model packs"): its built-in parts stay, hidden, for switching back.
+const SLOTS = [];
+function slot(name, g) { SLOTS.push({ name, g, parts: [...g.children], model: null }); return g; }
 const yawOf = f => Math.atan2(f[0], f[1]);
 function canvasTex(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return { c, x: c.getContext('2d'), t }; }
 function rrect(x, X, Y, W, H, R) { x.beginPath(); x.moveTo(X + R, Y); x.arcTo(X + W, Y, X + W, Y + H, R); x.arcTo(X + W, Y + H, X, Y + H, R); x.arcTo(X, Y + H, X, Y, R); x.arcTo(X, Y, X + W, Y, R); x.closePath(); }
@@ -1667,6 +1679,7 @@ function pendant(x, z, y = 2.45, big = false, light = false) {
   const shade = new THREE.Mesh(new THREE.CylinderGeometry(.05, r, r * 1.1, 24, 1, true), mats.black); shade.position.y = y; g.add(shade);
   const b = new THREE.Mesh(new THREE.SphereGeometry(r * .45, 14, 10), mats.bulb); b.position.y = y - r * .35; g.add(b);
   if (light) { const L = new THREE.PointLight('#FFD9A0', .3, 10, 1.6); L.position.set(x, y - .4, z); scene.add(L); lamps.push(L); }
+  slot('pendant', g);
 }
 function plantBig(x, z, s = 1, parent = scene) {
   const g = grp(x, z, rand(0, 6), parent); g.scale.setScalar(s);
@@ -1675,12 +1688,14 @@ function plantBig(x, z, s = 1, parent = scene) {
   for (let k = 0; k < 9; k++) { const a = k * 2.4, h = .9 + k * .12, r = .25 + (k % 3) * .08;
     const l = new THREE.Mesh(new THREE.IcosahedronGeometry(rand(.2, .32), 0), k % 2 ? mats.leaf : mats.leaf3);
     l.position.set(Math.cos(a) * r, h, Math.sin(a) * r); l.scale.y = .7; l.castShadow = true; g.add(l); }
+  slot('plantBig', g);
   if (parent === scene) block(x, z, .6 * s, .6 * s, .2);
 }
 function plantBush(x, z, s = 1, parent = scene) {
   const g = grp(x, z, 0, parent); g.scale.setScalar(s);
   cyl(.24, .2, .42, mats.pot2, 0, .21, 0, g);
   [[0, .66, 0, .34], [.16, .82, .06, .24], [-.14, .78, -.08, .26]].forEach(([a, b, c, r], i) => { const l = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 0), i % 2 ? mats.leaf2 : mats.leaf); l.position.set(a, b, c); l.castShadow = true; g.add(l); });
+  slot('plantBush', g);
   if (parent === scene) block(x, z, .5 * s, .5 * s, .2);
 }
 function snakePlant(x, y, z, parent = scene) {
@@ -1696,7 +1711,7 @@ function taskChair(x, z, f, mat) {
   box(.5, .08, .48, mat, 0, .46, 0, g); box(.48, .55, .06, mat, 0, .82, -.3, g);
   box(.04, .3, .04, mats.black, 0, .6, -.27, g);
   [-1, 1].forEach(s => { box(.035, .2, .035, mats.black, s * ARMREST.x, .59, -.08, g); box(.07, .035, .36, mats.black, s * ARMREST.x, ARMREST.y - .018, .02, g); });   // armrests
-  return g;
+  return slot('taskChair', g);
 }
 function workbench(cx, cz, seatXs, homeChairs) {
   const g = grp(cx, cz);
@@ -1731,7 +1746,7 @@ function sofa(cx, cz, len, f, backH = .42) {
     box(w - .05, .14, .76, mats.fabric, x, .4, .07, g);
     box(w - .05, backH, .2, mats.fabric, x, .47 + backH / 2, -.36, g); }
   [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => box(.04, .08, .04, mats.black, a * (len / 2 - .08), .04, b * .4, g));
-  return g;
+  return slot('sofa', g);
 }
 function armchair(x, z, f) {
   const g = grp(x, z, yawOf(f));
@@ -1740,6 +1755,7 @@ function armchair(x, z, f) {
   [-.42, .42].forEach(ax => box(.08, .2, .68, mats.leather, ax, .52, 0, g));
   box(.84, .05, .78, mats.black, 0, .3, 0, g);
   [[-.35, -.3], [.35, -.3], [-.35, .3], [.35, .3]].forEach(([a, b]) => box(.04, .28, .04, mats.black, a, .14, b, g));
+  slot('armchair', g);
   block(x, z, .9, .9, .15);
 }
 // squashed sphere: flat base, dipped seat at the front, slumped backrest behind, soft wrinkles
@@ -1757,7 +1773,7 @@ function beanbagGeo() {
   }
   g.computeVertexNormals(); return g;
 }
-function stoolHigh(x, z) { const g = grp(x, z); cyl(.2, .2, .06, mats.oak, 0, .74, 0, g); [0, 1, 2, 3].forEach(k => { const a = k * Math.PI / 2 + .78; const l = cyl(.016, .016, .74, mats.black, Math.cos(a) * .13, .37, Math.sin(a) * .13, g, 6); }); cyl(.14, .14, .015, mats.black, 0, .3, 0, g); }
+function stoolHigh(x, z) { const g = grp(x, z); cyl(.2, .2, .06, mats.oak, 0, .74, 0, g); [0, 1, 2, 3].forEach(k => { const a = k * Math.PI / 2 + .78; const l = cyl(.016, .016, .74, mats.black, Math.cos(a) * .13, .37, Math.sin(a) * .13, g, 6); }); cyl(.14, .14, .015, mats.black, 0, .3, 0, g); slot('stoolHigh', g); }
 function booth(cx, cz, felt) {
   const g = grp(cx, cz);
   box(1.45, 2.3, .08, felt, 0, 1.15, -.66, g);
@@ -3546,6 +3562,78 @@ function renderJSON() {
   $('#json').textContent = JSON.stringify(o, null, 2);
 }
 
+/* ---------- model packs: glTF furniture from ~/Library/Application Support/Agent Office/packs ---------- */
+// pack.json: { name, license, slots: { sofa: { model: 'sofa.glb', rotate: 90, fit: 'stretch-x' }, ... } }. A model is
+// fitted into the space of the piece it replaces, so seats, desks and walkways stay where agents expect them.
+// fit: 'contain' (default, keeps proportions), 'stretch-x' (fills the length, e.g. long sofas) or 'stretch'.
+let packList = [], packToken = 0;
+const packModels = new Map();                                       // url → loading glTF scene
+function vendorScript(src) {
+  return new Promise((ok, fail) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => fail(new Error(src)); document.head.appendChild(s); });
+}
+async function gltf(url) {
+  if (!THREE.GLTFLoader) await vendorScript('/vendor/GLTFLoader.js');
+  if (!packModels.has(url)) packModels.set(url, new THREE.GLTFLoader().loadAsync(url).then(m => { m.scene.traverse(o => o.isMesh && [].concat(o.material).forEach(r128Look)); return m.scene; }));
+  return packModels.get(url);
+}
+// three r128 can't show velvet (KHR_materials_sheen) and the office has no environment map for metals to reflect,
+// so both would render near-black: velvet takes its sheen color, metals keep a little shine instead.
+function r128Look(m) {
+  const sheen = m.userData.gltfExtensions && m.userData.gltfExtensions.KHR_materials_sheen;
+  if (sheen && sheen.sheenColorFactor) { const c = new THREE.Color().fromArray(sheen.sheenColorFactor); m.color.setRGB(Math.max(m.color.r, c.r), Math.max(m.color.g, c.g), Math.max(m.color.b, c.b)); }
+  if (m.metalness > .5) m.metalness = .35;
+}
+// The built-in parts' extent in the slot's own frame (before its position, turn and scale).
+function partsBox(parts) {
+  const b = new THREE.Box3(), t = new THREE.Box3();
+  for (const o of parts) { if (!o.geometry) continue; o.updateMatrix(); if (!o.geometry.boundingBox) o.geometry.computeBoundingBox(); b.union(t.copy(o.geometry.boundingBox).applyMatrix4(o.matrix)); }
+  return b;
+}
+function fitModel(src, room, opt) {
+  const model = src.clone(true); model.rotation.y = (opt.rotate || 0) * Math.PI / 180;
+  const lights = [];                                                // a model's own lights would be copied into every seat
+  model.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = true; else if (o.isLight) lights.push(o); });
+  lights.forEach(l => l.parent.remove(l));
+  const holder = new THREE.Group(); holder.add(model); holder.updateMatrixWorld(true);
+  const m = new THREE.Box3().setFromObject(model), ms = m.getSize(new THREE.Vector3()), mc = m.getCenter(new THREE.Vector3());
+  const rs = room.getSize(new THREE.Vector3()), rc = room.getCenter(new THREE.Vector3());
+  const k = new THREE.Vector3(rs.x / ms.x, rs.y / ms.y, rs.z / ms.z);
+  if (opt.fit === 'stretch-x') { const u = Math.min(k.y, k.z); k.set(k.x, u, u); }
+  else if (opt.fit !== 'stretch') { const u = Math.min(k.x, k.y, k.z); k.set(u, u, u); }
+  holder.scale.copy(k).multiplyScalar(opt.scale || 1);
+  holder.position.set(rc.x - mc.x * holder.scale.x, room.min.y - m.min.y * holder.scale.y, rc.z - mc.z * holder.scale.z);
+  return holder;
+}
+async function applyPack(id) {
+  const token = ++packToken, pack = packList.find(p => p.id === id);
+  const models = {};
+  if (pack) await Promise.all(Object.entries(pack.slots).map(async ([name, opt]) => {
+    if (!opt || !opt.model || !SLOTS.some(s => s.name === name)) return;
+    try { models[name] = await gltf(`/packs/${encodeURIComponent(pack.id)}/${opt.model.split('/').map(encodeURIComponent).join('/')}`); }
+    catch (err) { console.warn(`[packs] ${pack.id}: ${name} (${opt.model}) did not load`, err); }
+  }));
+  if (token !== packToken) return;                                   // another pack was picked meanwhile
+  for (const s of SLOTS) {
+    if (s.model) { s.g.remove(s.model); s.model = null; }
+    const src = models[s.name];
+    if (src) { s.room ??= partsBox(s.parts); s.model = fitModel(src, s.room, pack.slots[s.name]); s.g.add(s.model); }
+    s.parts.forEach(p => p.visible = !src);
+  }
+  const missing = pack ? Object.keys(pack.slots).filter(n => SLOTS.some(s => s.name === n) && !models[n]).length : 0;
+  if (missing) toast(`${pack.name}: ${missing} model${missing > 1 ? 's' : ''} could not be used`);
+}
+function renderPacks() {
+  const sel = $('#pack-select'), cur = uiPrefs.pack || '';
+  sel.innerHTML = `<option value="">Built-in</option>` + packList.map(p => `<option value="${esc(p.id)}"${p.id === cur ? ' selected' : ''}>${esc(p.name)}${p.license ? ` (${esc(p.license)})` : ''}</option>`).join('');
+  $('#pack-empty').hidden = packList.length > 0;
+}
+async function loadPacks() {
+  try { const r = await fetch('/api/packs'); if (!r.ok) throw 0; packList = await r.json(); } catch (_) { $('#pack-setting').hidden = true; return; }
+  renderPacks();
+  if (uiPrefs.pack && packList.some(p => p.id === uiPrefs.pack)) applyPack(uiPrefs.pack);
+}
+$('#pack-select').onchange = e => { uiPrefs.pack = e.target.value; saveUi(); applyPack(uiPrefs.pack); };
+
 /* ---------- VR ---------- */
 $('#vr-btn').onclick = async () => {
   if (!navigator.xr) { toast('This browser has no WebXR. Open the office in your headset browser to walk around in VR.'); return; }
@@ -4291,7 +4379,7 @@ window.agentOffice = { agents, SPOTS, DOOR };   // for debugging from the consol
 curFloor = makeFloor('lobby', 'Your first project', true); rebuildTower();
 setLiftOpen(uiPrefs.lift !== false); if (uiPrefs.panel === false) setPanelOpen(false);
 showDetailTab(uiPrefs.detailTab === 'activity' ? 'activity' : 'chat');
-applyScene(uiPrefs.theme in SCENES ? uiPrefs.theme : 'auto'); buildCustomize(); renderJSON(); drawTerm(); drawBoard(); layout();
+applyScene(uiPrefs.theme in SCENES ? uiPrefs.theme : 'auto'); buildCustomize(); renderJSON(); drawTerm(); drawBoard(); layout(); loadPacks();
 if (Object.hasOwn(CITIES, uiPrefs.city)) setCity(uiPrefs.city);
 setView('3d'); Object.assign(cam, { theta: goal.theta, phi: goal.phi, radius: goal.radius }); cam.target.copy(goal.target); applyCam();
 if (MODE === 'demo' || !/^https?:$/.test(location.protocol)) startDemo(); else connectLive();

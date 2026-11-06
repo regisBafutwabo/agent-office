@@ -6,6 +6,7 @@ use crate::discover;
 use crate::focus;
 use crate::music;
 use crate::ollama;
+use crate::packs;
 use crate::setup;
 use crate::store::{self, Origin, Store};
 use axum::{
@@ -31,6 +32,8 @@ use tokio::sync::{broadcast, oneshot};
 struct Web;
 
 static THREE_JS: &[u8] = include_bytes!("../../../node_modules/three/build/three.min.js");
+static GLTF_LOADER: &[u8] = include_bytes!("../../../node_modules/three/examples/js/loaders/GLTFLoader.js");
+static SKELETON_UTILS: &[u8] = include_bytes!("../../../node_modules/three/examples/js/utils/SkeletonUtils.js");
 
 /// How often to look for chats in the agents' logs (see discover.rs).
 const LOG_SCAN: Duration = Duration::from_secs(10);
@@ -100,6 +103,10 @@ pub fn router(port: u16, on_change: OnChange) -> Router {
         .route("/api/face/{session}/{mood}", post(save_face))
         .route("/ws", get(ws))
         .route("/vendor/three.min.js", get(three))
+        .route("/vendor/GLTFLoader.js", get(|| async { ([(header::CONTENT_TYPE, "text/javascript")], GLTF_LOADER) }))
+        .route("/vendor/SkeletonUtils.js", get(|| async { ([(header::CONTENT_TYPE, "text/javascript")], SKELETON_UTILS) }))
+        .route("/api/packs", get(|| async { Json(Value::Array(packs::list(&packs::dir()))) }))
+        .route("/packs/{*file}", get(pack_file))
         .fallback(get(asset))
         .layer(middleware::from_fn_with_state(state.clone(), check_origin))
         .with_state(state)
@@ -424,6 +431,17 @@ async fn client(mut socket: WebSocket, st: AppState) {
 
 async fn three() -> impl IntoResponse {
     ([(header::CONTENT_TYPE, "text/javascript")], THREE_JS)
+}
+
+async fn pack_file(Path(rel): Path<String>) -> Response {
+    let Some(path) = packs::file(&packs::dir(), &rel) else { return StatusCode::FORBIDDEN.into_response() };
+    match tokio::fs::read(&path).await {
+        Ok(data) => {
+            let mime = mime_guess::from_path(&path).first_or_octet_stream().to_string();
+            ([(header::CONTENT_TYPE, mime), (header::CACHE_CONTROL, "no-cache".to_string())], data).into_response()
+        }
+        Err(_) => (StatusCode::NOT_FOUND, "Not found").into_response(),
+    }
 }
 
 async fn asset(uri: Uri) -> Response {

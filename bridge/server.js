@@ -11,10 +11,13 @@ import { focus, appIcon } from './focus.js';
 import { watchMusic } from './music.js';
 import { scan, archivedChats } from './discover.js';
 import { pollOllama } from './ollama.js';
+import { listPacks, packFile } from './packs.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = path.join(ROOT, 'web');
 const THREE_JS = path.join(ROOT, 'node_modules', 'three', 'build', 'three.min.js');
+const THREE_EXAMPLES = path.join(ROOT, 'node_modules', 'three', 'examples', 'js');
+const VENDOR = { '/vendor/GLTFLoader.js': path.join(THREE_EXAMPLES, 'loaders', 'GLTFLoader.js'), '/vendor/SkeletonUtils.js': path.join(THREE_EXAMPLES, 'utils', 'SkeletonUtils.js') };
 const PORT = Number(process.env.AGENT_OFFICE_PORT || 4747);
 const HOST = process.env.AGENT_OFFICE_HOST || '127.0.0.1';
 const MAX_BODY = 1024 * 1024;
@@ -103,6 +106,9 @@ const server = http.createServer(async (req, res) => {
   if (req.method !== 'GET') { res.writeHead(405); res.end(); return; }
   if (url.pathname === '/api/state') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(snapshot())); return; }
   if (url.pathname === '/vendor/three.min.js') return sendFile(res, THREE_JS);
+  if (VENDOR[url.pathname]) return sendFile(res, VENDOR[url.pathname]);
+  if (url.pathname === '/api/packs') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(listPacks())); return; }
+  if (url.pathname.startsWith('/packs/')) { const file = packFile(url.pathname); if (!file) { res.writeHead(403); res.end(); return; } return sendFile(res, file); }
   if (url.pathname.startsWith('/api/app-icon/')) {               // real app icons for floor signs and the agent list
     const png = await appIcon(decodeURIComponent(url.pathname.slice(14)).replace(/\.png$/, ''));
     if (!png) { res.writeHead(404); res.end(); return; }
