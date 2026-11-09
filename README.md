@@ -130,6 +130,14 @@ The office points out three things you'd want to know about before they bite:
 
 The first two live in the open office page: reloading it forgets them, and they don't count toward the menu-bar badge.
 
+## Everything that needs you, in one place
+
+Agents from every tool you run show up together: the Claude app, the terminal, T3 Code, Codex, Cursor and the rest.
+
+- **Needs you:** a strip at the top lists every agent waiting on you, oldest first, with the tool and project it's in. Answer a held permission request right there with **Allow** or **Deny**, or jump to the agent's app with **Open**.
+- **By tool:** the agent list can be grouped by project (one floor each) or by the tool each agent runs in.
+- **Wall mode:** the **Wall** button goes full screen with only the building, the "needs you" strip and a big status light per agent, for a spare monitor or a TV. Press Esc to leave.
+
 ## Approving from the office
 
 When an agent needs permission, it raises its hand and its floor pulses amber. If the office is open on your screen, you can answer right there: **Allow**, **Deny**, or **Answer in Claude Code**. You can do this from the agent's card or from the pop-up alert.

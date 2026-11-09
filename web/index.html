@@ -106,8 +106,8 @@ button{font:inherit;color:inherit}
 .topbar .seg{align-self:stretch;align-items:stretch;flex-wrap:nowrap;padding:4px;border-radius:var(--r-lg);background:var(--glass)}
 .topbar .seg button{height:auto;padding:0 12px;border-radius:var(--r-md);font-size:13px}
 .topbar .seg button[aria-pressed="true"]{background:var(--panel-3);box-shadow:none}
-.vr-btn,.music-btn{height:auto;padding:0 14px;border-radius:var(--r-lg);background:var(--glass);font-weight:500}
-.vr-btn:hover,.music-btn:hover{background:var(--panel-2)}
+.vr-btn,.music-btn,.wall-btn{height:auto;padding:0 14px;border-radius:var(--r-lg);background:var(--glass);font-weight:500}
+.vr-btn:hover,.music-btn:hover,.wall-btn:hover{background:var(--panel-2)}
 
 /* side panel */
 .panel{position:absolute;top:var(--top);right:16px;bottom:16px;width:344px;border-radius:var(--r-lg);display:flex;flex-direction:column;overflow:hidden;z-index:4;transition:transform .3s ease,opacity .3s ease}
@@ -325,8 +325,36 @@ body.live .speed-top, body.live .demo-only{display:none}
 .hint kbd{font:500 11px/16px var(--font-m);padding:0 4px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel-2);color:var(--ink-2)}
 .city-credit{position:absolute;left:16px;bottom:56px;max-width:calc(100% - var(--panel-w) - 48px);z-index:4;height:20px;display:inline-flex;align-items:center;padding:0 8px;border-radius:var(--r-sm);font:400 11px/16px var(--font-b);color:var(--muted);background:var(--glass);text-decoration:none}
 .city-credit:hover{color:var(--ink);text-decoration:underline}
+.needs{position:absolute;top:var(--top);left:252px;right:calc(var(--panel-w) + 32px);margin:0 auto;max-width:620px;border-radius:var(--r-lg);padding:8px;z-index:6;display:flex;flex-direction:column;gap:4px;max-height:40%;overflow:auto}
+.needs-head{display:flex;align-items:center;gap:8px;padding:2px 6px;font:600 12px/16px var(--font-b);color:color-mix(in srgb,var(--s-wait) var(--pill-k),var(--ink))}
+.needs-head .dot{width:8px;height:8px;border-radius:50%;background:var(--s-wait);animation:pulse 1.6s ease-in-out infinite}
+.need{display:flex;align-items:center;gap:10px;padding:6px;border-radius:var(--r-md);background:var(--panel-2)}
+.need .av{position:relative;flex:none}
+.need-who{display:flex;flex-direction:column;min-width:0;flex:1;font:400 12px/16px var(--font-b);color:var(--muted)}
+.need-who b{color:var(--ink);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.need-what{color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.need-age{font:500 11px/1 var(--font-b);color:var(--muted);font-variant-numeric:tabular-nums;flex:none}
+.need-acts{display:flex;gap:4px;flex:none}
+@keyframes pulse{50%{opacity:.35}}
+.roster-group{margin:2px 0 6px;align-self:flex-start}
+.group-row{display:flex;align-items:center;gap:8px;padding:16px 8px 4px;font:400 12px/16px var(--font-b);color:var(--muted)}
+.group-row b{color:var(--ink);font-weight:600}
+.group-row .fl-meta{margin-left:auto}
+.wall-bar{display:none}
+#app.wall .lift,#app.wall .panel,#app.wall .panel-tab,#app.wall .detail,#app.wall .hint,#app.wall .topbar>:not(.wall-keep){display:none !important}
+#app.wall .needs{left:16px;right:16px;max-width:900px;top:16px}
+#app.wall .need{padding:10px}
+#app.wall .need-who{font-size:15px;line-height:20px}
+#app.wall .wall-bar{display:flex;position:absolute;left:16px;right:16px;bottom:16px;gap:8px;flex-wrap:wrap;justify-content:center;z-index:6;pointer-events:none}
+.wall-tile{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--r-lg);min-width:180px;max-width:280px}
+.wall-tile .light{width:18px;height:18px;border-radius:50%;flex:none;box-shadow:0 0 12px var(--c);background:var(--c)}
+.wall-tile.s-waiting .light{animation:pulse 1.2s ease-in-out infinite}
+.wall-tile .wt{display:flex;flex-direction:column;min-width:0;font:400 12px/16px var(--font-b);color:var(--muted)}
+.wall-tile .wt b{font:600 16px/22px var(--font-b);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#app.wall .wall-exit{position:absolute;top:16px;right:16px}
 .toasts{position:absolute;top:var(--top);right:calc(var(--panel-w) + 32px);display:flex;flex-direction:column;gap:8px;z-index:7;align-items:flex-end;pointer-events:none;max-width:min(460px,calc(100% - var(--panel-w) - 48px))}
 #app.panel-off .toasts{top:112px}
+#app.has-needs .toasts{top:calc(var(--top) + var(--needs-h,0px) + 8px)}
 .toast{pointer-events:auto;display:flex;align-items:center;gap:12px;min-height:44px;padding:8px 8px 8px 12px;border-radius:var(--r-lg);box-shadow:var(--e-2);font:400 13px/18px var(--font-b);animation:tin .25s ease-out}
 .toast>span:not(.toast-av){flex:1;min-width:0}
 .toast-av{position:relative;flex:none;margin-left:-4px}
@@ -371,7 +399,7 @@ body.live .speed-top, body.live .demo-only{display:none}
   .lift-btn .fl-count{display:none}
 }
 @media (prefers-reduced-motion: reduce){
-  .pill.s-waiting,.toast,.fl-num.party{animation:none}
+  .pill.s-waiting,.toast,.fl-num.party,.needs-head .dot,.wall-tile.s-waiting .light{animation:none}
 }
 </style>
 
@@ -404,11 +432,19 @@ body.live .speed-top, body.live .demo-only{display:none}
       <button data-speed="1" aria-pressed="true">1×</button>
       <button data-speed="3" aria-pressed="false">3×</button>
     </div>
+    <button class="btn glass wall-btn" id="wall-btn" aria-pressed="false" title="Wall mode: full screen, big status lights">Wall</button>
     <button class="btn vr-btn glass" id="vr-btn" aria-label="Enter VR">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h13A2.5 2.5 0 0 1 21 8.5v6a2.5 2.5 0 0 1-2.5 2.5h-3l-2-2.5h-3L8.5 17h-3A2.5 2.5 0 0 1 3 14.5z"/><circle cx="8" cy="11.5" r="1.5"/><circle cx="16" cy="11.5" r="1.5"/></svg>
       <span>Enter VR</span>
     </button>
   </header>
+
+  <section class="needs glass" id="needs" hidden aria-label="Agents that need you" aria-live="polite">
+    <div class="needs-head"><span class="dot" aria-hidden="true"></span><span id="needs-title">Needs you</span></div>
+    <div id="needs-list"></div>
+  </section>
+  <div class="wall-bar" id="wall-bar" aria-label="Every agent"></div>
+  <button class="btn glass wall-exit" id="wall-exit" hidden>Exit wall mode</button>
 
   <nav class="lift glass" id="lift" aria-label="Floors">
     <div class="lift-head">
@@ -431,6 +467,7 @@ body.live .speed-top, body.live .demo-only{display:none}
     <button class="icon-btn sm" id="panel-hide" aria-label="Hide panel" title="Hide panel  ]"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
     </div>
     <div class="tabpane" id="tab-agents">
+      <div class="seg roster-group" id="roster-group" role="group" aria-label="Group agents"><button data-group="project">By project</button><button data-group="tool">By tool</button></div>
       <div class="roster" id="roster"></div>
       <div class="setup-card" id="setup-card" hidden></div>
     </div>
@@ -2859,6 +2896,7 @@ function setAgentLook(a, patch) {
 }
 function setState(a, state, activity) {
   if (/failed|Denied/.test(activity || '')) a.faceErrorUntil = a.animT + 4;   // a worried face for a few seconds
+  if (state === 'waiting' && a.state !== 'waiting') a.waitingSince = Date.now(); else if (state !== 'waiting') a.waitingSince = 0;
   a.state = state; a.activity = activity; a.labelDirty = true; uiDirty = true; detailDirty = true; updateScreen(a); }
 function updateScreen(a) {
   if (a.gone) return; const c = stateColor(a);
@@ -3281,7 +3319,7 @@ canvas.addEventListener('wheel', e => { e.preventDefault(); goal.radius = clamp(
 const keys = new Set();
 addEventListener('keydown', e => {
   if (e.target.closest('input,textarea,select,dialog')) return;
-  if (e.key === 'Escape') select(null);
+  if (e.key === 'Escape') { if (appEl.classList.contains('wall')) setWall(false); select(null); }
   if (e.key === '[') setLiftOpen(liftEl.classList.contains('collapsed'));
   if (e.key === ']') setPanelOpen(!panelOpen());
   if (e.key === '\\') { const show = liftEl.classList.contains('collapsed') && !panelOpen(); setLiftOpen(show); setPanelOpen(show); }
@@ -3343,20 +3381,89 @@ function row(a) {
     <span class="who"><span class="nm"><span class="nm-t" title="${esc(a.name)}">${esc(a.name)}</span>${meta ? ` <span class="proj">${meta}</span>` : ''}</span><span class="act">${from}${esc(act)}</span></span>
     <span class="row-end"><span class="pill s-${a.state}">${STATUS[a.state].label}</span>${open ? '<span class="row-slot"></span>' : ''}</span></button>${open ? `<button class="row-open" data-open="${a.id}" title="${open}" aria-label="${open}">${OPEN_ICON}</button>` : ''}</div>`;
 }
-function renderUI() {
-  const mains = agents.filter(a => a.kind === 'main');
-  const html = floors.slice().reverse().map(f => {
+// Which tool an agent runs in, for "By tool": the Claude app, the terminal, T3 Code, Codex, Cursor…
+function toolGroup(a) {
+  const s = a.parent || a;
+  if (viaT3(s)) return 'T3 Code';
+  if (AGENT_NAMES[s.agentName]) return AGENT_NAMES[s.agentName];
+  return { desktop: 'Claude app', terminal: 'Claude Code · terminal', sdk: 'Claude Code · SDK' }[s.entrypoint] || 'Claude Code';
+}
+const groupBy = () => uiPrefs.group === 'tool' ? 'tool' : 'project';
+function setGroupBy(g) { uiPrefs.group = g; saveUi(); document.querySelectorAll('#roster-group button').forEach(b => b.setAttribute('aria-pressed', b.dataset.group === g)); rosterEl._html = null; uiDirty = true; }
+$('#roster-group').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setGroupBy(b.dataset.group); });
+setTimeout(() => setGroupBy(groupBy()));   // uiPrefs is defined further down
+const familyRows = m => row(m) + agents.filter(s => s.parent === m).map(row).join('');
+function rosterHtml(mains) {
+  if (groupBy() === 'tool') {
+    const groups = new Map();
+    for (const m of mains) { const g = toolGroup(m); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(m); }
+    return [...groups].sort((x, y) => x[0].localeCompare(y[0])).map(([g, ms]) =>
+      `<div class="group-row"><b>${esc(g)}</b><span class="fl-meta">${ms.length} agent${ms.length === 1 ? '' : 's'}</span></div>` + ms.map(familyRows).join('')).join('');
+  }
+  return floors.slice().reverse().map(f => {
     const ms = mains.filter(m => m.floor === f); if (!ms.length) return '';
     return `<button class="floor-row${f === curFloor ? ' on' : ''}" data-floor="${f.i}"><b>${esc(f.name)}</b>${floorNews(f)}<span class="fl-meta">Floor ${floorNum(f)}</span></button>`
-      + ms.map(m => row(m) + agents.filter(s => s.parent === m).map(row).join('')).join('');
+      + ms.map(familyRows).join('');
   }).join('');
+}
+
+/* "Needs you": every agent waiting on you, from any tool, oldest first, answerable right here where the tool allows. */
+const needsEl = $('#needs'), needsList = $('#needs-list');
+const ago = ms => { const s = Math.max(0, (Date.now() - ms) / 1000 | 0); return s < 60 ? `${s}s` : s < 3600 ? `${s / 60 | 0}m` : `${s / 3600 | 0}h`; };
+function renderNeeds() {
+  const list = agents.filter(a => a.state === 'waiting' && !a.gone).sort((x, y) => (x.waitingSince || 0) - (y.waitingSince || 0));
+  const html = list.map(a => {
+    const s = a.parent || a, from = s.live ? whereFrom(s) : 'Demo', floor = (s.floor && s.floor.name) || '';
+    const acts = a.approval ? `<button class="btn sm primary" data-act="allow" data-id="${a.id}">Allow</button><button class="btn sm" data-act="deny" data-id="${a.id}">Deny</button>`
+      : s.live && hostName(a) ? `<button class="btn sm primary" data-act="open" data-id="${a.id}">${esc(openLabel(a))}</button>` : '';
+    return `<div class="need"><span class="av" style="--c:${a.color}">${faceImg(a)}${s.live ? appBadge(a, 'av-app') : ''}</span>
+      <span class="need-who"><b>${esc(a.name)}</b><span>${esc(from)}${floor ? ' · ' + esc(floor) : ''}</span><span class="need-what" title="${esc(a.activity || '')}">${esc(a.activity || 'Waiting for you')}</span></span>
+      <span class="need-age" title="Waiting this long">${a.waitingSince ? ago(a.waitingSince) : ''}</span>
+      <span class="need-acts">${acts}<button class="btn sm ghost" data-act="show" data-id="${a.id}">Show</button></span></div>`;
+  }).join('');
+  needsEl.hidden = !list.length; appEl.classList.toggle('has-needs', !!list.length);
+  $('#needs-title').textContent = list.length === 1 ? '1 agent needs you' : `${list.length} agents need you`;
+  if (html !== needsList._html) { needsList.innerHTML = html; needsList._html = html; }
+  document.documentElement.style.setProperty('--needs-h', needsEl.hidden ? '0px' : needsEl.offsetHeight + 'px');
+}
+needsList.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return; const a = agents.find(x => x.id === b.dataset.id); if (!a) return;
+  if (b.dataset.act === 'allow' || b.dataset.act === 'deny') decide(a, b.dataset.act);
+  else if (b.dataset.act === 'open') openHost(a);
+  else { if (appEl.classList.contains('wall')) setWall(false); select(a, true); }
+});
+setInterval(() => { if (!needsEl.hidden) { needsList._html = null; renderNeeds(); } }, 15000);   // keep the wait times fresh
+
+/* Wall mode: nothing but the building, the "needs you" strip and a big status light per agent, full screen. */
+const WALL_ORDER = { waiting: 0, working: 1, thinking: 2, done: 3, idle: 4 };
+function renderWall() {
+  if (!appEl.classList.contains('wall')) return;
+  const mains = agents.filter(a => a.kind === 'main' && !a.gone).sort((x, y) => WALL_ORDER[x.state] - WALL_ORDER[y.state]);
+  const html = mains.map(a => { const subs = agents.filter(s => s.parent === a).length;
+    return `<div class="wall-tile glass s-${a.state}" style="--c:${STATUS[a.state].hex}"><span class="light" aria-hidden="true"></span><span class="wt"><b>${esc(a.name)}</b><span>${STATUS[a.state].label} · ${esc(a.live ? toolGroup(a) : 'Demo')}${subs ? ` · ${subs} subagent${subs === 1 ? '' : 's'}` : ''}</span></span></div>`; }).join('')
+    || '<div class="wall-tile glass"><span class="wt"><b>No agents yet</b><span>They show up here as soon as one starts</span></span></div>';
+  const bar = $('#wall-bar'); if (html !== bar._html) { bar.innerHTML = html; bar._html = html; }
+}
+function setWall(on) {
+  appEl.classList.toggle('wall', on); $('#wall-btn').setAttribute('aria-pressed', on); $('#wall-exit').hidden = !on;
+  if (on) { select(null); goBuilding(); renderWall(); if (document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {}); }
+  else if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  layout();
+}
+$('#wall-btn').onclick = () => setWall(!appEl.classList.contains('wall'));
+$('#wall-exit').onclick = () => setWall(false);
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && appEl.classList.contains('wall')) setWall(false); });
+
+function renderUI() {
+  const mains = agents.filter(a => a.kind === 'main');
+  const html = rosterHtml(mains);
   if (html !== rosterEl._html) { rosterEl.innerHTML = html; rosterEl._html = html; renderSetup(); }
   const subs = agents.length - mains.length, waiting = agents.filter(a => a.state === 'waiting').length;
   const lounging = agents.filter(a => a.busy && a.spot && a.spot.laptop).length;
   $('#stats').innerHTML = `<span><b>${mains.length}</b> sessions</span><span><b>${subs}</b> subagent${subs === 1 ? '' : 's'}</span><span><b>${lounging}</b> on laptops</span><span class="${waiting ? 'warn' : ''}"><b>${waiting}</b> need${waiting === 1 ? 's' : ''} you</span>`;
   const wc = $('#wait-count'); wc.hidden = !waiting; wc.textContent = waiting;
   const pw = $('#panel-wait'); pw.hidden = !waiting; pw.textContent = waiting;
-  floors.forEach(f => drawSign(f)); renderLift();
+  floors.forEach(f => drawSign(f)); renderLift(); renderNeeds(); renderWall();
   uiDirty = false;
 }
 
