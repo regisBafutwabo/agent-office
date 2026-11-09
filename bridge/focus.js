@@ -9,8 +9,10 @@ export const APPS = {
   'com.apple.Terminal': 'Terminal', 'com.googlecode.iterm2': 'iTerm', 'dev.warp.Warp-Stable': 'Warp', 'com.mitchellh.ghostty': 'Ghostty',
   'net.kovidgoyal.kitty': 'kitty', 'com.github.wez.wezterm': 'WezTerm', 'org.alacritty': 'Alacritty',
   'com.todesktop.230313mzl4w4u92': 'Cursor', 'com.microsoft.VSCode': 'VS Code', 'com.exafunction.windsurf': 'Windsurf', 'dev.zed.Zed': 'Zed',
-  'com.anthropic.claudefordesktop': 'Claude', 'com.openai.codex': 'Codex', 'com.openai.chat': 'ChatGPT',
+  'com.anthropic.claudefordesktop': 'Claude', 'com.openai.codex': 'Codex', 'com.openai.chat': 'ChatGPT', 'com.t3tools.t3code': 'T3 Code',
 };
+// T3 Code runs Claude, Codex and Cursor for you; its sessions open T3 Code, not those tools' own apps.
+const T3_CODE = 'com.t3tools.t3code';
 const EDITORS = new Set(['com.todesktop.230313mzl4w4u92', 'com.microsoft.VSCode', 'com.exafunction.windsurf', 'dev.zed.Zed']);
 const FROM_TERM = { Apple_Terminal: 'com.apple.Terminal', 'iTerm.app': 'com.googlecode.iterm2', WarpTerminal: 'dev.warp.Warp-Stable', ghostty: 'com.mitchellh.ghostty', WezTerm: 'com.github.wez.wezterm' };
 
@@ -20,7 +22,8 @@ export const validChat = c => /^local_[A-Za-z0-9-]{1,64}$/.test(c || '');
 const CODEX_THREAD = /^codex:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 
 /** The link that opens this exact chat in its desktop app, or null when the agent runs somewhere else (a terminal, an editor). */
-export function chatLink({ agent, id, chat, app, term }) {
+export function chatLink({ agent, id, chat, app, term, entrypoint }) {
+  if (entrypoint === 't3-code') return null;   // T3 Code has no link to one thread yet
   if (validChat(chat)) return { bundle: 'com.anthropic.claudefordesktop', url: `claude://code/continue?session=${chat}&source=agent_office` };
   const m = CODEX_THREAD.exec(id || '');
   if (agent === 'codex' && m && !term && (!app || app === 'com.openai.codex')) return { bundle: 'com.openai.codex', url: `codex://threads/${m[1]}` };
@@ -60,11 +63,11 @@ const ITERM_SCRIPT = dev => `tell application "iTerm2"
 end tell`;
 
 /** Resolves to a short message ("Opened the Terminal tab"); rejects with the reason it couldn't. */
-export async function focus({ agent, id, chat, app, term, tty, cwd }) {
+export async function focus({ agent, id, chat, app, term, tty, cwd, entrypoint }) {
   if (process.platform !== 'darwin') throw new Error('Opening apps from the office only works on macOS for now.');
-  const link = chatLink({ agent, id, chat, app, term });
+  const link = chatLink({ agent, id, chat, app, term, entrypoint });
   if (link) { await run('open', [link.url]); return `Opened the chat in ${APPS[link.bundle]}`; }
-  const bundle = APPS[app] ? app : FROM_TERM[term];
+  const bundle = entrypoint === 't3-code' ? T3_CODE : APPS[app] ? app : FROM_TERM[term];
   if (!bundle) throw new Error("This agent's app isn't known yet. Start a new session and try again.");
   const name = APPS[bundle], dev = validTty(tty) ? `/dev/${tty}` : null;
   if (dev && bundle === 'com.apple.Terminal') return (await run('osascript', ['-e', TERMINAL_SCRIPT(dev)])) === 'found' ? 'Opened the Terminal tab' : 'Opened Terminal (that tab is closed)';

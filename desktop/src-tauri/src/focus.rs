@@ -22,6 +22,7 @@ pub const APPS: &[(&str, &str)] = &[
     ("com.anthropic.claudefordesktop", "Claude"),
     ("com.openai.codex", "Codex"),
     ("com.openai.chat", "ChatGPT"),
+    ("com.t3tools.t3code", "T3 Code"),
 ];
 /// Editors that can open the project folder, which focuses that project's window (where its agent chat is).
 const EDITORS: &[&str] = &["com.todesktop.230313mzl4w4u92", "com.microsoft.VSCode", "com.exafunction.windsurf", "dev.zed.Zed"];
@@ -84,14 +85,19 @@ fn open_app(bundle: &str, folder: Option<&str>) -> Result<(), String> {
     if status.success() { Ok(()) } else { Err(format!("macOS couldn't open {}", app_name(bundle).unwrap_or(bundle))) }
 }
 
+/// T3 Code runs Claude, Codex and Cursor for you; its sessions open T3 Code (no link to one thread yet), not those tools' apps.
+const T3_CODE: &str = "com.t3tools.t3code";
+
 /// Returns a short message for the office ("Opened the Terminal tab"), or why it couldn't.
-pub fn focus(agent: &str, id: &str, chat: Option<&str>, app: Option<&str>, term: Option<&str>, tty: Option<&str>, cwd: &str) -> Result<String, String> {
-    if let Some((bundle, url)) = chat_link(agent, id, chat, app, term) {
+#[allow(clippy::too_many_arguments)]
+pub fn focus(agent: &str, id: &str, chat: Option<&str>, app: Option<&str>, term: Option<&str>, tty: Option<&str>, cwd: &str, entrypoint: &str) -> Result<String, String> {
+    let t3 = entrypoint == "t3-code";
+    if let Some((bundle, url)) = chat_link(agent, id, chat, app, term).filter(|_| !t3) {
         let status = Command::new("open").arg(&url).status().map_err(|e| e.to_string())?;
         let name = app_name(bundle).unwrap_or("the app");
         return if status.success() { Ok(format!("Opened the chat in {name}")) } else { Err(format!("macOS couldn't open {name}")) };
     }
-    let bundle = app.filter(|a| app_name(a).is_some()).or_else(|| term.and_then(app_from_term))
+    let bundle = if t3 { Some(T3_CODE) } else { app.filter(|a| app_name(a).is_some()).or_else(|| term.and_then(app_from_term)) }
         .ok_or_else(|| "This agent's app isn't known yet. Start a new session and try again.".to_string())?;
     let name = app_name(bundle).unwrap_or("the app");
     let tty = tty.filter(|t| valid_tty(t)).map(|t| format!("/dev/{t}"));
@@ -205,7 +211,7 @@ mod tests {
 
     #[test]
     fn unknown_apps_are_refused() {
-        assert!(focus("claude-code", "s1", None, Some("com.evil.app"), None, None, "/").is_err());
+        assert!(focus("claude-code", "s1", None, Some("com.evil.app"), None, None, "/", "terminal").is_err());
         assert_eq!(app_name("com.openai.codex"), Some("Codex"));
         assert_eq!(app_from_term("iTerm.app"), Some("com.googlecode.iterm2"));
     }

@@ -8,6 +8,7 @@ mod discover;
 mod focus;
 mod music;
 mod ollama;
+mod packs;
 mod server;
 mod setup;
 mod store;

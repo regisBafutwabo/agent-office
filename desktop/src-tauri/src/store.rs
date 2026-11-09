@@ -30,9 +30,23 @@ pub fn clip(s: &str, n: usize) -> String {
     }
 }
 
+/// A hook-driven session the log can still correct, since a hook never reports these:
+/// where it runs (Codex hooks don't say, its log does), and a turn that ended without a Stop hook (a failed run).
+/// Only a log written after the last hook can end a turn, so an earlier turn's end never cuts a new one short.
+fn correct_from_log(s: &mut Session, f: &Found) -> bool {
+    let place = if s.entrypoint == "unknown" { entrypoint_label(f.entrypoint.as_deref()) } else { "unknown".into() };
+    let over = f.ended && f.at > s.last_event_at && !matches!(s.status.as_str(), "done" | "idle");
+    if place == "unknown" && !over { return false; }
+    if place != "unknown" { s.entrypoint = place; }
+    if over { (s.status, s.activity, s.tool, s.last_event_at) = ("done".into(), "Finished".into(), None, f.at); }
+    true
+}
+
 pub fn entrypoint_label(raw: Option<&str>) -> String {
     match raw {
         None | Some("") | Some("unknown") => "unknown".into(),
+        // Claude's CLAUDE_CODE_ENTRYPOINT and Codex's originator ("T3 Code").
+        Some(r) if matches!(r.to_ascii_lowercase().as_str(), "t3-code" | "t3 code" | "t3code") => "t3-code".into(),
         Some(r) if r.contains("desktop") => "desktop".into(),
         Some("cli") => "terminal".into(),
         Some(r) if r.starts_with("sdk") => "sdk".into(),
@@ -325,7 +339,10 @@ impl Store {
             return None;
         }
         let (idx, new) = match self.sessions.iter().position(|s| s.id == f.id) {
-            Some(i) if !self.sessions[i].from_log => return None,
+            Some(i) if !self.sessions[i].from_log => {
+                if !correct_from_log(&mut self.sessions[i], &f) { return None; }
+                (i, false)
+            }
             Some(i) => {
                 let s = &mut self.sessions[i];
                 s.last_event_at = s.last_event_at.max(f.at);
@@ -354,8 +371,8 @@ impl Store {
         let mut event = json!({
             "type": "SessionFound", "sessionId": s.id, "at": now_ms(), "agentId": null, "agentType": null,
             "message": if new { Value::from("Already running") } else { Value::Null },
-            "session": { "id": s.id, "agent": s.agent, "cwd": s.cwd, "project": s.project, "title": s.title, "merged": false, "entrypoint": s.entrypoint,
-                         "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": null, "term": null, "chat": null, "messages": s.messages },
+            "session": { "id": s.id, "agent": s.agent, "cwd": s.cwd, "project": s.project, "title": s.title, "merged": s.merged, "entrypoint": s.entrypoint,
+                         "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": s.app, "term": s.term, "chat": s.chat, "messages": s.messages },
         });
         if let Some(id) = replaces { event["replacesSessionId"] = id.into(); }
         if new {                                   // only the arrival goes in the feed, not every refresh
@@ -628,7 +645,7 @@ mod tests {
         st.ingest(&json!({ "session_id": "t1", "cwd": "/repo", "hook_event_name": "SessionStart" }), None, None);
         st.ingest(&json!({ "session_id": "real-claude", "cwd": "/repo", "hook_event_name": "SessionStart" }), Some("cli"), None);
         let f = Found { id: "codex:t1".into(), agent: "codex".into(), cwd: "/repo".into(), project: None, entrypoint: None,
-            at: now_ms(), status: "working".into(), activity: "Working".into(), title: None, messages: vec![] };
+            at: now_ms(), status: "working".into(), activity: "Working".into(), title: None, messages: vec![], ended: false };
         assert_eq!(st.adopt(f).unwrap()["replacesSessionId"], "t1");
         assert_eq!(st.sessions.len(), 2);
         assert!(st.sessions.iter().any(|s| s.id == "real-claude"));
@@ -645,6 +662,28 @@ mod tests {
         assert_eq!(entrypoint_label(Some("claude-desktop")), "desktop");
         assert_eq!(entrypoint_label(Some("cli")), "terminal");
         assert_eq!(entrypoint_label(None), "unknown");
+        assert_eq!(entrypoint_label(Some("t3-code")), "t3-code"); // Claude run by T3 Code
+        assert_eq!(entrypoint_label(Some("T3 Code")), "t3-code"); // Codex's originator when T3 Code runs it
+    }
+
+    #[test]
+    fn a_log_that_ended_the_turn_after_the_last_hook_finishes_a_stuck_agent() {
+        let mut st = Store::default();
+        let prompt = json!({ "session_id": "codex:t1", "cwd": "/repo", "hook_event_name": "UserPromptSubmit", "prompt": "go" });
+        st.ingest_from(&prompt, None, None, "codex", Origin::default());
+        let last = st.sessions[0].last_event_at;
+        let log = |at: u64, ended: bool| Found { agent: "codex".into(), id: "codex:t1".into(), cwd: "/repo".into(), project: None, entrypoint: Some("T3 Code".into()),
+            at, status: "done".into(), activity: "Finished".into(), title: None, messages: vec![], ended };
+        // An earlier turn's end, written before this prompt, mustn't cut it short; it only fills in where the session runs.
+        let e = st.adopt(log(last - 1000, true)).unwrap();
+        assert_eq!((e["session"]["entrypoint"].as_str(), e["session"]["status"].as_str()), (Some("t3-code"), Some("thinking")));
+        assert!(st.adopt(log(last + 1000, false)).is_none()); // still mid-turn in the log
+        // The run failed: no Stop hook, but the log says the turn is over.
+        assert_eq!(st.adopt(log(last + 1000, true)).unwrap()["session"]["status"], "done");
+        assert!(!st.sessions[0].from_log);
+        assert!(st.adopt(log(last + 2000, true)).is_none()); // already done
+        let again = json!({ "session_id": "codex:t1", "cwd": "/repo", "hook_event_name": "UserPromptSubmit", "prompt": "again" });
+        assert_eq!(st.ingest_from(&again, None, None, "codex", Origin::default()).unwrap()["session"]["status"], "thinking");
     }
 
     #[test]
@@ -773,7 +812,7 @@ mod tests {
 
     fn found(id: &str, status: &str) -> Found {
         Found { agent: "claude-code".into(), id: id.into(), cwd: "/Users/me/code/shop".into(), project: None, entrypoint: Some("claude-desktop".into()),
-                at: now_ms(), status: status.into(), activity: "Working".into(), title: Some("Fix cart".into()), messages: vec![] }
+                at: now_ms(), status: status.into(), activity: "Working".into(), title: Some("Fix cart".into()), messages: vec![], ended: false }
     }
 
     #[test]

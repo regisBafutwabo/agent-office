@@ -121,17 +121,22 @@ function codex(home, now, out) {
       if (!id || imported || (meta.thread_source && meta.thread_source !== 'user')) continue;
       const last = tail(file).reverse().map(o => o.payload?.type).find(t => ['task_started', 'task_complete', 'turn_aborted'].includes(t));
       const [status, activity] = settle(...(!last ? ['idle', 'Session started'] : last === 'task_started' ? ['thinking', 'Thinking'] : ['done', 'Finished']), at, now);
-      out.push({ agent: 'codex', id: `codex:${id}`, cwd: meta.cwd || '', entrypoint: meta.originator || null, at, status, activity, title: null, messages: [] });
+      // ended: the log itself says the turn is over, so it overrides hooks still saying "thinking" (see Store.adopt).
+      out.push({ agent: 'codex', id: `codex:${id}`, cwd: meta.cwd || '', entrypoint: meta.originator || null, at, status, activity, title: null, messages: [],
+                 ended: !!last && last !== 'task_started' });
     }
   }
 }
 
 // Cursor wraps your prompt as "<user_query>\n…\n</user_query>" after a timestamp.
+// T3 Code adds its own instructions inside that and puts your words in "<user_request>…</user_request>".
+const cursorText = o => Array.isArray(o?.message?.content) && o.message.content.find(x => typeof x?.text === 'string')?.text || '';
+const between = (text, tag) => text.includes(`<${tag}>`) ? text.split(`<${tag}>`)[1].split(`</${tag}>`)[0] : null;
+export const fromT3 = text => text.includes('<t3_code_orchestration_instructions>');
 function cursorPrompt(o) {
-  const text = Array.isArray(o?.message?.content) && o.message.content.find(x => typeof x?.text === 'string')?.text;
+  const text = cursorText(o);
   if (!text) return null;
-  const q = text.includes('<user_query>') ? text.split('<user_query>')[1].split('</user_query>')[0] : text;
-  return clip(q, 80) || null;
+  return clip(between(text, 'user_request') ?? between(text, 'user_query') ?? text, 80) || null;
 }
 
 function cursor(home, now, out) {
@@ -142,9 +147,9 @@ function cursor(home, now, out) {
         cwd ??= decode(folder) || '/' + folder.replace(/-/g, '/');
         const done = tail(file).at(-1)?.type === 'turn_ended';
         const [status, activity] = settle(done ? 'done' : 'thinking', done ? 'Finished' : 'Thinking', at, now);
-        const first = head(file, 1)[0];
-        out.push({ agent: 'cursor', id: `cursor:${path.basename(file, '.jsonl')}`, cwd, entrypoint: null, at, status, activity,
-                   title: first?.role === 'user' ? cursorPrompt(first) : null, messages: [] });
+        const first = head(file, 1)[0], user = first?.role === 'user';
+        out.push({ agent: 'cursor', id: `cursor:${path.basename(file, '.jsonl')}`, cwd, entrypoint: user && fromT3(cursorText(first)) ? 't3-code' : null, at, status, activity,
+                   title: user ? cursorPrompt(first) : null, messages: [], ended: done });
       }
     }
   }

@@ -54,7 +54,7 @@ pub fn models(ps: &Value, log: &str, home: &Path, now: u64) -> Vec<Found> {
         Found {
             agent: "ollama".into(), id: format!("ollama:{name}"), cwd: home.join(".ollama").to_string_lossy().into(), project: Some("Ollama".into()),
             entrypoint: None, at: now, status: if on { "working" } else { "idle" }.into(),
-            activity: if on { "Answering a prompt" } else { "Loaded, waiting for a prompt" }.into(), title: Some(name.into()), messages: vec![],
+            activity: if on { "Answering a prompt" } else { "Loaded, waiting for a prompt" }.into(), title: Some(name.into()), messages: vec![], ended: false,
         }
     }).collect()
 }
