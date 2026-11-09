@@ -33,6 +33,22 @@ test('labels where the session runs', () => {
   assert.equal(entrypointLabel('claude-desktop'), 'desktop');
   assert.equal(entrypointLabel('cli'), 'terminal');
   assert.equal(entrypointLabel(undefined), 'unknown');
+  assert.equal(entrypointLabel('t3-code'), 't3-code');   // Claude run by T3 Code
+  assert.equal(entrypointLabel('T3 Code'), 't3-code');   // Codex's originator when T3 Code runs it
+});
+
+test('a log that ended the turn after the last hook finishes a stuck agent', () => {
+  const st = new Store(() => null), id = 'codex:t1';
+  st.ingest({ session_id: id, cwd: '/repo', hook_event_name: 'UserPromptSubmit', prompt: 'go' }, undefined, undefined, 'codex');
+  const s = st.sessions.get(id), log = (at, ended = true) => ({ agent: 'codex', id, cwd: '/repo', entrypoint: 'T3 Code', at, status: 'done', activity: 'Finished', title: null, messages: [], ended });
+  // An earlier turn's end, written before this prompt, mustn't cut it short; it only fills in where the session runs.
+  const e = st.adopt(log(s.lastEventAt - 1000));
+  assert.deepEqual([e.session.entrypoint, e.session.status], ['t3-code', 'thinking']);
+  assert.equal(st.adopt(log(s.lastEventAt + 1000, false)), null);   // still mid-turn in the log
+  // The run failed: no Stop hook, but the log says the turn is over.
+  assert.deepEqual([st.adopt(log(s.lastEventAt + 1000)).session.status, s.fromLog], ['done', false]);
+  assert.equal(st.adopt(log(s.lastEventAt + 2000)), null);          // already done
+  assert.equal(st.ingest({ session_id: id, cwd: '/repo', hook_event_name: 'UserPromptSubmit', prompt: 'again' }, undefined, undefined, 'codex').session.status, 'thinking');
 });
 
 test('summarizes tool calls relative to the project', () => {
@@ -131,6 +147,7 @@ test('opens the exact chat in the Claude and Codex apps, and only there', () => 
   assert.equal(chatLink({ agent: 'codex', id }).url, 'codex://threads/01a0e0d8-2f30-7311-b7ee-864db5ef85bd');
   assert.equal(chatLink({ agent: 'codex', id, term: 'Apple_Terminal' }), null);   // Codex CLI in a terminal: open the tab instead
   assert.equal(chatLink({ agent: 'codex', id: 'codex:../../x' }), null);
+  assert.equal(chatLink({ agent: 'codex', id, entrypoint: 't3-code' }), null);   // run by T3 Code: open T3 Code, not the Codex app
 });
 
 test('ignores payloads without a session or event name', () => {

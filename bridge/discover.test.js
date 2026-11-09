@@ -30,7 +30,7 @@ test('finds Codex threads you started but not imports or subagents', () => {
   write(path.join(day, 'rollout-a.jsonl'), [meta('t1', 'user'), { type: 'event_msg', payload: { type: 'task_started' } }, { type: 'event_msg', payload: { type: 'task_complete' } }]);
   write(path.join(day, 'rollout-b.jsonl'), [meta('t2', 'subagent')]);
   write(path.join(day, 'rollout-c.jsonl'), [{ type: 'session_meta', payload: { id: 't3', cwd: '/repo' } }, { type: 'event_msg', payload: { type: 'task_started', turn_id: 'external-import-turn-1' } }]);
-  assert.deepEqual(scan(home).map(f => [f.id, f.status]), [['codex:t1', 'done']]);
+  assert.deepEqual(scan(home).map(f => [f.id, f.status, f.ended]), [['codex:t1', 'done', true]]);
 });
 
 test('finds Cursor chats and names them after the first prompt', () => {
@@ -38,7 +38,16 @@ test('finds Cursor chats and names them after the first prompt', () => {
   write(path.join(home, '.cursor', 'projects', 'Users-me-shop', 'agent-transcripts', 'c1', 'c1.jsonl'),
     [{ role: 'user', message: { content: [{ type: 'text', text: '<timestamp>now</timestamp>\n<user_query>\ngit   pull\n</user_query>' }] } }]);
   const [f] = scan(home);
-  assert.deepEqual([f.id, f.status, f.title, f.cwd], ['cursor:c1', 'thinking', 'git pull', '/Users/me/shop']);   // no such folder here, so dashes read as slashes
+  assert.deepEqual([f.id, f.status, f.title, f.cwd, f.entrypoint, f.ended], ['cursor:c1', 'thinking', 'git pull', '/Users/me/shop', null, false]);   // no such folder here, so dashes read as slashes
+});
+
+test('names Cursor chats run by T3 Code after your words, not its instructions', () => {
+  const home = tmp('cursor-t3');
+  write(path.join(home, '.cursor', 'projects', 'Users-me-shop', 'agent-transcripts', 'c2', 'c2.jsonl'), [
+    { role: 'user', message: { content: [{ type: 'text', text: '<user_query>\n<t3_code_orchestration_instructions>\nlong rules\n</t3_code_orchestration_instructions>\n<user_request>\nlogin to claude\n</user_request>\n</user_query>' }] } },
+    { type: 'turn_ended' }]);
+  const [f] = scan(home);
+  assert.deepEqual([f.title, f.entrypoint, f.status, f.ended], ['login to claude', 't3-code', 'done', true]);
 });
 
 test('decodes folder names by walking the disk', () => {

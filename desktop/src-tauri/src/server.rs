@@ -401,7 +401,7 @@ async fn client(mut socket: WebSocket, st: AppState) {
                                 store.sessions.iter().find(|s| s.id == sid).cloned()
                             });
                             let result = match target {
-                                Some(s) => tokio::task::spawn_blocking(move || focus::focus(&s.agent, &s.id, s.chat.as_deref(), s.app.as_deref(), s.term.as_deref(), s.tty.as_deref(), &s.cwd))
+                                Some(s) => tokio::task::spawn_blocking(move || focus::focus(&s.agent, &s.id, s.chat.as_deref(), s.app.as_deref(), s.term.as_deref(), s.tty.as_deref(), &s.cwd, &s.entrypoint))
                                     .await.unwrap_or_else(|_| Err("Couldn't open the app".into())),
                                 None => Err("That session has ended".into()),
                             };

@@ -3415,7 +3415,7 @@ function renderDetail() {
   // While a held request shows Allow/Deny, the note would only contradict it.
   const note = $('#d-note'); note.hidden = !a.live || !!(a.approval && a.approval.live);
   if (!note.hidden) { const w = a.state === 'waiting'; note.classList.toggle('warn', w);
-    const src = a.parent || a, app = AGENT_NAMES[src.agentName] || `Claude Code (${(ENTRY[src.entrypoint] || 'Claude Code').toLowerCase()})`;
+    const src = a.parent || a, app = viaT3(a) ? 'T3 Code' : AGENT_NAMES[src.agentName] || `Claude Code (${(ENTRY[src.entrypoint] || 'Claude Code').toLowerCase()})`;
     note.textContent = w ? `Answer this in ${app}.` : `Watching this session live. Reply to it in ${app}.`; }
 }
 // The card shows the agent's chat; its hook events sit one tab over, under Activity.
@@ -3702,25 +3702,27 @@ addEventListener('resize', layout);
 /* ---------- live mode: real Claude Code sessions from the bridge ---------- */
 const params = new URLSearchParams(location.search);
 const FAST = params.has('fast');                                   // shorter idle timers, handy when testing
-const ENTRY = { desktop:'Desktop app', terminal:'Terminal', sdk:'SDK', unknown:'Claude Code' };
+const ENTRY = { desktop:'Desktop app', terminal:'Terminal', sdk:'SDK', 't3-code':'T3 Code', unknown:'Claude Code' };
 const AGENT_NAMES = { codex:'Codex', cursor:'Cursor', gemini:'Gemini CLI', copilot:'Copilot', factory:'Droid', qwen:'Qwen Code',
   goose:'Goose', kiro:'Kiro', windsurf:'Windsurf', cline:'Cline', opencode:'OpenCode', amp:'Amp', ollama:'Ollama' };
 // Apps the desktop app can bring forward (matches focus.rs / focus.js).
 const HOST_APPS = { 'com.apple.Terminal': 'Terminal', 'com.googlecode.iterm2': 'iTerm', 'dev.warp.Warp-Stable': 'Warp', 'com.mitchellh.ghostty': 'Ghostty',
   'net.kovidgoyal.kitty': 'kitty', 'com.github.wez.wezterm': 'WezTerm', 'org.alacritty': 'Alacritty', 'com.todesktop.230313mzl4w4u92': 'Cursor',
   'com.microsoft.VSCode': 'VS Code', 'com.exafunction.windsurf': 'Windsurf', 'dev.zed.Zed': 'Zed', 'com.anthropic.claudefordesktop': 'Claude',
-  'com.openai.codex': 'Codex', 'com.openai.chat': 'ChatGPT' };
+  'com.openai.codex': 'Codex', 'com.openai.chat': 'ChatGPT', 'com.t3tools.t3code': 'T3 Code' };
 const HOST_TERMS = { Apple_Terminal: 'Terminal', 'iTerm.app': 'iTerm', WarpTerminal: 'Warp', ghostty: 'Ghostty', WezTerm: 'WezTerm' };
 // Claude desktop sessions and Codex app threads open on the exact chat (chatLink in focus.rs / focus.js); the rest open their app or tab.
-const opensChat = a => { const s = a.parent || a; return !!s.hostChat || (s.agentName === 'codex' && !s.hostTerm && (!s.hostApp || s.hostApp === 'com.openai.codex')); };
-const hostName = a => { const s = a.parent || a; return HOST_APPS[s.hostApp] || HOST_TERMS[s.hostTerm] || (opensChat(a) ? (s.hostChat ? 'Claude' : 'Codex') : null); };
+// T3 Code runs Claude, Codex and Cursor for you: its agents open T3 Code (no link to one thread yet), not those tools' apps.
+const viaT3 = a => (a.parent || a).entrypoint === 't3-code';
+const opensChat = a => { const s = a.parent || a; return !viaT3(a) && (!!s.hostChat || (s.agentName === 'codex' && !s.hostTerm && (!s.hostApp || s.hostApp === 'com.openai.codex'))); };
+const hostName = a => { const s = a.parent || a; return viaT3(a) ? 'T3 Code' : HOST_APPS[s.hostApp] || HOST_TERMS[s.hostTerm] || (opensChat(a) ? (s.hostChat ? 'Claude' : 'Codex') : null); };
 const openLabel = a => opensChat(a) ? `Open chat in ${hostName(a)}` : `Open in ${hostName(a)}`;
 function openHost(a) {
   const src = a.parent || a;
   if (!live.ws || live.ws.readyState !== 1) { toast('The office server isn’t connected'); return; }
   live.ws.send(JSON.stringify({ type: 'focus', sessionId: src.sessionId }));
 }
-const whereFrom = a => AGENT_NAMES[a.agentName] || ENTRY[a.entrypoint] || 'Claude Code';   // "Terminal", "Desktop app", or the tool's name
+const whereFrom = a => viaT3(a) ? `${AGENT_NAMES[a.agentName] || 'Claude Code'} in T3 Code` : AGENT_NAMES[a.agentName] || ENTRY[a.entrypoint] || 'Claude Code';   // "Terminal", "Desktop app", or the tool's name
 const READ_TOOLS = new Set(['Read', 'Grep', 'Glob']);
 const WEB_TOOLS = new Set(['WebFetch', 'WebSearch']);
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit']);

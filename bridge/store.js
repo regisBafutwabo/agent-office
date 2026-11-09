@@ -17,6 +17,7 @@ const isHelperDir = cwd => !cwd || cwd === '/';
 
 export function entrypointLabel(raw) {
   if (!raw || raw === 'unknown') return 'unknown';
+  if (/^t3[- ]?code$/i.test(raw)) return 't3-code';   // Claude's CLAUDE_CODE_ENTRYPOINT and Codex's originator ("T3 Code")
   if (raw.includes('desktop')) return 'desktop';
   if (raw === 'cli') return 'terminal';
   if (raw.startsWith('sdk')) return 'sdk';
@@ -143,21 +144,33 @@ export class Store {
     return gone;
   }
 
+  // A hook-driven session the log can still correct, since a hook never reports these:
+  // where it runs (Codex hooks don't say, its log does), and a turn that ended without a Stop hook (a failed run).
+  // Only a log written after the last hook can end a turn, so an earlier turn's end never cuts a new one short.
+  correctFromLog(s, f) {
+    const where = s.entrypoint === 'unknown' ? entrypointLabel(f.entrypoint) : 'unknown';
+    const over = f.ended && f.at > s.lastEventAt && !['done', 'idle'].includes(s.status);
+    if (where === 'unknown' && !over) return false;
+    if (where !== 'unknown') s.entrypoint = where;
+    if (over) { s.status = 'done'; s.activity = 'Finished'; s.tool = null; s.lastEventAt = f.at; }
+    return true;
+  }
+
   // A chat found in its log (discover.js): add it, or refresh it while no hook has reported on it.
-  // Returns a SessionFound event when something on screen changes; hooks always win over logs.
+  // Returns a SessionFound event when something on screen changes; otherwise hooks win over logs (but see correctFromLog).
   adopt(f) {
     if (f.agent === 'claude-code' && this.codexIds.has(f.id)) return null;
     const replacesSessionId = !isHelperDir(f.cwd) ? this.claimCodex(f.agent, f.id) : null;
     if (this.ended.has(f.id)) return null;
     let s = this.sessions.get(f.id), isNew = !s;
-    if (s && !s.fromLog) return null;
+    if (s && !s.fromLog && !this.correctFromLog(s, f)) return null;
     if (isNew && isHelperDir(f.cwd)) return null;
     if (isNew) {
       s = { id: f.id, agent: f.agent, cwd: f.cwd, project: f.project || path.basename(f.cwd) || 'session', entrypoint: entrypointLabel(f.entrypoint),
             startedAt: f.at, lastEventAt: f.at, status: f.status, activity: f.activity, permissionMode: 'default', subagents: {}, tool: null,
             title: f.title || null, transcriptTitle: f.title || null, messages: f.messages, fromLog: true };
       this.sessions.set(f.id, s);
-    } else {
+    } else if (s.fromLog) {
       s.lastEventAt = Math.max(s.lastEventAt, f.at);
       const title = f.title || s.transcriptTitle || null, messages = f.messages.length ? f.messages : s.messages;
       const changed = s.status !== f.status || s.activity !== f.activity || JSON.stringify(s.messages) !== JSON.stringify(messages) || s.title !== title;
@@ -165,7 +178,7 @@ export class Store {
       if (!changed) return null;
     }
     const e = { type: 'SessionFound', sessionId: s.id, at: Date.now(), agentId: null, agentType: null, message: isNew ? 'Already running' : null,
-      session: { id: s.id, agent: s.agent, app: null, term: null, chat: null, cwd: s.cwd, project: s.project, title: s.title, merged: false,
+      session: { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, cwd: s.cwd, project: s.project, title: s.title, merged: !!s.merged,
                  entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity, messages: s.messages } };
     if (replacesSessionId) e.replacesSessionId = replacesSessionId;
     if (isNew) { this.recent.push(e); if (this.recent.length > RECENT_MAX) this.recent.shift(); }   // only the arrival goes in the feed

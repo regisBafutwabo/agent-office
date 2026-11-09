@@ -38,6 +38,8 @@ pub struct Found {
     pub activity: String,
     pub title: Option<String>,
     pub messages: Vec<Message>,
+    /// The log itself says the turn is over, so it overrides hooks still saying "thinking" (see Store::adopt).
+    pub ended: bool,
 }
 
 fn mtime_ms(p: &Path) -> Option<u64> {
@@ -182,7 +184,7 @@ fn claude(home: &Path, now: u64, out: &mut Vec<Found>, archived: &HashSet<String
             };
             let (status, activity) = settle(status, activity, at, now);
             let t = read_tail(&log).unwrap_or_default();
-            out.push(Found { agent: "claude-code".into(), id, cwd: root.to_string_lossy().into(), project: None, entrypoint, at, status, activity, title: t.title, messages: t.messages });
+            out.push(Found { agent: "claude-code".into(), id, cwd: root.to_string_lossy().into(), project: None, entrypoint, at, status, activity, title: t.title, messages: t.messages, ended: false });
         }
     }
 }
@@ -209,16 +211,27 @@ fn codex(home: &Path, now: u64, out: &mut Vec<Found>) {
                 None => ("idle", "Session started"),
             };
             let (status, activity) = settle(status, activity, at, now);
+            let ended = last.as_deref().is_some_and(|t| t != "task_started");
             out.push(Found { agent: "codex".into(), id: format!("codex:{id}"), cwd: meta["cwd"].as_str().unwrap_or("").into(), project: None,
-                             entrypoint: meta["originator"].as_str().map(String::from), at, status, activity, title: None, messages: vec![] });
+                             entrypoint: meta["originator"].as_str().map(String::from), at, status, activity, title: None, messages: vec![], ended });
         }
     }
 }
 
 /// Cursor wraps your prompt as "<user_query>\n…\n</user_query>" after a timestamp.
+/// T3 Code adds its own instructions inside that and puts your words in "<user_request>…</user_request>".
+fn cursor_text(o: &Value) -> Option<&str> {
+    o["message"]["content"].as_array()?.iter().find_map(|x| x["text"].as_str())
+}
+fn between<'a>(text: &'a str, tag: &str) -> Option<&'a str> {
+    text.split_once(&format!("<{tag}>")).map(|(_, r)| r.split(&format!("</{tag}>")).next().unwrap_or(r))
+}
+pub fn from_t3(text: &str) -> bool {
+    text.contains("<t3_code_orchestration_instructions>")
+}
 fn cursor_prompt(o: &Value) -> Option<String> {
-    let text = o["message"]["content"].as_array()?.iter().find_map(|x| x["text"].as_str())?;
-    let q = text.split_once("<user_query>").map(|(_, r)| r.split("</user_query>").next().unwrap_or(r)).unwrap_or(text);
+    let text = cursor_text(o)?;
+    let q = between(text, "user_request").or_else(|| between(text, "user_query")).unwrap_or(text);
     Some(clip(q, 80)).filter(|q| !q.is_empty())
 }
 
@@ -232,8 +245,10 @@ fn cursor(home: &Path, now: u64, out: &mut Vec<Found>) {
                 let cwd = cwd.get_or_insert_with(|| decode(&folder).map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| format!("/{}", folder.replace('-', "/")))).clone();
                 let done = tail(&log).last().is_some_and(|o| o["type"] == "turn_ended");
                 let (status, activity) = settle(if done { "done" } else { "thinking" }, if done { "Finished" } else { "Thinking" }, at, now);
-                let title = head(&log, 1).first().filter(|o| o["role"] == "user").and_then(cursor_prompt);
-                out.push(Found { agent: "cursor".into(), id: format!("cursor:{id}"), cwd, project: None, entrypoint: None, at, status, activity, title, messages: vec![] });
+                let first = head(&log, 1).into_iter().next().filter(|o| o["role"] == "user");
+                let title = first.as_ref().and_then(cursor_prompt);
+                let entrypoint = first.as_ref().and_then(cursor_text).filter(|t| from_t3(t)).map(|_| "t3-code".to_string());
+                out.push(Found { agent: "cursor".into(), id: format!("cursor:{id}"), cwd, project: None, entrypoint, at, status, activity, title, messages: vec![], ended: done });
             }
         }
     }
@@ -302,7 +317,7 @@ mod tests {
         write(&day.join("rollout-b.jsonl"), &[meta("t2", "subagent")]);
         write(&day.join("rollout-c.jsonl"), &[json!({ "type": "session_meta", "payload": { "id": "t3", "cwd": "/repo" } }), json!({ "type": "event_msg", "payload": { "type": "task_started", "turn_id": "external-import-turn-1" } })]);
         let found = scan(&home, now_ms());
-        assert_eq!(found.iter().map(|f| (f.id.as_str(), f.status.as_str())).collect::<Vec<_>>(), vec![("codex:t1", "done")]);
+        assert_eq!(found.iter().map(|f| (f.id.as_str(), f.status.as_str(), f.ended)).collect::<Vec<_>>(), vec![("codex:t1", "done", true)]);
     }
 
     #[test]
@@ -313,6 +328,17 @@ mod tests {
         let found = scan(&home, now_ms());
         assert_eq!((found[0].id.as_str(), found[0].status.as_str(), found[0].title.as_deref()), ("cursor:c1", "thinking", Some("git pull")));
         assert_eq!(found[0].cwd, "/Users/me/shop"); // no such folder here, so the dashes are read as slashes
+        assert_eq!((found[0].entrypoint.as_deref(), found[0].ended), (None, false));
+    }
+
+    #[test]
+    fn names_cursor_chats_run_by_t3_code_after_your_words_not_its_instructions() {
+        let home = tmp("cursor-t3");
+        let log = home.join(".cursor/projects/Users-me-shop/agent-transcripts/c2/c2.jsonl");
+        let text = "<user_query>\n<t3_code_orchestration_instructions>\nlong rules\n</t3_code_orchestration_instructions>\n<user_request>\nlogin to claude\n</user_request>\n</user_query>";
+        write(&log, &[json!({ "role": "user", "message": { "content": [{ "type": "text", "text": text }] } }), json!({ "type": "turn_ended" })]);
+        let f = &scan(&home, now_ms())[0];
+        assert_eq!((f.title.as_deref(), f.entrypoint.as_deref(), f.status.as_str(), f.ended), (Some("login to claude"), Some("t3-code"), "done", true));
     }
 
     #[test]
