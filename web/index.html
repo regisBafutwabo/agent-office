@@ -264,6 +264,11 @@ pre.json{margin:0;padding:12px;background:var(--panel-2);border:1px solid var(--
 .d-ctx .bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
 .d-ctx .bar i{display:block;height:100%;border-radius:3px;background:var(--c)}
 .d-ctx small{font-size:12px;font-variant-numeric:tabular-nums}
+.d-mem{font:400 12px/16px var(--font-b);color:var(--muted)}
+.d-mem summary{cursor:pointer}
+.d-mem ol{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:3px;max-height:132px;overflow:auto}
+.d-mem li{display:grid;grid-template-columns:52px minmax(0,1fr);gap:8px;color:var(--ink)}
+.d-mem time{color:var(--muted);font-variant-numeric:tabular-nums}
 .perm{border:1px solid color-mix(in srgb,var(--s-wait) 40%,transparent);background:color-mix(in srgb,var(--s-wait) 8%,var(--panel));border-radius:var(--r-md);padding:12px;display:flex;flex-direction:column;gap:8px}
 .perm-head{font-weight:600}
 .perm code{font:500 12px/16px var(--font-m);background:var(--panel-2);border:1px solid var(--line);padding:8px 10px;border-radius:var(--r-sm);overflow-x:auto;white-space:nowrap}
@@ -492,6 +497,7 @@ body.live .speed-top, body.live .demo-only{display:none}
     <p class="d-activity" id="d-activity"></p>
     <div class="d-alert" id="d-alert" hidden></div>
     <div class="d-ctx" id="d-ctx" hidden title="How much of its context window this chat fills. Near the top, Claude Code compacts it and the details get summarized."><span>Memory</span><span class="bar"><i id="d-ctx-bar"></i></span><small id="d-ctx-text"></small></div>
+    <details class="d-mem" id="d-mem" hidden><summary id="d-mem-sum"></summary><ol id="d-mem-list"></ol></details>
     <div class="perm" id="d-perm" hidden>
       <div class="perm-head">Wants to run <b id="d-perm-tool"></b></div>
       <code id="d-perm-cmd"></code>
@@ -1792,6 +1798,8 @@ function booth(cx, cz, felt) {
 /* ---------- zone: workbenches ---------- */
 const benchX = [-10.3, -8.1, -5.9, -3.7].map(x => x + 7);
 const deskSeats = [...workbench(-7, -2.6, benchX), ...workbench(-7, 2.2, benchX)];
+const deskShelves = deskSeats.map(s => grp(s.x, s.z));             // what each desk remembers (see drawDesks); the meshes are shared across floors
+let deskDirty = true;
 function linearLamp(x, z, len, light) {
   const g = grp(x, z);
   [-len / 2 + .3, len / 2 - .3].forEach(dx => cyl(.006, .006, .9, mats.black, dx, 2.95, 0, g, 4));
@@ -2260,7 +2268,7 @@ function rebuildTower() {
 function refreshFloorVisuals() {
   curFloor.deskSeats.forEach(s => { s.chairMat.color.set(s.owner ? s.owner.color : sceneT.chair); s.screen.color.set(sceneT.screenOff); });
   agents.forEach(a => { if (a.floor === curFloor) updateScreen(a); });
-  drawTerm(); drawBoard();
+  drawTerm(); drawBoard(); deskDirty = true;
 }
 function goToFloor(i) {
   const f = floors[i]; if (!f) return;
@@ -2882,7 +2890,7 @@ const stamp = e => e.at ? wallClock(e.at) : clock(e.t);
 const HOOK_WORDS = { SessionStart: 'Joined', SessionFound: 'Joined', SessionEnd: 'Left', UserPromptSubmit: 'Got a prompt', PreToolUse: 'Started',
   PostToolUse: 'Finished', PostToolUseFailure: 'Failed', PermissionRequest: 'Asked to run', PermissionResolved: 'Answered', Notification: 'Needs you',
   Stop: 'Done', SubagentStart: 'Subagent in', SubagentStop: 'Subagent out', PreCompact: 'Compacting', GoingInCircles: 'Going in circles',
-  SameFile: 'Same file', Merged: 'Merged' };
+  SameFile: 'Same file', Merged: 'Merged', Unstuck: 'Unstuck' };
 const hookTag = (hook, warn) => `<code class="hook${warn ? ' warn' : ''}" title="${esc(hook)}">${esc(HOOK_WORDS[hook] || hook)}</code>`;
 function emit(a, hook, detail, at) {
   const e = { t: simTime, at, hook, detail, a };
@@ -2964,8 +2972,15 @@ async function doTool(a, ws, tool, arg) {
   setState(a, 'working', label);
   if (tool === 'Bash') termPush(a, '$ ' + arg, '#F3F7F8');
   if (tool === 'Edit' || tool === 'Write') boardPush(a, arg);
-  await wait(rand(2.2, 4));
-  if (tool === 'Bash') termPush(a, bashResult(arg), '#6FD69A');
+  const bash = tool === 'Bash', long = bash && /test|build|e2e/.test(arg);
+  let fails = 0;
+  if (bash) a.run = { at: Date.now() };
+  if (bash && Math.random() < .18) for (const n = Math.random() < .3 ? 3 : 1; fails < n; fails++) {
+    await wait(rand(2, 3.5)); termPush(a, '✗ failed', '#FF7B72'); emit(a, 'PostToolUseFailure', label); react(a, { kind: 'soot' });
+    a.pose = 'think'; setState(a, 'thinking', `${tool} failed, rethinking`); await wait(rand(1.5, 2.5)); a.pose = 'type'; setState(a, 'working', label);
+  }
+  await wait(long ? rand(8, 12) : rand(2.2, 4));
+  if (bash) { termPush(a, bashResult(arg), '#6FD69A'); a.run = null; react(a, outcomeOf({ tool }, fails, long ? RUN_LONG_MS : 0), Date.now()); }
   emit(a, 'PostToolUse', label);
 }
 async function mainLoop(a) {
@@ -3059,7 +3074,7 @@ const COFFEE_MS = 2 * 60 * 1000;                                   // how long a
 const sipTip = new THREE.Quaternion(), X_AXIS = new THREE.Vector3(1, 0, 0);
 function animationPose(a, moving) {
   if (moving) return 'walk';
-  if (a.cheerUntil > performance.now()) return 'cheer';
+  if (a.cheerUntil > performance.now() && a.state !== 'waiting') return 'cheer';
   return a.pose === 'dance' && !canDance(a) ? 'idle' : a.pose;
 }
 function updateAgent(a, dt, sdt) {
@@ -3408,6 +3423,11 @@ function renderDetail() {
   const ctx = a.kind === 'main' && a.context, cx = $('#d-ctx'); cx.hidden = !ctx;
   if (ctx) { const k = ctxShare(ctx); cx.style.setProperty('--c', ctxColor(ctx)); $('#d-ctx-bar').style.width = `${Math.round(k * 100)}%`;
     $('#d-ctx-text').textContent = `${kTok(ctx.used)} of ${kTok(ctx.max)} · ${Math.round(k * 100)}%`; }
+  const mem = $('#d-mem'), desk = a.kind === 'main' ? deskOf(a) : emptyDesk(); mem.hidden = !desk.dayCount && !desk.moments.length;
+  if (!mem.hidden) {
+    $('#d-mem-sum').textContent = `Desk memories · ${desk.dayCount} day${desk.dayCount === 1 ? '' : 's'} here · ${desk.merges} merge${desk.merges === 1 ? '' : 's'}`;
+    $('#d-mem-list').innerHTML = desk.moments.map(m => `<li><time>${new Date(m.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</time><span>${esc(momentText(m))}</span></li>`).join('');
+  }
   if (a.approval) { $('#d-perm-tool').textContent = a.approval.tool; $('#d-perm-cmd').textContent = a.approval.cmd || a.approval.tool; }
   $('#d-defer').hidden = !(a.approval && a.approval.live);
   renderChat(a);
@@ -3994,12 +4014,13 @@ function updateClashes() {
   clashMat.opacity = .55 + .3 * Math.sin(performance.now() / 260);
 }
 // The same tool call failing again and again (a test that keeps failing, a build that won't pass) means the agent may be stuck.
-// Counts reset when that call works, on a new prompt, and when the agent finishes.
+// Counts reset when that call works, on a new prompt, and when the agent finishes. Returns how often it had failed before this result.
 function noteResult(who, e, replay) {
-  const key = `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}`, fails = who.fails || (who.fails = new Map());
-  if (!e.failed) { fails.delete(key); if (who.stuck && who.stuck.key === key) setStuck(who, null); return; }
-  const n = (fails.get(key) || 0) + 1; fails.set(key, n);
-  if (n >= STUCK_AFTER) setStuck(who, { key, n, label: e.tool === 'Bash' && e.summary || key }, replay);
+  const key = `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}`, fails = who.fails || (who.fails = new Map()), before = fails.get(key) || 0;
+  if (!e.failed) { fails.delete(key); if (who.stuck && who.stuck.key === key) setStuck(who, null); return before; }
+  fails.set(key, before + 1);
+  if (before + 1 >= STUCK_AFTER) setStuck(who, { key, n: before + 1, label: e.tool === 'Bash' && e.summary || key }, replay);
+  return before;
 }
 function setStuck(a, v, replay) {
   const was = a.stuck; a.stuck = v; a.pose = poseFor(a); a.labelDirty = true; uiDirty = true; detailDirty = true;
@@ -4035,7 +4056,7 @@ function liveMain(s, instant) {
   a = createAgent({ name, kind: 'main', color, home, project: { key: s.project, agent: fallback }, cwd: s.cwd, sessionId: s.id, title: s.title || null, customName: !!custom,
                     entrypoint: s.entrypoint, agentName: s.agent, hostApp: s.app, hostTerm: s.term, hostChat: s.chat, pref: saved.pref || 'anywhere', look: saved.look ? { ...saved.look, intern: false } : undefined, live: true, subs: new Map(), streak: 0, floor });
   if (isNew && !instant) toast(`${s.project} moved into floor ${floorNum(floor)}`, 'Go there', () => flyToFloor(floor.i));
-  home.by = a.id; if (home.type === 'desk') { home.owner = a; if (floor === curFloor) home.chairMat.color.set(color); }
+  home.by = a.id; if (home.type === 'desk') { home.owner = a; deskDirty = true; if (floor === curFloor) home.chairMat.color.set(color); }
   a.ws = home;
   if (instant) { a.spot = home; a.where = 'Own desk'; a.g.position.set(home.x, 0, home.z); a.yaw = a.yawT = yawOf(home.face); a.arrivedAt = 0; }
   else { a.spot = DOOR; a.g.position.set(DOOR.x, 0, DOOR.z); a.yaw = a.yawT = -Math.PI / 2; a.appear = 0; walkTo(a, home).then(() => { a.pose = poseFor(a); }); }
@@ -4065,7 +4086,7 @@ async function leaveOffice(a, note) {
   if (a.subs) for (const sub of a.subs.values()) leaveOffice(sub);
   applyStatus(a, 'done', note || (a.kind === 'sub' ? `Reported back to ${a.parent.name}` : 'Signing off'));
   await wait(1.2);
-  a.gone = true;
+  a.gone = true; deskDirty = true;
   if (a.home) { if (a.home.by === a.id) a.home.by = null; if (a.home.owner === a) { a.home.owner = null; if (a.floor === curFloor) a.home.chairMat.color.set(sceneT.chair); } if (a.home.screen && a.floor === curFloor) a.home.screen.color.set(sceneT.screenOff); }
   a.nextSpot = null; await walkTo(a, DOOR); a.leaving = true; await wait(.7);
   removeAgent(a);
@@ -4148,6 +4169,120 @@ async function reviewSubs(a) {
   place(a, next, true);
 }
 
+/* ---------- outcomes: what a command's result looks like, and what a desk remembers ---------- */
+// "Finished responding" isn't "it worked", so reactions key off a command passing or failing, never off Stop.
+const RUN_LONG_MS = 20000;                      // a passing command that took this long delivers a parcel
+const RUN_GEAR_MS = 6000;                       // a command still running after this long gets a turning gear
+const CHEER_GAP_MS = 20000;                     // small comebacks cheer at most this often, so a retry loop doesn't become a party
+function outcomeOf(e, failsBefore, ranMs) {
+  if (e.tool !== 'Bash') return null;
+  if (e.failed) return { kind: 'soot' };
+  if (failsBefore >= STUCK_AFTER) return { kind: 'unstuck', fails: failsBefore };
+  if (failsBefore > 0) return { kind: 'comeback', fails: failsBefore };
+  return ranMs >= RUN_LONG_MS ? { kind: 'parcel' } : null;
+}
+// A desk's memory holds counts and dated captions only: no prompts, commands or file names.
+const MOMENTS_MAX = 40;
+const PLANT_DAYS = [1, 3, 7, 14, 30];           // days worked here before the desk plant grows a size
+const plantStage = days => PLANT_DAYS.filter(n => days >= n).length;
+const dayOf = at => { const d = new Date(at); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const emptyDesk = () => ({ dayCount: 0, lastDay: '', merges: 0, unstuck: 0, team: false, moments: [] });
+// Both return the same object when nothing changed, so a second open page or a replayed event can't count twice.
+function remember(desk, kind, at, n) {
+  const id = `${kind}:${at}`;
+  if (desk.moments.some(m => m.id === id) || (kind === 'team' && desk.team)) return desk;
+  return { ...desk, moments: [{ id, kind, at, n }, ...desk.moments].slice(0, MOMENTS_MAX),
+    merges: desk.merges + (kind === 'merge'), unstuck: desk.unstuck + (kind === 'unstuck'), team: desk.team || kind === 'team' };
+}
+function workedOn(desk, at) {
+  const day = dayOf(at); if (desk.lastDay >= day) return desk;
+  const d = { ...desk, lastDay: day, dayCount: desk.dayCount + 1 };
+  return plantStage(d.dayCount) > plantStage(desk.dayCount) ? remember(d, 'grew', at, d.dayCount) : d;
+}
+const momentText = m => m.kind === 'merge' ? 'Work got merged' : m.kind === 'unstuck' ? `Got unstuck after ${m.n} failed tries`
+  : m.kind === 'team' ? 'First subagent team' : m.n === 1 ? 'Moved in: a sprout on the desk' : `The desk plant grew after ${m.n} days here`;
+const deskKey = cwd => 'agent-office:desk:' + cwd;
+const demoDesks = new Map();                    // demo projects keep theirs in memory only
+function deskOf(a) {
+  a = a.parent || a;
+  if (!a.live) return demoDesks.get(a.project.key) || emptyDesk();
+  try { return { ...emptyDesk(), ...(a.cwd && JSON.parse(localStorage.getItem(deskKey(a.cwd)))) }; } catch (_) { return emptyDesk(); }
+}
+function changeDesk(a, change) {
+  a = a.parent || a; const was = deskOf(a), d = change(was); if (d === was) return;
+  if (!a.live) demoDesks.set(a.project.key, d); else if (a.cwd) { try { localStorage.setItem(deskKey(a.cwd), JSON.stringify(d)); } catch (_) {} }
+  deskDirty = true; detailDirty = true;
+}
+addEventListener('storage', e => { if (e.key && e.key.startsWith('agent-office:desk:')) { deskDirty = true; detailDirty = true; } });
+const TROPHY = M('#E9B83A', { roughness: .35, metalness: .2 });
+function drawDesks() {
+  deskDirty = false; if (!curFloor) return;
+  curFloor.deskSeats.forEach((s, i) => {
+    const g = deskShelves[i], d = s.owner && !s.owner.gone ? deskOf(s.owner) : null, stage = d ? plantStage(d.dayCount) : 0;
+    const sig = d ? `${stage}|${d.merges}|${d.unstuck}` : '';
+    if (sig === g.userData.sig) return; g.userData.sig = sig;
+    g.traverse(o => { if (o.geometry) o.geometry.dispose(); }); g.clear();
+    if (!d) return;
+    // Left of the screen, between the keyboard and the monitor. Drawn larger than life so they read from across the floor.
+    const z = s.face[1] * .62, cups = Math.min(d.merges, 4);
+    const stand = x => { const h = new THREE.Group(); h.position.set(x, .77, z); h.scale.setScalar(1.7); g.add(h); return h; };
+    if (stage) {
+      const h = stand(-.96); cyl(.05, .038, .07, mats.pot2, 0, .035, 0, h, 12);
+      for (let k = 0; k < stage; k++) part(new THREE.IcosahedronGeometry(.034 + stage * .005, 0), k % 2 ? mats.leaf2 : mats.leaf, h, Math.sin(k * 2.4) * .028, .1 + k * .042, Math.cos(k * 2.4) * .028);
+    }
+    for (let i = 0; i < cups; i++) {                                // a cup per merge; from the fifth on, the first one is the big one
+      const h = stand(-.79 + i * .13); if (!i && d.merges > 4) h.scale.setScalar(2.5);
+      cyl(.03, .03, .012, TROPHY, 0, .006, 0, h, 12); cyl(.008, .008, .04, TROPHY, 0, .032, 0, h, 6); cyl(.032, .015, .05, TROPHY, 0, .077, 0, h, 12);
+    }
+    if (d.unstuck) part(new THREE.TorusKnotGeometry(.022, .007, 48, 6), mats.steel, stand(-.79 + cups * .13), 0, .04, 0);   // the knot it untangled
+  });
+}
+// Short-lived bits in the air: confetti, soot, sparks, and a parcel that lands on the desk.
+const fx = [];
+const FX_GEO = { conf: new THREE.PlaneGeometry(.1, .06), soot: new THREE.SphereGeometry(.05, 8, 6), spark: new THREE.SphereGeometry(.016, 6, 4), parcel: new THREE.BoxGeometry(.26, .2, .22), gear: new THREE.TorusGeometry(.06, .02, 5, 9) };
+const FX_MAT = { conf: ['#FFD166', '#EF476F', '#06D6A0', '#4CC9F0', '#F2F5F6'].map(c => new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide })),
+  soot: M('#34393C'), spark: new THREE.MeshBasicMaterial({ color: '#6FD69A' }), parcel: M('#C39A6B') };
+const inView = a => a.floor === curFloor && !a.onRoof && viewMode === 'floor' && a.g.visible && !document.hidden;
+function burst(a, kind) {
+  if (!inView(a)) return;
+  const p = a.g.position, f = !a.path.length && a.spot && a.spot.face || [0, 0];   // over the desk it faces, or over itself mid-walk
+  const add = (geo, mat, y, v, life, o, side = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(p.x + f[0] * .6 + Math.abs(f[1]) * side, y, p.z + f[1] * .6 + Math.abs(f[0]) * side); scene.add(m); fx.push(Object.assign({ m, v: new THREE.Vector3(...v), life, age: 0 }, o)); };
+  if (kind === 'soot') for (let k = 0; k < 7; k++) add(FX_GEO.soot, FX_MAT.soot, 1.2, [rand(-.12, .12), rand(.25, .5), rand(-.12, .12)], rand(1.1, 1.7), { grow: 1.6 });
+  else if (kind === 'parcel') {
+    add(FX_GEO.parcel, FX_MAT.parcel, .9, [0, 1.9, 0], 7, { g: 6, rest: .9 }, .62);   // beside the keyboard, where you can see it past the agent
+    for (let k = 0; k < 8; k++) add(FX_GEO.spark, FX_MAT.spark, 1, [rand(-.5, .5), rand(.6, 1.3), rand(-.5, .5)], .9, { g: 2.5 });
+  } else for (let k = 0, n = kind === 'big' ? 48 : 22; k < n; k++) add(FX_GEO.conf, pick(FX_MAT.conf), 1.6, [rand(-1.3, 1.3), rand(2.2, 3.8), rand(-1.3, 1.3)], rand(1.8, 2.8), { g: 4.5, spin: rand(4, 10), drag: 1.2 });
+}
+function updateFx(dt) {
+  for (let i = fx.length - 1; i >= 0; i--) {
+    const p = fx[i]; p.age += dt;
+    if (p.age >= p.life) { scene.remove(p.m); fx.splice(i, 1); continue; }
+    if (p.g) p.v.y -= p.g * dt;
+    if (p.drag) p.v.multiplyScalar(1 - dt * p.drag);
+    p.m.position.addScaledVector(p.v, dt);
+    if (p.rest != null && p.m.position.y < p.rest) { p.m.position.y = p.rest; p.v.y = p.v.y < -.6 ? -p.v.y * .35 : 0; }
+    if (p.spin) { p.m.rotation.x += p.spin * dt; p.m.rotation.z += p.spin * .7 * dt; }
+    const k = p.age / p.life;
+    p.m.scale.setScalar((p.grow ? 1 + k * p.grow : 1) * Math.min(1, (1 - k) / .2));   // shrinks away over its last fifth
+  }
+  const now = Date.now();
+  for (const a of agents) {
+    const on = !!a.run && now - a.run.at > RUN_GEAR_MS && a.state !== 'waiting';
+    if (on && !a.gear) a.gear = part(FX_GEO.gear, mats.brass, a.g, .36, 1.02, .1, false);
+    if (a.gear) { a.gear.visible = on; if (on) { a.gear.rotation.z += dt * 3; a.gear.position.y = 1.02 + Math.sin(now / 45) * .006; } }
+  }
+}
+function react(who, o, at) {
+  if (!o) return;
+  const now = performance.now();
+  if (o.kind === 'soot') { if (now - (who.sootAt || -1e9) > 3000) { who.sootAt = now; burst(who, 'soot'); } return; }
+  if (o.kind === 'parcel') { burst(who, 'parcel'); return; }
+  const big = o.kind === 'unstuck';
+  if (big) { emit(who, 'Unstuck', `Worked after ${o.fails} failed tries`, at); changeDesk(who, d => remember(d, 'unstuck', at, o.fails)); }
+  else if (now - (who.cheeredAt || -1e9) < CHEER_GAP_MS) return;
+  who.cheeredAt = now; who.cheerUntil = now + (big ? 4500 : 2200); burst(who, big ? 'big' : 'small');
+}
+
 function onLiveEvent(e, replay) {
   if (e.replacesSessionId) {
     const duplicate = live.byId.get(e.replacesSessionId);
@@ -4187,7 +4322,8 @@ function onLiveEvent(e, replay) {
       if (e.message) emit(a, 'SessionFound', `${e.message} · ${whereFrom(a)} · ${a.cwd}`, e.at);
       applyStatus(a, s.status, s.activity); break;
     case 'UserPromptSubmit':
-      emit(a, 'UserPromptSubmit', `"${e.prompt || ''}"`, e.at); seeAgent(a); unstick(a);
+      emit(a, 'UserPromptSubmit', `"${e.prompt || ''}"`, e.at); seeAgent(a); unstick(a); a.run = null;
+      if (!replay) changeDesk(a, d => workedOn(d, e.at));
       a.ws = chooseWorkspot(a); a.streak = 0;
       applyStatus(a, 'thinking', e.prompt || 'New prompt');
       place(a, s.permissionMode === 'plan' ? (spotOfType(a, ['meeting']) || a.ws) : a.ws, true);
@@ -4197,6 +4333,7 @@ function onLiveEvent(e, replay) {
       if (who === a && (e.tool === 'Task' || e.tool === 'Agent')) { applyStatus(a, 'working', `Waiting on ${e.summary.split(':')[0] || 'a'} subagent`); break; }
       applyStatus(who, 'working', label);
       place(who, who === a ? spotForTool(a, e.tool, s) : (READ_TOOLS.has(e.tool) && Math.random() < .6 ? spotOfType(who, ['library']) : null) || who.ws);
+      if (e.tool === 'Bash') who.run = { at: e.at };
       if (e.tool === 'Bash' && !replay) termPush(who, '$ ' + e.summary, '#F3F7F8');
       if (EDIT_TOOLS.has(e.tool) && !replay) boardPush(who, e.summary);
       if (EDIT_TOOLS.has(e.tool)) noteEdit(who, e.summary, replay);
@@ -4204,9 +4341,10 @@ function onLiveEvent(e, replay) {
     case 'PostToolUse': case 'PostToolUseFailure':
       if (e.failed) emit(who, 'PostToolUseFailure', label, e.at);
       if (e.tool === 'Bash' && !replay) termPush(who, e.failed ? '✗ failed' : '✓ done', e.failed ? '#FF7B72' : '#6FD69A');
-      noteResult(who, e, replay);
+      { const before = noteResult(who, e, replay), ran = e.tool === 'Bash' && who.run; if (ran) who.run = null;
+        if (!replay) react(who, outcomeOf(e, before, ran ? e.at - ran.at : 0), e.at); }
       if (who.state !== 'waiting') applyStatus(who, 'thinking', e.failed ? `${e.tool} failed, rethinking` : who.review && !who.reviewDone ? reviewLabel(who.review) : 'Thinking');
-      if (e.merged) { emit(who, 'Merged', label, e.at); if (!replay) { celebrate(who); chime('merged', a); } }
+      if (e.merged) { emit(who, 'Merged', label, e.at); if (!replay) { celebrate(who); chime('merged', a); changeDesk(a, d => remember(d, 'merge', e.at)); } }
       break;
     case 'PermissionRequest': case 'Notification': {
       const perm = e.type === 'PermissionRequest' || e.notificationType === 'permission_prompt';
@@ -4217,12 +4355,12 @@ function onLiveEvent(e, replay) {
         if (!replay) { toast(`${a.name} needs your permission in the ${whereFrom(a).toLowerCase()}`, 'Show me', () => select(who, true), who, 'waiting'); chime('needs', a); nudgeTitle(`✋ ${a.name} needs you`); }
       } else if (e.notificationType === 'idle_prompt') applyStatus(a, 'idle', 'Waiting for your input');
       break; }
-    case 'Stop': emit(a, 'Stop', 'Finished responding', e.at); unstick(a); applyStatus(a, 'done', a.merged ? 'Finished · merged' : 'Finished');
+    case 'Stop': emit(a, 'Stop', 'Finished responding', e.at); unstick(a); a.run = null; applyStatus(a, 'done', a.merged ? 'Finished · merged' : 'Finished');
       if (!replay) { chime('done', a); nudgeTitle(`✓ ${a.name} is done`); if (a.floor !== curFloor || viewMode !== 'floor') { unseenOf(a.floor).add(a.id); uiDirty = true; } }
       if (!replay) toast(`${a.name} finished in ~/${a.project.key}`, hostName(a) ? [[opensChat(a) ? 'Open chat' : `Open in ${hostName(a)}`, () => openHost(a), true], ['Show me', () => select(a, true)]] : 'Show me', () => select(a, true), a, 'done');
       break;
-    case 'SubagentStart': emit(who, 'SubagentStart', `${e.agentType || 'Subagent'} started`, e.at); break;
-    case 'SubagentStop': emit(who, 'SubagentStop', e.message || 'Returned its result', e.at);
+    case 'SubagentStart': emit(who, 'SubagentStart', `${e.agentType || 'Subagent'} started`, e.at); if (!replay) changeDesk(a, d => remember(d, 'team', e.at)); break;
+    case 'SubagentStop': emit(who, 'SubagentStop', e.message || 'Returned its result', e.at); who.run = null;
       if (replay) { removeAgent(who); a.subs.delete(e.agentId); } else if (!who.awaitingReview && !who.exiting) queueReview(a, who); break;
     case 'PermissionResolved': emit(who, 'PermissionResolved', e.message, e.at); applyStatus(who, 'thinking', e.message);
       if (!replay) toast(`${e.message.startsWith('Allowed') ? 'Allowed' : 'Denied'}: ${who.name} ${e.message.startsWith('Allowed') ? 'can go ahead' : 'will find another way'}`); break;
@@ -4479,6 +4617,11 @@ function startDemo() {
     a.spot = home; a.where = 'Own desk'; a.g.position.set(home.x, 0, home.z); a.yaw = a.yawT = yawOf(home.face);
     setState(a, 'idle', 'Session started');
   });
+  PROJECTS.forEach((p, i) => {                                // so the demo desks already have a past
+    const DAY = 864e5, now = Date.now(); let d = remember({ ...emptyDesk(), dayCount: [2, 9, 16, 31][i % 4] }, 'team', now - 20 * DAY);
+    for (let k = [1, 3, 6, 0][i % 4]; k > 0; k--) d = remember(d, 'merge', now - (k * 2 + 2) * DAY);
+    demoDesks.set(p.key, i % 2 ? remember(d, 'unstuck', now - 3 * DAY, 4) : d);
+  });
   curFloor = floors[floors.length - 1]; yOffTarget = yOff = -curFloor.i * FLOOR_H; rebuildTower(); refreshFloorVisuals();
   buildCustomize(); renderJSON(); setModeLine(); goBuilding();
   agents.filter(a => a.kind === 'main').forEach(mainLoop);
@@ -4520,7 +4663,7 @@ function step(dt) {
   yOff += (yOffTarget - yOff) * (reduced ? 1 : 1 - Math.exp(-dt * 5)); building.position.y = city.position.y = yOff;
   floorGlow();
   for (const a of agents.slice()) updateAgent(a, dt, sdt);
-  updateHoops(dt); updateArcade(dt); updateParty(dt); updateClashes();
+  updateHoops(dt); updateArcade(dt); updateParty(dt); updateClashes(); updateFx(dt); if (deskDirty) drawDesks();
   { let want = 0; for (const a of agents) if (a.floor === curFloor && !a.onRoof && Math.hypot(a.g.position.x - 12.6, a.g.position.z + 1.8) < 1.9) want = 1;
     lift.open += (want - lift.open) * (1 - Math.exp(-dt * 6));
     lift.l.position.z = -1.8 - .275 - lift.open * .5; lift.r.position.z = -1.8 + .275 + lift.open * .5;

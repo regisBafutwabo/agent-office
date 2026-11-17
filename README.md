@@ -130,6 +130,17 @@ The office points out three things you'd want to know about before they bite:
 
 The first two live in the open office page: reloading it forgets them, and they don't count toward the menu-bar badge.
 
+## Reactions and desk memories
+
+Agents react to how a command went, not to finishing a reply:
+
+- **Still running:** a gear turns beside an agent whose command has run for more than 6 seconds.
+- **Passed after a long run:** a command that took 20 seconds or more drops a parcel on the desk.
+- **Failed:** a puff of soot.
+- **Comeback:** a command that failed and then passes gets a short cheer and confetti. If it had failed 3 times or more, the cheer is bigger and the desk remembers it.
+
+Each project's desk keeps what happened there. A plant grows after 1, 3, 7, 14 and 30 days of work, every merge adds a gold cup (the first becomes a big one at five), and a steel knot marks the times an agent got itself unstuck. The agent's card lists the dated moments under **Desk memories**. Memories hold counts and dates only, never prompts, commands or file names, and they are saved in this browser.
+
 ## Approving from the office
 
 When an agent needs permission, it raises its hand and its floor pulses amber. If the office is open on your screen, you can answer right there: **Allow**, **Deny**, or **Answer in Claude Code**. You can do this from the agent's card or from the pop-up alert.
