@@ -2269,6 +2269,7 @@ function refreshFloorVisuals() {
   curFloor.deskSeats.forEach(s => { s.chairMat.color.set(s.owner ? s.owner.color : sceneT.chair); s.screen.color.set(sceneT.screenOff); });
   agents.forEach(a => { if (a.floor === curFloor) updateScreen(a); });
   drawTerm(); drawBoard(); deskDirty = true;
+  for (const s of Object.values(SPOTS).flat()) if (s.chair) s.chair.rotation.y = yawOf(s.face);   // not how the last floor's sitters left them
 }
 function goToFloor(i) {
   const f = floors[i]; if (!f) return;
@@ -3088,7 +3089,8 @@ function updateAgent(a, dt, sdt) {
     else { g.position.x += dx / d * step; g.position.z += dz / d * step; a.yawT = Math.atan2(dx, dz); }
   } else if (a.spot && a.spot.face) a.yawT = yawOf(a.spot.face) + (swivel ? Math.sin(a.animT * .8) * .45 : 0);
   a.yaw = lerpAngle(a.yaw, a.yawT ?? a.yaw, 1 - Math.exp(-sdt * (swivel ? 3 : 10))); g.rotation.y = a.yaw;
-  if (!a.path.length && a.spot && a.spot.chair) a.spot.chair.rotation.y = a.yaw;   // the chair turns with whoever sits in it
+  // The chair turns with whoever sits in it. Chairs are shared by every floor, so only the floor on show may move them.
+  if (!a.path.length && a.spot && a.spot.chair && a.floor === curFloor) a.spot.chair.rotation.y = a.yaw;
   const targetAppear = a.leaving ? 0 : 1; a.appear += (targetAppear - a.appear) * (1 - Math.exp(-sdt * 6));
   g.scale.setScalar(a.scale * Math.max(.001, a.appear));
   a.animT += sdt; const t = a.animT; const moving = a.path.length > 0;
