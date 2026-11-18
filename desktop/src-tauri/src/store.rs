@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::discover::{Found, FOUND_WINDOW_MS};
+use crate::discover::{Found, FoundSub, FOUND_WINDOW_MS};
 use crate::transcript::{read_transcript, Context, Message, Transcript, MESSAGE_CHARS};
 
 const STALE_MS: u64 = 6 * 60 * 60 * 1000; // forget sessions that went silent (crashed without SessionEnd)
@@ -160,6 +160,9 @@ pub struct Subagent {
     pub status: String,
     pub activity: String,
     pub started_at: u64,
+    /// Found in its log, with no hook heard from it yet: its log decides when it leaves (see Store::adopt_subs).
+    #[serde(skip)]
+    pub from_log: bool,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -333,6 +336,25 @@ impl Store {
     }
 
     /// A chat found in its log (discover.rs): add it, or refresh it while no hook has reported on it.
+    /// Subagents a found chat's logs show at work (discover::running_subs) that no hook told us about walk in, and
+    /// leave once the logs say they finished. Returns the events to pass on.
+    pub fn adopt_subs(&mut self, id: &str, subs: &[FoundSub]) -> Vec<Value> {
+        let now = now_ms();
+        let Some(s) = self.sessions.iter_mut().find(|s| s.id == id) else { return vec![] };
+        let event = |kind: &str, a: &Subagent| json!({ "type": kind, "sessionId": id, "at": now, "agentId": a.id, "agentType": a.kind, "agentTask": a.task, "message": null });
+        let mut events = vec![];
+        for x in subs {
+            let stopped = self.stopped_subs.get(&(id.to_string(), x.id.clone())).is_some_and(|at| now.saturating_sub(*at) < LATE_HOOK_MS);
+            if stopped || s.subagents.iter().any(|a| a.id == x.id) { continue; }
+            s.subagents.push(Subagent { id: x.id.clone(), kind: x.kind.clone(), task: x.task.clone(), status: "working".into(), activity: "Working".into(), started_at: x.at, from_log: true });
+            events.push(event("SubagentStart", s.subagents.last().unwrap()));
+        }
+        let (stay, gone): (Vec<_>, Vec<_>) = std::mem::take(&mut s.subagents).into_iter().partition(|a| !a.from_log || subs.iter().any(|x| x.id == a.id));
+        s.subagents = stay;
+        events.extend(gone.iter().map(|a| event("SubagentStop", a)));
+        events
+    }
+
     /// Returns a SessionFound event when something on screen changes; hooks always win over logs.
     pub fn adopt(&mut self, f: Found) -> Option<Value> {
         if f.agent == "claude-code" && self.codex_ids.contains(&f.id) { return None; }
@@ -511,13 +533,14 @@ impl Store {
                     let task = claim_task(s, agent_type, now);
                     s.subagents.push(Subagent {
                         id: agent_id.into(), kind: if agent_type.is_empty() { "subagent".into() } else { agent_type.into() }, task,
-                        status: "thinking".into(), activity: "Starting".into(), started_at: now,
+                        status: "thinking".into(), activity: "Starting".into(), started_at: now, from_log: false,
                     });
                     s.subagents.len() - 1
                 }
             })
         };
         if let Some(i) = sub {
+            s.subagents[i].from_log = false;       // a hook reports on it: hooks decide when it leaves
             e.insert("agentTask".into(), s.subagents[i].task.clone().map_or(Value::Null, Value::from));
         }
         let tool = str_of(p, "tool_name");
@@ -668,7 +691,7 @@ mod tests {
         st.ingest(&json!({ "session_id": "t1", "cwd": "/repo", "hook_event_name": "SessionStart" }), None, None);
         st.ingest(&json!({ "session_id": "real-claude", "cwd": "/repo", "hook_event_name": "SessionStart" }), Some("cli"), None);
         let f = Found { id: "codex:t1".into(), agent: "codex".into(), cwd: "/repo".into(), project: None, entrypoint: None,
-            at: now_ms(), status: "working".into(), activity: "Working".into(), title: None, messages: vec![], ended: false };
+            at: now_ms(), status: "working".into(), activity: "Working".into(), title: None, messages: vec![], ended: false, subs: vec![] };
         assert_eq!(st.adopt(f).unwrap()["replacesSessionId"], "t1");
         assert_eq!(st.sessions.len(), 2);
         assert!(st.sessions.iter().any(|s| s.id == "real-claude"));
@@ -696,7 +719,7 @@ mod tests {
         st.ingest_from(&prompt, None, None, "codex", Origin::default());
         let last = st.sessions[0].last_event_at;
         let log = |at: u64, ended: bool| Found { agent: "codex".into(), id: "codex:t1".into(), cwd: "/repo".into(), project: None, entrypoint: Some("T3 Code".into()),
-            at, status: "done".into(), activity: "Finished".into(), title: None, messages: vec![], ended };
+            at, status: "done".into(), activity: "Finished".into(), title: None, messages: vec![], ended, subs: vec![] };
         // An earlier turn's end, written before this prompt, mustn't cut it short; it only fills in where the session runs.
         let e = st.adopt(log(last - 1000, true)).unwrap();
         assert_eq!((e["session"]["entrypoint"].as_str(), e["session"]["status"].as_str()), (Some("t3-code"), Some("thinking")));
@@ -858,9 +881,26 @@ mod tests {
         assert_eq!(st.ingest(&base(json!({ "hook_event_name": "UserPromptSubmit", "prompt": "next" })), None, None).unwrap()["session"]["merged"], false);
     }
 
+    #[test]
+    fn a_subagent_already_at_work_walks_in_and_leaves_when_its_log_or_a_hook_says_so() {
+        let mut st = Store::default();
+        let sub = [FoundSub { id: "a1".into(), kind: "general-purpose".into(), task: Some("Wire the frontend".into()), at: 1 }];
+        st.adopt(found("s1", "working"));
+        let e = st.adopt_subs("s1", &sub);
+        assert_eq!((e[0]["type"].as_str(), e[0]["agentId"].as_str(), e[0]["agentTask"].as_str()), (Some("SubagentStart"), Some("a1"), Some("Wire the frontend")));
+        assert!(st.adopt_subs("s1", &sub).is_empty());                              // already here
+        assert_eq!(st.adopt_subs("s1", &[])[0]["type"], "SubagentStop");
+        st.adopt_subs("s1", &sub);
+        st.ingest(&json!({ "session_id": "s1", "cwd": "/Users/me/code/shop", "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": { "command": "ls" }, "agent_id": "a1" }), None, None);
+        assert!(st.adopt_subs("s1", &[]).is_empty());                               // a hook reported on it, so only a hook ends it
+        assert_eq!(st.sessions[0].subagents.len(), 1);
+        st.ingest(&json!({ "session_id": "s1", "cwd": "/Users/me/code/shop", "hook_event_name": "SubagentStop", "agent_id": "a1" }), None, None);
+        assert!(st.adopt_subs("s1", &sub).is_empty());                              // its log still reads mid-turn for a moment: it stays gone
+    }
+
     fn found(id: &str, status: &str) -> Found {
         Found { agent: "claude-code".into(), id: id.into(), cwd: "/Users/me/code/shop".into(), project: None, entrypoint: Some("claude-desktop".into()),
-                at: now_ms(), status: status.into(), activity: "Working".into(), title: Some("Fix cart".into()), messages: vec![], ended: false }
+                at: now_ms(), status: status.into(), activity: "Working".into(), title: Some("Fix cart".into()), messages: vec![], ended: false, subs: vec![] }
     }
 
     #[test]

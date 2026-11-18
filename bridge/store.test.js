@@ -284,3 +284,17 @@ test('chats archived in the desktop app leave, but come back with their next hoo
   st.ingest({ ...base, hook_event_name: 'UserPromptSubmit', prompt: 'back again' });
   assert.ok(st.snapshot().sessions.some(s => s.id === 's1'));
 });
+
+test('a subagent already at work when the office opens walks in, and leaves when its log or a hook says it finished', () => {
+  const st = new Store(() => null), sub = { id: 'a1', type: 'general-purpose', task: 'Wire the frontend', at: 1 };
+  st.adopt({ ...found('s1', 'working'), subs: [sub] });
+  assert.deepEqual(st.adoptSubs({ id: 's1', subs: [sub] }).map(e => [e.type, e.agentId, e.agentTask]), [['SubagentStart', 'a1', 'Wire the frontend']]);
+  assert.deepEqual(st.adoptSubs({ id: 's1', subs: [sub] }), []);         // already here
+  assert.deepEqual(st.adoptSubs({ id: 's1', subs: [] }).map(e => e.type), ['SubagentStop']);
+  st.adoptSubs({ id: 's1', subs: [sub] });
+  st.ingest({ session_id: 's1', cwd: '/Users/me/code/shop', hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'ls' }, agent_id: 'a1', agent_type: 'general-purpose' });
+  assert.deepEqual(st.adoptSubs({ id: 's1', subs: [] }), []);            // a hook reported on it, so only a hook ends it
+  assert.equal(st.snapshot().sessions[0].subagents.length, 1);
+  st.ingest({ session_id: 's1', cwd: '/Users/me/code/shop', hook_event_name: 'SubagentStop', agent_id: 'a1' });
+  assert.deepEqual(st.adoptSubs({ id: 's1', subs: [sub] }), []);         // its log still reads mid-turn for a moment: it stays gone
+});

@@ -187,6 +187,20 @@ export class Store {
     return e;
   }
 
+  // Subagents a found chat's logs show at work (discover.js runningSubs) that no hook told us about walk in, and leave
+  // once the logs say they finished. Returns the events to pass on.
+  adoptSubs(f) {
+    const s = this.sessions.get(f.id), now = Date.now(), subs = f.subs || [], events = []; if (!s) return events;
+    const ev = (type, sub) => ({ type, sessionId: s.id, at: now, agentId: sub.id, agentType: sub.type, agentTask: sub.task, message: null });
+    for (const x of subs) {
+      if (s.subagents[x.id] || now - (this.stoppedSubs.get(`${s.id}\n${x.id}`) ?? -Infinity) < LATE_HOOK_MS) continue;
+      s.subagents[x.id] = { id: x.id, type: x.type, task: x.task, status: 'working', activity: 'Working', startedAt: x.at, fromLog: true };
+      events.push(ev('SubagentStart', x));
+    }
+    for (const sub of Object.values(s.subagents)) if (sub.fromLog && !subs.some(x => x.id === sub.id)) { delete s.subagents[sub.id]; events.push(ev('SubagentStop', sub)); }
+    return events;
+  }
+
   // Found agents a poll no longer reports (Ollama unloaded the model) leave now, not after the usual quiet spell.
   // Returns their ids.
   retire(agent, keep) {
@@ -230,7 +244,7 @@ export class Store {
     if (e.agentId && type !== 'SubagentStart' && now - (this.stoppedSubs.get(`${sid}\n${e.agentId}`) ?? -Infinity) < LATE_HOOK_MS) return null;
     const sub = e.agentId ? (s.subagents[e.agentId] ||= { id: e.agentId, type: e.agentType || 'subagent', task: this.claimTask(sid, e.agentType, now),
                                                           status: 'thinking', activity: 'Starting', startedAt: now }) : null;
-    if (sub) e.agentTask = sub.task;
+    if (sub) { e.agentTask = sub.task; delete sub.fromLog; }             // a hook reports on it: hooks decide when it leaves
     const target = sub || s;
 
     switch (type) {

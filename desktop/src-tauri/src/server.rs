@@ -88,7 +88,9 @@ pub fn router(port: u16, on_change: OnChange) -> Router {
         // Chats that were already running when the office opened move in before the first page loads.
         let mut store = state.store.lock().unwrap();
         for f in discover::scan_home(store::now_ms()) {
+            let (id, subs) = (f.id.clone(), f.subs.clone());
             if let Some(e) = store.adopt(f) { (state.on_change)(&store, &e); }
+            store.adopt_subs(&id, &subs);
         }
     }
     tokio::spawn(watch_music(state.clone()));
@@ -198,7 +200,9 @@ async fn watch_logs(st: AppState) {
         let mut store = st.store.lock().unwrap();
         let keep: Vec<String> = models.iter().map(|f| f.id.clone()).collect();
         for f in found.into_iter().chain(models) {
-            if let Some(e) = store.adopt(f) {
+            let (id, subs) = (f.id.clone(), f.subs.clone());
+            let found = store.adopt(f);
+            for e in found.into_iter().chain(store.adopt_subs(&id, &subs)) {
                 (st.on_change)(&store, &e);
                 broadcast(&st, json!({ "type": "event", "event": e }));
             }

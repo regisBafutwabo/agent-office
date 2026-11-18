@@ -166,10 +166,10 @@ async function syncOllama() {
 }
 // Chats that were already running move in from their logs (discover.js); keep the ones no hook reports on up to date,
 // and walk out the ones whose log went quiet.
-for (const f of scan()) store.adopt(f);
+for (const f of scan()) { store.adopt(f); store.adoptSubs(f); }
 syncOllama();
 setInterval(() => {
-  for (const f of scan()) { const e = store.adopt(f); if (e) broadcast({ type: 'event', event: e }); }
+  for (const f of scan()) { const e = store.adopt(f); for (const x of [e, ...store.adoptSubs(f)]) if (x) broadcast({ type: 'event', event: x }); }
   for (const id of store.dropArchived(archivedChats())) broadcast({ type: 'event', event: { type: 'SessionEnd', sessionId: id, at: Date.now(), reason: 'Archived in the Claude app' } });
   syncOllama();
   const before = [...store.sessions.keys()]; store.prune();
