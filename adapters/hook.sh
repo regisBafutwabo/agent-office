@@ -9,7 +9,7 @@
 AGENT="${1:-unknown}"
 EVENT="${2:-}"
 PROJECT="${CLAUDE_PROJECT_DIR:-${GEMINI_PROJECT_DIR:-${QWEN_PROJECT_DIR:-${FACTORY_PROJECT_DIR:-}}}}"
-# App, terminal and tty let the office bring this agent's window or terminal tab to the front.
+# App, terminal, tty and T3 Code thread let the office bring this agent's window or terminal tab to the front.
 curl -s -m 1 -X POST \
   -H 'Content-Type: application/json' \
   -H "X-Agent-Office-Agent: $AGENT" \
@@ -18,6 +18,7 @@ curl -s -m 1 -X POST \
   -H "X-Agent-Office-App: ${__CFBundleIdentifier:-}" \
   -H "X-Agent-Office-Term: ${TERM_PROGRAM:-}" \
   -H "X-Agent-Office-Tty: $(ps -o tty= -p $$ 2>/dev/null | tr -d ' ')" \
+  -H "X-Agent-Office-T3-Thread: ${T3CODE_THREAD_ID:-}" \
   --data-binary @- \
   "http://127.0.0.1:${AGENT_OFFICE_PORT:-4747}/hook" >/dev/null 2>&1
 # Gemini CLI and Cursor read a JSON reply from stdout; an empty object means "no opinion".

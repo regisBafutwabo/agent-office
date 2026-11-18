@@ -187,6 +187,8 @@ pub struct Session {
     pub tty: Option<String>,
     /// The Claude desktop app's chat id, so "Open chat" lands on this exact conversation.
     pub chat: Option<String>,
+    /// The T3 Code thread (T3CODE_THREAD_ID), so "Open chat" lands on that thread in T3 Code.
+    pub t3_thread: Option<String>,
     /// The chat's title (from its transcript), or its first prompt until it has one.
     pub title: Option<String>,
     /// A merge ran since the last prompt (see is_merge).
@@ -233,6 +235,7 @@ pub struct Origin<'a> {
     pub term: Option<&'a str>,
     pub tty: Option<&'a str>,
     pub chat: Option<&'a str>,
+    pub t3_thread: Option<&'a str>,
 }
 
 #[derive(Default)]
@@ -385,7 +388,7 @@ impl Store {
                 self.sessions.push(Session {
                     id: f.id, agent: f.agent, cwd: f.cwd, project, entrypoint: entrypoint_label(f.entrypoint.as_deref()), started_at: f.at, last_event_at: f.at,
                     status: f.status, activity: f.activity, permission_mode: "default".into(), subagents: vec![], tool: None,
-                    app: None, term: None, tty: None, chat: None, title: f.title.clone(), merged: false, messages: f.messages, context: None,
+                    app: None, term: None, tty: None, chat: None, t3_thread: None, title: f.title.clone(), merged: false, messages: f.messages, context: None,
                     transcript_title: f.title, first_prompt: None, transcript_checked_at: 0, pending_tasks: vec![], from_log: true,
                 });
                 (self.sessions.len() - 1, true)
@@ -396,7 +399,7 @@ impl Store {
             "type": "SessionFound", "sessionId": s.id, "at": now_ms(), "agentId": null, "agentType": null,
             "message": if new { Value::from("Already running") } else { Value::Null },
             "session": { "id": s.id, "agent": s.agent, "cwd": s.cwd, "project": s.project, "title": s.title, "merged": s.merged, "entrypoint": s.entrypoint,
-                         "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": s.app, "term": s.term, "chat": s.chat, "messages": s.messages },
+                         "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": s.app, "term": s.term, "chat": s.chat, "t3Thread": s.t3_thread, "messages": s.messages },
         });
         if let Some(id) = replaces { event["replacesSessionId"] = id.into(); }
         if new {                                   // only the arrival goes in the feed, not every refresh
@@ -454,7 +457,7 @@ impl Store {
                     id: sid.into(), agent: agent.into(), cwd, project, entrypoint: entrypoint_label(entrypoint), started_at: now, last_event_at: now,
                     status: "idle".into(), activity: "Session started".into(),
                     permission_mode: if pm.is_empty() { "default".into() } else { pm.into() }, subagents: vec![], tool: None,
-                    app: None, term: None, tty: None, chat: None,
+                    app: None, term: None, tty: None, chat: None, t3_thread: None,
                     title: None, merged: false, messages: vec![], context: None, transcript_title: None, first_prompt: None, transcript_checked_at: 0, pending_tasks: vec![],
                     from_log: false,
                 });
@@ -480,6 +483,7 @@ impl Store {
             if let Some(t) = origin.term.filter(|t| !t.is_empty()) { s.term = Some(t.into()); }
             if let Some(t) = origin.tty.filter(|t| crate::focus::valid_tty(t)) { s.tty = Some(t.into()); }
             if let Some(c) = origin.chat.filter(|c| crate::focus::valid_chat(c)) { s.chat = Some(c.into()); }
+            if let Some(t) = origin.t3_thread.filter(|t| crate::focus::valid_uuid(t)) { s.t3_thread = Some(t.into()); }
             // The chat's title and last messages from its transcript; until it has a title, its first prompt stands in.
             let before = s.messages.clone();
             let prompt = str_of(p, "prompt");
@@ -643,7 +647,7 @@ impl Store {
         }
         e.insert("session".into(), json!({
             "id": s.id, "agent": s.agent, "cwd": s.cwd, "project": s.project, "title": s.title, "merged": s.merged, "entrypoint": s.entrypoint,
-            "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": s.app, "term": s.term, "chat": s.chat,
+            "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": s.app, "term": s.term, "chat": s.chat, "t3Thread": s.t3_thread,
             "context": s.context,
         }));
         if chat_changed {
@@ -837,6 +841,17 @@ mod tests {
         assert!(st.ingest(&json!({ "hook_event_name": "Stop" }), None, None).is_none());
         assert!(st.ingest_from(&json!({ "hook_event_name": "SessionStart", "session_id": "codex:h1", "cwd": "/" }), None, None, "codex", Origin::default()).is_none());
         assert!(!st.sessions.iter().any(|s| s.id == "codex:h1"));
+    }
+
+    #[test]
+    fn keeps_a_valid_t3_code_thread_and_ignores_a_bad_one() {
+        let mut st = Store::default();
+        let thread = "fceae35e-a7d0-4d26-b667-aa2413567acf";
+        let e = st.ingest_from(&base(json!({ "hook_event_name": "SessionStart" })), Some("t3-code"), None, "claude-code", Origin { t3_thread: Some(thread), ..Origin::default() }).unwrap();
+        assert_eq!(e["session"]["t3Thread"], thread);
+        st.ingest_from(&base(json!({ "hook_event_name": "Stop" })), Some("t3-code"), None, "claude-code", Origin { t3_thread: Some("../x?y"), ..Origin::default() });
+        assert_eq!(st.sessions[0].t3_thread.as_deref(), Some(thread));
+        assert_eq!(serde_json::to_value(&st.sessions[0]).unwrap()["t3Thread"], thread);
     }
 
     #[test]

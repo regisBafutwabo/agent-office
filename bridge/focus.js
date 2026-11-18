@@ -11,7 +11,7 @@ export const APPS = {
   'com.todesktop.230313mzl4w4u92': 'Cursor', 'com.microsoft.VSCode': 'VS Code', 'com.exafunction.windsurf': 'Windsurf', 'dev.zed.Zed': 'Zed',
   'com.anthropic.claudefordesktop': 'Claude', 'com.openai.codex': 'Codex', 'com.openai.chat': 'ChatGPT', 'com.t3tools.t3code': 'T3 Code',
 };
-// T3 Code runs Claude, Codex and Cursor for you; its sessions open T3 Code, not those tools' own apps.
+// T3 Code runs Claude, Codex and Cursor for you; its sessions open their thread in T3 Code, not those tools' own apps.
 const T3_CODE = 'com.t3tools.t3code';
 const EDITORS = new Set(['com.todesktop.230313mzl4w4u92', 'com.microsoft.VSCode', 'com.exafunction.windsurf', 'dev.zed.Zed']);
 const FROM_TERM = { Apple_Terminal: 'com.apple.Terminal', 'iTerm.app': 'com.googlecode.iterm2', WarpTerminal: 'dev.warp.Warp-Stable', ghostty: 'com.mitchellh.ghostty', WezTerm: 'com.github.wez.wezterm' };
@@ -20,10 +20,13 @@ export const validTty = t => /^ttys?\d{1,4}$/.test(t || '');
 // Chat ids: the Claude desktop app's session (CLAUDE_CODE_HOST_SESSION_ID) and a Codex thread (its hook session id).
 export const validChat = c => /^local_[A-Za-z0-9-]{1,64}$/.test(c || '');
 const CODEX_THREAD = /^codex:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
+// A T3 Code thread (T3CODE_THREAD_ID) and T3 Code's install id (~/.t3/userdata/environment-id) are both UUIDs.
+export const validUuid = v => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v || '');
+export const t3Environment = (home = os.homedir()) => { try { return fs.readFileSync(path.join(home, '.t3/userdata/environment-id'), 'utf8').trim(); } catch { return null; } };
 
 /** The link that opens this exact chat in its desktop app, or null when the agent runs somewhere else (a terminal, an editor). */
-export function chatLink({ agent, id, chat, app, term, entrypoint }) {
-  if (entrypoint === 't3-code') return null;   // T3 Code has no link to one thread yet
+export function chatLink({ agent, id, chat, app, term, entrypoint, t3Thread }, t3Env = null) {
+  if (entrypoint === 't3-code') return validUuid(t3Thread) && validUuid(t3Env) ? { bundle: T3_CODE, url: `t3code://threads/${t3Env}/${t3Thread}` } : null;   // else just bring T3 Code forward
   if (validChat(chat)) return { bundle: 'com.anthropic.claudefordesktop', url: `claude://code/continue?session=${chat}&source=agent_office` };
   const m = CODEX_THREAD.exec(id || '');
   if (agent === 'codex' && m && !term && (!app || app === 'com.openai.codex')) return { bundle: 'com.openai.codex', url: `codex://threads/${m[1]}` };
@@ -63,9 +66,9 @@ const ITERM_SCRIPT = dev => `tell application "iTerm2"
 end tell`;
 
 /** Resolves to a short message ("Opened the Terminal tab"); rejects with the reason it couldn't. */
-export async function focus({ agent, id, chat, app, term, tty, cwd, entrypoint }) {
+export async function focus({ agent, id, chat, app, term, tty, cwd, entrypoint, t3Thread }) {
   if (process.platform !== 'darwin') throw new Error('Opening apps from the office only works on macOS for now.');
-  const link = chatLink({ agent, id, chat, app, term, entrypoint });
+  const link = chatLink({ agent, id, chat, app, term, entrypoint, t3Thread }, entrypoint === 't3-code' ? t3Environment() : null);
   if (link) { await run('open', [link.url]); return `Opened the chat in ${APPS[link.bundle]}`; }
   const bundle = entrypoint === 't3-code' ? T3_CODE : APPS[app] ? app : FROM_TERM[term];
   if (!bundle) throw new Error("This agent's app isn't known yet. Start a new session and try again.");

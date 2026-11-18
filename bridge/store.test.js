@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store, summarizeTool, entrypointLabel } from './store.js';
-import { chatLink } from './focus.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { chatLink, t3Environment } from './focus.js';
 
 const base = { session_id: 's1', cwd: '/Users/me/code/shop', permission_mode: 'default' };
 
@@ -161,6 +164,24 @@ test('opens the exact chat in the Claude and Codex apps, and only there', () => 
   assert.equal(chatLink({ agent: 'codex', id, term: 'Apple_Terminal' }), null);   // Codex CLI in a terminal: open the tab instead
   assert.equal(chatLink({ agent: 'codex', id: 'codex:../../x' }), null);
   assert.equal(chatLink({ agent: 'codex', id, entrypoint: 't3-code' }), null);   // run by T3 Code: open T3 Code, not the Codex app
+});
+
+test('opens a T3 Code session at its own thread, and only with valid ids', () => {
+  const st = new Store(), thread = 'fceae35e-a7d0-4d26-b667-aa2413567acf', env = '3232e3cc-4af0-4943-bba3-a85dcaf45bf7';
+  st.ingest({ ...base, hook_event_name: 'SessionStart' }, 't3-code', undefined, 'claude-code', { app: 'com.t3tools.t3code', t3Thread: thread });
+  st.ingest({ ...base, hook_event_name: 'Stop' }, 't3-code', undefined, 'claude-code', { t3Thread: '../x?y' });
+  const s = st.snapshot().sessions[0];
+  assert.equal(s.t3Thread, thread);
+  assert.deepEqual(chatLink(s, env), { bundle: 'com.t3tools.t3code', url: `t3code://threads/${env}/${thread}` });
+  assert.equal(chatLink(s, null), null);                                   // no environment id: just bring T3 Code forward
+  assert.equal(chatLink(s, 'not-a-uuid/../x'), null);
+  assert.equal(chatLink({ ...s, t3Thread: undefined }, env), null);
+  assert.equal(chatLink({ ...s, t3Thread: 'abc' }, env), null);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'office-t3-'));
+  assert.equal(t3Environment(home), null);
+  fs.mkdirSync(path.join(home, '.t3/userdata'), { recursive: true }); fs.writeFileSync(path.join(home, '.t3/userdata/environment-id'), `${env}\n`);
+  assert.equal(t3Environment(home), env);
+  fs.rmSync(home, { recursive: true, force: true });
 });
 
 test('ignores payloads without a session or event name', () => {

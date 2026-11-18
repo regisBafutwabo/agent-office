@@ -240,7 +240,7 @@ fn ingest(st: &Shared, headers: &HeaderMap, query: &HashMap<String, String>, bod
     let agent = header("x-agent-office-agent").or(query.get("agent").map(String::as_str)).unwrap_or("claude-code").to_lowercase();
     let Some(payload) = adapters::normalize(&agent, &raw, header("x-agent-office-event")) else { return Ok(None) };
     let mut store = st.store.lock().unwrap();
-    let origin = Origin { app: header("x-agent-office-app"), term: header("x-agent-office-term"), tty: header("x-agent-office-tty"), chat: header("x-agent-office-chat") };
+    let origin = Origin { app: header("x-agent-office-app"), term: header("x-agent-office-term"), tty: header("x-agent-office-tty"), chat: header("x-agent-office-chat"), t3_thread: header("x-agent-office-t3-thread") };
     let event = store.ingest_from(&payload, header("x-agent-office-entrypoint"), header("x-agent-office-project"), &agent, origin);
     if let Some(e) = &event {
         (st.on_change)(&store, e);
@@ -439,7 +439,7 @@ async fn client(mut socket: WebSocket, st: AppState) {
                                 store.sessions.iter().find(|s| s.id == sid).cloned()
                             });
                             let result = match target {
-                                Some(s) => tokio::task::spawn_blocking(move || focus::focus(&s.agent, &s.id, s.chat.as_deref(), s.app.as_deref(), s.term.as_deref(), s.tty.as_deref(), &s.cwd, &s.entrypoint))
+                                Some(s) => tokio::task::spawn_blocking(move || focus::focus(&s.agent, &s.id, s.chat.as_deref(), s.app.as_deref(), s.term.as_deref(), s.tty.as_deref(), &s.cwd, &s.entrypoint, s.t3_thread.as_deref()))
                                     .await.unwrap_or_else(|_| Err("Couldn't open the app".into())),
                                 None => Err("That session has ended".into()),
                             };

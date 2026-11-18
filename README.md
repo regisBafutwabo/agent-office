@@ -110,6 +110,7 @@ Every live agent has an **↗** button in the agent list, and an **Open chat** /
 
 - **Claude desktop app:** opens that exact chat (the plugin passes the app's session id; needs plugin 0.4.0).
 - **Codex app:** opens that exact thread.
+- **T3 Code:** opens that session's own conversation (needs plugin 0.4.2).
 - **Terminal and iTerm:** selects the tab running that session.
 - **Cursor, VS Code, Windsurf, Zed:** opens that project's window, where its agent chat lives.
 - **Anything else on the list:** brings the app forward.

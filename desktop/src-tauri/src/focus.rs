@@ -62,6 +62,23 @@ fn codex_thread(id: &str) -> Option<&str> {
     (shape_ok && groups.iter().all(|g| g.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()))).then_some(uuid)
 }
 
+/// A T3 Code thread (T3CODE_THREAD_ID) or T3 Code's install id: a UUID, any case.
+pub fn valid_uuid(v: &str) -> bool {
+    let groups: Vec<&str> = v.split('-').collect();
+    groups.iter().map(|g| g.len()).eq([8, 4, 4, 4, 12]) && groups.iter().all(|g| g.chars().all(|c| c.is_ascii_hexdigit()))
+}
+
+/// T3 Code's install id, which its thread links name (~/.t3/userdata/environment-id).
+fn t3_environment(home: &Path) -> Option<String> {
+    std::fs::read_to_string(home.join(".t3/userdata/environment-id")).ok().map(|s| s.trim().to_string())
+}
+
+/// The link that opens a T3 Code session's own thread. None without valid ids, and T3 Code is just brought forward.
+pub fn t3_link(thread: Option<&str>, env: Option<&str>) -> Option<(&'static str, String)> {
+    let (thread, env) = (thread.filter(|t| valid_uuid(t))?, env.filter(|e| valid_uuid(e))?);
+    Some((T3_CODE, format!("t3code://threads/{env}/{thread}")))
+}
+
 /// The link that opens this exact chat in its desktop app, as (bundle id, url). None when the agent runs somewhere
 /// else (a terminal or an editor), where the tab or project window is the best we can do.
 pub fn chat_link(agent: &str, id: &str, chat: Option<&str>, app: Option<&str>, term: Option<&str>) -> Option<(&'static str, String)> {
@@ -85,14 +102,15 @@ fn open_app(bundle: &str, folder: Option<&str>) -> Result<(), String> {
     if status.success() { Ok(()) } else { Err(format!("macOS couldn't open {}", app_name(bundle).unwrap_or(bundle))) }
 }
 
-/// T3 Code runs Claude, Codex and Cursor for you; its sessions open T3 Code (no link to one thread yet), not those tools' apps.
+/// T3 Code runs Claude, Codex and Cursor for you; its sessions open their thread in T3 Code (t3_link), not those tools' apps.
 const T3_CODE: &str = "com.t3tools.t3code";
 
 /// Returns a short message for the office ("Opened the Terminal tab"), or why it couldn't.
 #[allow(clippy::too_many_arguments)]
-pub fn focus(agent: &str, id: &str, chat: Option<&str>, app: Option<&str>, term: Option<&str>, tty: Option<&str>, cwd: &str, entrypoint: &str) -> Result<String, String> {
+pub fn focus(agent: &str, id: &str, chat: Option<&str>, app: Option<&str>, term: Option<&str>, tty: Option<&str>, cwd: &str, entrypoint: &str, t3_thread: Option<&str>) -> Result<String, String> {
     let t3 = entrypoint == "t3-code";
-    if let Some((bundle, url)) = chat_link(agent, id, chat, app, term).filter(|_| !t3) {
+    let link = if t3 { t3_link(t3_thread, t3_environment(Path::new(&std::env::var_os("HOME").unwrap_or_default())).as_deref()) } else { chat_link(agent, id, chat, app, term) };
+    if let Some((bundle, url)) = link {
         let status = Command::new("open").arg(&url).status().map_err(|e| e.to_string())?;
         let name = app_name(bundle).unwrap_or("the app");
         return if status.success() { Ok(format!("Opened the chat in {name}")) } else { Err(format!("macOS couldn't open {name}")) };
@@ -203,6 +221,22 @@ mod tests {
     }
 
     #[test]
+    fn t3_code_sessions_open_their_own_thread_only_with_valid_ids() {
+        let (thread, env) = ("fceae35e-a7d0-4d26-b667-aa2413567acf", "3232e3cc-4af0-4943-bba3-a85dcaf45bf7");
+        assert_eq!(t3_link(Some(thread), Some(env)).unwrap(), ("com.t3tools.t3code", format!("t3code://threads/{env}/{thread}")));
+        assert!(t3_link(None, Some(env)).is_none());
+        assert!(t3_link(Some("../x?y"), Some(env)).is_none());
+        assert!(t3_link(Some(thread), None).is_none());
+        assert!(t3_link(Some(thread), Some("not-a-uuid/../x")).is_none());
+        let home = std::env::temp_dir().join(format!("office-t3-{}", std::process::id()));
+        assert!(t3_environment(&home).is_none());
+        std::fs::create_dir_all(home.join(".t3/userdata")).unwrap();
+        std::fs::write(home.join(".t3/userdata/environment-id"), format!("{env}\n")).unwrap();
+        assert_eq!(t3_environment(&home).as_deref(), Some(env));
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
     fn only_app_ids_reach_the_icon_lookup() {
         assert!(valid_bundle("com.openai.codex"));
         assert!(!valid_bundle("../../etc/passwd"));
@@ -211,7 +245,7 @@ mod tests {
 
     #[test]
     fn unknown_apps_are_refused() {
-        assert!(focus("claude-code", "s1", None, Some("com.evil.app"), None, None, "/", "terminal").is_err());
+        assert!(focus("claude-code", "s1", None, Some("com.evil.app"), None, None, "/", "terminal", None).is_err());
         assert_eq!(app_name("com.openai.codex"), Some("Codex"));
         assert_eq!(app_from_term("iTerm.app"), Some("com.googlecode.iterm2"));
     }

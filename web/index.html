@@ -3922,7 +3922,7 @@ const HOST_TERMS = { Apple_Terminal: 'Terminal', 'iTerm.app': 'iTerm', WarpTermi
 // Claude desktop sessions and Codex app threads open on the exact chat (chatLink in focus.rs / focus.js); the rest open their app or tab.
 // T3 Code runs Claude, Codex and Cursor for you: its agents open T3 Code (no link to one thread yet), not those tools' apps.
 const viaT3 = a => (a.parent || a).entrypoint === 't3-code';
-const opensChat = a => { const s = a.parent || a; return !viaT3(a) && (!!s.hostChat || (s.agentName === 'codex' && !s.hostTerm && (!s.hostApp || s.hostApp === 'com.openai.codex'))); };
+const opensChat = a => { const s = a.parent || a; return viaT3(a) ? !!s.hostT3Thread : (!!s.hostChat || (s.agentName === 'codex' && !s.hostTerm && (!s.hostApp || s.hostApp === 'com.openai.codex'))); };
 const hostName = a => { const s = a.parent || a; return viaT3(a) ? 'T3 Code' : HOST_APPS[s.hostApp] || HOST_TERMS[s.hostTerm] || (opensChat(a) ? (s.hostChat ? 'Claude' : 'Codex') : null); };
 const openLabel = a => opensChat(a) ? `Open chat in ${hostName(a)}` : `Open in ${hostName(a)}`;
 function openHost(a) {
@@ -4121,7 +4121,7 @@ function liveMain(s, instant) {
   const custom = customName(saved, s.project), name = custom || chatName(s.title) || fallback;
   const color = saved.color || PALETTE[hashStr(s.cwd || s.id) % PALETTE.length];
   a = createAgent({ name, kind: 'main', color, home, project: { key: s.project, agent: fallback }, cwd: s.cwd, sessionId: s.id, title: s.title || null, customName: !!custom,
-                    entrypoint: s.entrypoint, agentName: s.agent, hostApp: s.app, hostTerm: s.term, hostChat: s.chat, pref: saved.pref || 'anywhere', look: saved.look ? { ...saved.look, intern: false } : undefined, live: true, subs: new Map(), streak: 0, floor });
+                    entrypoint: s.entrypoint, agentName: s.agent, hostApp: s.app, hostTerm: s.term, hostChat: s.chat, hostT3Thread: s.t3Thread, pref: saved.pref || 'anywhere', look: saved.look ? { ...saved.look, intern: false } : undefined, live: true, subs: new Map(), streak: 0, floor });
   if (isNew && !instant) toast(`${s.project} moved into floor ${floorNum(floor)}`, 'Go there', () => flyToFloor(floor.i));
   home.by = a.id; if (home.type === 'desk') { home.owner = a; deskDirty = true; if (floor === curFloor) home.chairMat.color.set(color); }
   a.ws = home;
@@ -4600,6 +4600,7 @@ function onLiveEvent(e, replay) {
   if (s.app) a.hostApp = s.app;
   if (s.term) a.hostTerm = s.term;
   if (s.chat) a.hostChat = s.chat;
+  if (s.t3Thread) a.hostT3Thread = s.t3Thread;
   retitle(a, s.title);
   if (s.messages) { a.messages = s.messages; if (a === selected) detailDirty = true; }
   setContext(a, s.context, replay);
@@ -4675,7 +4676,7 @@ function onSnapshot(msg) {
   agents.forEach(a => { if (a.approval && a.approval.live) a.approval = null; });
   for (const s of msg.sessions) {
     const a = liveMain(s, true);
-    if (s.app) a.hostApp = s.app; if (s.term) a.hostTerm = s.term; if (s.chat) a.hostChat = s.chat;
+    if (s.app) a.hostApp = s.app; if (s.term) a.hostTerm = s.term; if (s.chat) a.hostChat = s.chat; if (s.t3Thread) a.hostT3Thread = s.t3Thread;
     retitle(a, s.title);
     a.merged = !!s.merged;
     if (s.messages) a.messages = s.messages;

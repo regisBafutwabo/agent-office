@@ -41,6 +41,11 @@ for (const hook of ['send', 'permission']) {
   });
 }
 
+test('every hook passes on the T3 Code thread', () => {
+  for (const [hook, args] of [['../plugin/hooks/send.sh', []], ['../plugin/hooks/permission.sh', []], ['../adapters/hook.sh', ['codex']]])
+    assert.match(runHook(hook, { T3CODE_THREAD_ID: 'fceae35e-a7d0-4d26-b667-aa2413567acf' }, args).args, /X-Agent-Office-T3-Thread: fceae35e-a7d0-4d26-b667-aa2413567acf/);
+});
+
 test('the dedicated Codex adapter still reports once with the Codex identity', () => {
   const result = runHook('../adapters/hook.sh', { CODEX_THREAD_ID: 'codex-thread' }, ['codex']);
   assert.match(result.args, /X-Agent-Office-Agent: codex/);

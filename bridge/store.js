@@ -1,6 +1,6 @@
 // Turns raw Claude Code hook payloads into a small, UI-friendly model of sessions and subagents.
 import path from 'node:path';
-import { validTty, validChat } from './focus.js';
+import { validTty, validChat, validUuid } from './focus.js';
 import { readTranscript, MESSAGE_CHARS } from './transcript.js';
 import { FOUND_WINDOW_MS } from './discover.js';
 import { editOf } from './changes.js';
@@ -180,7 +180,7 @@ export class Store {
       if (!changed) return null;
     }
     const e = { type: 'SessionFound', sessionId: s.id, at: Date.now(), agentId: null, agentType: null, message: isNew ? 'Already running' : null,
-      session: { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, cwd: s.cwd, project: s.project, title: s.title, merged: !!s.merged,
+      session: { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, t3Thread: s.t3Thread || null, cwd: s.cwd, project: s.project, title: s.title, merged: !!s.merged,
                  entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity, messages: s.messages } };
     if (replacesSessionId) e.replacesSessionId = replacesSessionId;
     if (isNew) { this.recent.push(e); if (this.recent.length > RECENT_MAX) this.recent.shift(); }   // only the arrival goes in the feed
@@ -211,7 +211,7 @@ export class Store {
 
   // Returns the normalized event (or null if the payload is unusable).
   // projectDir is CLAUDE_PROJECT_DIR from the hook; it stays put when the session cds into a subfolder.
-  // origin: { app, term, tty, chat } from the hook scripts, used for "Open in …" and "Open chat".
+  // origin: { app, term, tty, chat, t3Thread } from the hook scripts, used for "Open in …" and "Open chat".
   ingest(p, entrypoint, projectDir, agent = 'claude-code', origin = {}) {
     const type = p.hook_event_name, sid = p.session_id;
     if (!type || !sid) return null;
@@ -234,6 +234,7 @@ export class Store {
     if (origin.term) s.term = origin.term;
     if (validTty(origin.tty)) s.tty = origin.tty;
     if (validChat(origin.chat)) s.chat = origin.chat;
+    if (validUuid(origin.t3Thread)) s.t3Thread = origin.t3Thread;
     const chatChanged = this.refreshTranscript(s, p, type);
 
     const e = { type, sessionId: sid, at: now, agentId: p.agent_id || null, agentType: p.agent_type || null };
@@ -277,7 +278,7 @@ export class Store {
       case 'SessionEnd': e.reason = p.reason; this.ended.add(sid); this.sessions.delete(sid); this.transcriptChecks.delete(sid); this.pendingTasks.delete(sid); break;
       default: break;
     }
-    e.session = { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, cwd: s.cwd, project: s.project, title: s.title || null, merged: !!s.merged, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity, context: s.context || null };
+    e.session = { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, t3Thread: s.t3Thread || null, cwd: s.cwd, project: s.project, title: s.title || null, merged: !!s.merged, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity, context: s.context || null };
     if (chatChanged) e.session.messages = s.messages;
     this.recent.push(e); if (this.recent.length > RECENT_MAX) this.recent.shift();
     return e;

@@ -10,7 +10,7 @@ if [ -n "${CODEX_THREAD_ID:-}${CODEX_SESSION_ID:-}${CODEX_APP_TOOLS_PIPE_PATH:-}
   exit 0
 fi
 
-# App, terminal, tty and chat id let the office bring this agent's chat, window or terminal tab to the front.
+# App, terminal, tty, chat id and T3 Code thread let the office bring this agent's chat, window or terminal tab to the front.
 RESPONSE=$(curl -s -m 65 -X POST \
   -H 'Content-Type: application/json' \
   -H "X-Agent-Office-Entrypoint: ${CLAUDE_CODE_ENTRYPOINT:-unknown}" \
@@ -19,6 +19,7 @@ RESPONSE=$(curl -s -m 65 -X POST \
   -H "X-Agent-Office-Term: ${TERM_PROGRAM:-}" \
   -H "X-Agent-Office-Tty: $(ps -o tty= -p $$ 2>/dev/null | tr -d ' ')" \
   -H "X-Agent-Office-Chat: ${CLAUDE_CODE_HOST_SESSION_ID:-}" \
+  -H "X-Agent-Office-T3-Thread: ${T3CODE_THREAD_ID:-}" \
   --data-binary @- \
   "http://127.0.0.1:${AGENT_OFFICE_PORT:-4747}/permission" 2>/dev/null)
 [ -n "$RESPONSE" ] && printf '%s' "$RESPONSE"

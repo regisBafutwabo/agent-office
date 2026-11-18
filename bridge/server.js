@@ -28,7 +28,7 @@ const APPROVAL_HOLD_MS = 45_000;   // how long a watched office holds a permissi
 // could reach localhost and approve commands. Hooks (curl) send no Origin header.
 const ALLOWED_ORIGINS = new Set(['localhost', '127.0.0.1', '[::1]'].map(h => `http://${h}:${PORT}`));
 // Where the hook came from: app, terminal, tty and chat id, for "Open in …" and "Open chat".
-const originOf = req => ({ app: req.headers['x-agent-office-app'], term: req.headers['x-agent-office-term'], tty: req.headers['x-agent-office-tty'], chat: req.headers['x-agent-office-chat'] });
+const originOf = req => ({ app: req.headers['x-agent-office-app'], term: req.headers['x-agent-office-term'], tty: req.headers['x-agent-office-tty'], chat: req.headers['x-agent-office-chat'], t3Thread: req.headers['x-agent-office-t3-thread'] });
 const originOk = req => !req.headers.origin || ALLOWED_ORIGINS.has(req.headers.origin);
 
 const store = new Store();
