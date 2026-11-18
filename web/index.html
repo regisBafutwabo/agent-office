@@ -613,7 +613,7 @@ body.live .speed-top, body.live .demo-only{display:none}
       <button class="icon-btn sm" id="rv-close" aria-label="Close review"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
     <p class="rv-warn chg-warn" id="rv-warn" hidden></p>
     <div class="rv-body"><ol class="rv-files" id="rv-files"></ol><div class="rv-diff" id="rv-diff"></div></div>
-    <footer><div class="rv-run" id="rv-run"></div><button class="btn" id="rv-chat" hidden></button><button class="btn primary" id="rv-mark">Mark reviewed</button></footer>
+    <footer><div class="rv-run" id="rv-run"></div><button class="btn" id="rv-refresh" title="Read the checkout again">Refresh</button><button class="btn" id="rv-chat" hidden></button><button class="btn primary" id="rv-mark">Mark reviewed</button></footer>
   </dialog>
   <dialog class="city-picker" id="city-picker" aria-labelledby="city-title" aria-describedby="city-description">
     <h2 id="city-title">Pick your city</h2>
@@ -3274,7 +3274,7 @@ function zoomTo(s) {
   viewMode = 'screen'; goal.theta = zoom.theta; goal.phi = Math.PI / 2; goal.target.copy(p);
   const h = stage.clientHeight || 1, fr = screenFrame(stage.clientWidth, h);
   goal.radius = Math.max(g.height * h / (2 * t * fr.gh * .94), g.width * h / (2 * t * fr.gw * .96));
-  screensDirty = true; renderLift();
+  screensDirty = true; renderLift(); refreshBoard();
 }
 function unzoom() {
   if (viewMode !== 'screen') return;
@@ -4398,7 +4398,7 @@ async function loadChanges(m, force) {
   if (!m.live || !m.sessionId || !m.cwd) return;
   const st = chg.get(m.sessionId) || {}; chg.set(m.sessionId, st);
   if (st.busy || (!force && Date.now() - (st.at || 0) < CHG_POLL_MS)) return;
-  st.busy = true;
+  st.busy = true; if (reviewing === m) renderReview();
   try { st.data = await (await fetch('/api/changes?session=' + encodeURIComponent(m.sessionId))).json(); } catch (_) { st.data = { ok: false, error: 'The office server did not answer' }; }
   st.busy = false; st.at = Date.now(); m.chgStale = false;
   if (selected && mainOf(selected) === m) detailDirty = true;
@@ -4416,6 +4416,14 @@ setInterval(() => {                              // the open card or review, and
   const m = reviewing || (selected && mainOf(selected)); if (m) loadChanges(m);
   for (const b of boardMains()) if (b !== m && b.chgStale !== false) loadChanges(b);
 }, 5000);
+let boardReadAt = 0;
+function refreshBoard(all) {                     // you may have committed, stashed or edited by hand while no agent was reporting
+  if (Date.now() - boardReadAt < 2000) return; boardReadAt = Date.now();
+  const ms = new Set(boardMains()); if (all) { if (selected) ms.add(mainOf(selected)); if (reviewing) ms.add(reviewing); }
+  for (const m of ms) loadChanges(m, true);
+}
+addEventListener('focus', () => refreshBoard(true));
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshBoard(true); });
 const codeLines = (del, add) => del.map(l => `<span class="ln del">- ${esc(l)}</span>`).join('') + add.map(l => `<span class="ln add">+ ${esc(l)}</span>`).join('');
 function renderGlance(a) {
   const m = mainOf(a), el = $('#d-chg'), c = changesOf(m), le = m.lastEdit, has = c && c.ok && c.files.length > 0;
@@ -4471,6 +4479,7 @@ function renderReview() {
   runEl.innerHTML = run ? `<span class="${run.failed ? 'bad' : 'ok'}">${run.failed ? '✗ Last command failed' : '✓ Last command passed'}</span> · ${hm(run.at)} · one command, not a verdict on the checkout<b title="${esc(run.cmd)}">${esc(run.cmd)}</b>` : '';
   const chat = $('#rv-chat'); chat.hidden = !(m.live && hostName(m)); if (!chat.hidden) chat.textContent = openLabel(m);
   $('#rv-mark').disabled = !ok || !unreviewed(c).length;
+  const rf = $('#rv-refresh'); rf.hidden = !m.live; rf.disabled = !!(chg.get(m.sessionId) || {}).busy;
 }
 async function showDiff(path) {
   const m = reviewing, c = m && changesOf(m), f = c && c.ok && c.files.find(x => x.path === path); if (!f || !codeOn) return;
@@ -4485,6 +4494,7 @@ async function showDiff(path) {
 $('#rv-files').addEventListener('click', e => { const b = e.target.closest('[data-path]'); if (b) showDiff(b.dataset.path); });
 $('#rv-diff').addEventListener('click', e => { if (e.target.id === 'rv-reload' && rvDiff) showDiff(rvDiff.path); });
 $('#rv-chat').onclick = () => reviewing && openHost(reviewing);
+$('#rv-refresh').onclick = () => reviewing && loadChanges(reviewing, true);
 $('#rv-mark').onclick = () => {                 // these versions are seen; a later edit to any of them brings it back
   const c = reviewing && changesOf(reviewing); if (!c || !c.ok) return;
   try { localStorage.setItem('agent-office:reviewed:' + c.root, JSON.stringify({ at: Date.now(), sigs: Object.fromEntries(c.files.map(f => [f.path, f.sig])) })); } catch (_) {}

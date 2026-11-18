@@ -147,7 +147,7 @@ An agent's card shows what its checkout holds that you haven't reviewed, so you 
 
 - **Files to review:** the count of changed files, including committed, uncommitted and untracked ones, since the checkout's base branch (`origin/HEAD`, else `main`, `master` or `develop`).
 - **Latest reported edit:** the file an agent last changed, with the lines it took out and put in. Hooks report an edit once it is made, so the lines appear whole.
-- **Review:** opens the file list beside one file's diff. The diff stays still while you read; if the file changes meanwhile, the window says so and lets you load the new version. A dot shows which agent reported an edit to a file.
+- **Review:** opens the file list beside one file's diff. The diff stays still while you read; if the file changes meanwhile, the window says so and lets you load the new version. A dot shows which agent reported an edit to a file. **Refresh** reads the checkout again; the office also re-reads every checkout on the war room's board when you zoom onto a screen or come back to the window, so a commit or stash you made by hand shows up.
 - **Mark reviewed:** remembers the versions you saw, in this browser. A file comes back when it changes again.
 
 Git reads the checkout, so agents working in one folder share one list, and the card says when that is the case. Claude Code reports the changed lines; other tools show the file name only. To keep code out of the office altogether, turn off **Customize → Show code in agent cards and reviews**: the office then keeps and shows file names only.
