@@ -2951,7 +2951,7 @@ function walkTo(a, s) {
   if (!a.spot && a.dest && a.dest !== s && a.dest !== a.home && a.dest.by === a.id) a.dest.by = null;
   const from = a.spot;
   if (from) {
-    if (from !== a.home) from.by = null;
+    if (from !== a.home && from.by === a.id) from.by = null;
     if (from.screen && a.floor === curFloor) from.screen.color.set(sceneT.screenOff);
   }
   if (s.type && s !== a.home) s.by = a.id;
@@ -4111,10 +4111,16 @@ function setContext(a, c, replay) {
   }
 }
 
+function mainSeat(floor) { return floor.deskSeats.find(d => !d.owner && !d.by) || freeSpots(['hightable', 'stool'], floor)[0] || floor.deskSeats[0]; }
+function subSeat(a, type) {
+  const fl = a.floor, home = type === 'Plan' ? freeSpots(['meeting'], fl)[0] : null;
+  return home || fl.deskSeats.filter(d => !d.by).sort((p, q) => Math.hypot(p.x - a.home.x, p.z - a.home.z) - Math.hypot(q.x - a.home.x, q.z - a.home.z))[0]
+              || freeSpots(['hightable', 'stool', 'sofa'], fl)[0] || pick(fl.SPOTS.stool);
+}
 function liveMain(s, instant) {
-  let a = live.byId.get(s.id); if (a) return a;
+  let a = live.byId.get(s.id); if (a && !(a.gone && a.leaving)) return a;   // already out the door: a fresh agent comes in
   const floor = ensureFloor(s.cwd || s.project, s.project, true), isNew = floor !== curFloor && !floorAgents(floor).length;
-  const home = floor.deskSeats.find(d => !d.owner && !d.by) || freeSpots(['hightable', 'stool'], floor)[0] || floor.deskSeats[0];
+  const home = mainSeat(floor);
   const saved = loadAgentPrefs(s.cwd);
   const same = agents.filter(x => x.kind === 'main' && x.project.key === s.project).length;
   const fallback = s.project + (same ? ` ${same + 1}` : '');
@@ -4134,11 +4140,8 @@ function liveMain(s, instant) {
   return a;
 }
 function liveSub(a, id, type, instant, task) {
-  let sub = a.subs.get(id); if (sub) return sub;
-  const fl = a.floor;
-  let home = type === 'Plan' ? freeSpots(['meeting'], fl)[0] : null;
-  if (!home) home = fl.deskSeats.filter(d => !d.by).sort((p, q) => Math.hypot(p.x - a.home.x, p.z - a.home.z) - Math.hypot(q.x - a.home.x, q.z - a.home.z))[0]
-                 || freeSpots(['hightable', 'stool', 'sofa'], fl)[0] || pick(fl.SPOTS.stool);
+  let sub = a.subs.get(id); if (sub && !(sub.gone && sub.leaving)) return sub;
+  const fl = a.floor, home = subSeat(a, type);
   sub = createAgent({ name: task || type || 'Subagent', kind: 'sub', subType: type || 'subagent', color: mix(a.color, '#ffffff', .35), home, parent: a, project: a.project, live: true, streak: 0, floor: fl });
   home.by = sub.id; sub.ws = home;
   if (instant) { sub.spot = home; sub.where = PLACE[home.type]; sub.g.position.set(home.x, 0, home.z); sub.yaw = sub.yawT = yawOf(home.face); }
@@ -4149,17 +4152,30 @@ function liveSub(a, id, type, instant, task) {
 }
 async function leaveOffice(a, note) {
   if (a.leaving || a.exiting) return; a.exiting = true;
-  if (a.onRoof) await leaveRoof(a);
+  const t = a.leaveT = (a.leaveT || 0) + 1, off = () => a.leaveT !== t;   // comeBack() bumps leaveT: stop at the next await
+  if (a.onRoof) { await Promise.race([leaveRoof(a), wait(20)]); if (off()) return; }
   if (a.subs) for (const sub of a.subs.values()) leaveOffice(sub);
   applyStatus(a, 'done', note || (a.kind === 'sub' ? `Reported back to ${a.parent.name}` : 'Signing off'));
-  await wait(1.2);
+  await wait(1.2); if (off()) return;
   a.gone = true; deskDirty = true;
   if (a.home) { if (a.home.by === a.id) a.home.by = null; if (a.home.owner === a) { a.home.owner = null; if (a.floor === curFloor) a.home.chairMat.color.set(sceneT.chair); } if (a.home.screen && a.floor === curFloor) a.home.screen.color.set(sceneT.screenOff); }
-  a.nextSpot = null; await walkTo(a, DOOR); a.leaving = true; await wait(.7);
+  a.nextSpot = null; await Promise.race([walkTo(a, DOOR), wait(30)]); if (off()) return;   // capped: another walk may take over
+  a.leaving = true; await wait(.7);
   removeAgent(a);
-  if (a.kind === 'main') { live.byId.delete(a.sessionId); buildCustomize(); renderJSON(); }
+  if (a.kind === 'main') { if (live.byId.get(a.sessionId) === a) live.byId.delete(a.sessionId); buildCustomize(); renderJSON(); }
   else if (a.parent) for (const [k, v] of a.parent.subs) if (v === a) a.parent.subs.delete(k);
   setModeLine();
+}
+// Activity after a leave began (a session that ended and resumed, a subagent let go that got more work): come back to a seat.
+// Once at the door (gone and leaving) it finishes leaving, and liveMain/liveSub bring in a fresh agent instead.
+function comeBack(a, state, activity) {
+  if (!a.exiting || a.gone && a.leaving) return;
+  a.leaveT++; a.exiting = a.gone = a.awaitingReview = false; deskDirty = true;
+  const h = a.home;
+  if (h.by && h.by !== a.id || h.type === 'desk' && h.owner && h.owner !== a) { const n = a.kind === 'main' ? mainSeat(a.floor) : subSeat(a.parent, a.subType); if (a.ws === h) a.ws = n; a.home = n; }
+  a.home.by = a.id; if (a.kind === 'main' && a.home.type === 'desk') { a.home.owner = a; if (a.floor === curFloor) a.home.chairMat.color.set(a.color); }
+  applyStatus(a, state, activity);
+  if (a.dest === DOOR || a.spot === DOOR) place(a, workSpot(a), true);
 }
 
 /* ---------- sounds: one soft tone per agent, a little different for each kind of news ---------- */
@@ -4594,7 +4610,7 @@ function onLiveEvent(e, replay) {
   }
   const s = e.session;
   if (e.type === 'SessionEnd') { const a = live.byId.get(e.sessionId); if (a) { emit(a, 'SessionEnd', e.reason || 'Session ended', e.at); leaveOffice(a); } return; }
-  const a = liveMain(s, replay);
+  const a = liveMain(s, replay); comeBack(a, s.status || 'idle', s.activity || 'Session resumed');
   if (e.type === 'SubagentStop' && e.agentId && !a.subs.has(e.agentId)) return;   // never saw it work: nothing to show
   if (s.entrypoint && s.entrypoint !== 'unknown') a.entrypoint = s.entrypoint;
   if (s.app) a.hostApp = s.app;
@@ -4610,6 +4626,7 @@ function onLiveEvent(e, replay) {
   const label = `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}`;
   const agentResult = e.type.startsWith('PostToolUse') && (e.tool === 'Task' || e.tool === 'Agent');
   if (who === a && a.review && !agentResult) a.reviewDone = true;                       // the main agent moved on: let the subagent go
+  if (who !== a && e.type !== 'SubagentStop' && !a.exiting) comeBack(who, 'thinking', 'Back to work');
   if (who !== a && who.awaitingReview && e.type !== 'SubagentStop') who.awaitingReview = false;   // resumed: back to work
   switch (e.type) {
     case 'SessionStart': emit(a, 'SessionStart', `${whereFrom(a)} · ${a.cwd}`, e.at); break;
@@ -4675,14 +4692,14 @@ function onSnapshot(msg) {
   feedEl.innerHTML = '';
   agents.forEach(a => { if (a.approval && a.approval.live) a.approval = null; });
   for (const s of msg.sessions) {
-    const a = liveMain(s, true);
+    const a = liveMain(s, true); comeBack(a, s.status, s.activity);
     if (s.app) a.hostApp = s.app; if (s.term) a.hostTerm = s.term; if (s.chat) a.hostChat = s.chat; if (s.t3Thread) a.hostT3Thread = s.t3Thread;
     retitle(a, s.title);
     a.merged = !!s.merged;
     if (s.messages) a.messages = s.messages;
     setContext(a, s.context, true);
     applyStatus(a, s.status, s.activity); a.reported = [s.status, s.activity];
-    for (const sub of s.subagents || []) { const x = liveSub(a, sub.id, sub.type, true, sub.task); applyStatus(x, sub.status, sub.activity); }
+    for (const sub of s.subagents || []) { const x = liveSub(a, sub.id, sub.type, true, sub.task); if (!a.exiting) comeBack(x, sub.status, sub.activity); applyStatus(x, sub.status, sub.activity); }
     // Finished while the page was disconnected (the Mac slept, the app restarted): its SubagentStop never reached us.
     const still = new Set((s.subagents || []).map(x => x.id));
     for (const [id, sub] of a.subs) if (!still.has(id) && !sub.awaitingReview) leaveOffice(sub, `Reported back to ${a.name}`);
