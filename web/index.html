@@ -4364,12 +4364,12 @@ const unreviewed = c => { const seen = reviewedOf(c.root).sigs; return c.files.f
 // Hooks name files relative to the session's folder; git names them relative to the checkout.
 const inCheckout = (c, file) => file.startsWith('/') ? (file.startsWith(c.root + '/') ? file.slice(c.root.length + 1) : file) : (c.prefix || '') + file;
 // One row of the war room's review board: what a session's checkout holds that you haven't reviewed, files with a reported edit first.
-function reviewRow(m, c, seen, now) {
-  const row = { m, name: m.name, color: m.color, state: m.state, run: m.lastRun || null, tone: 'wait', note: 'Reading the checkout…', count: 0, total: 0, add: 0, del: 0, files: [] };
+function reviewRow(m, c, seen, now, subs = []) {
+  const row = { m, name: m.name, color: m.color, state: m.state, subs: subs.map(s => ({ name: s.name, color: s.color, state: s.state })), run: m.lastRun || null, tone: 'wait', note: 'Reading the checkout…', count: 0, total: 0, add: 0, del: 0, files: [] };
   if (!c) return row;
   if (!c.ok) return { ...row, tone: 'none', note: c.error };
-  const by = new Map(); for (const [file, t] of m.touched || []) by.set(inCheckout(c, file), t.at);
-  const files = c.files.filter(f => seen[f.path] !== f.sig).map(f => { const at = by.get(f.path) || 0; return { path: f.path, add: f.add, del: f.del, at, fresh: now - at < EDIT_FRESH_MS }; }).sort((a, b) => b.at - a.at);
+  const by = new Map(); for (const [file, t] of m.touched || []) by.set(inCheckout(c, file), t);
+  const files = c.files.filter(f => seen[f.path] !== f.sig).map(f => { const t = by.get(f.path), at = t ? t.at : 0; return { path: f.path, add: f.add, del: f.del, at, fresh: now - at < EDIT_FRESH_MS, color: t?.who?.color || null, by: t?.who?.name || null }; }).sort((a, b) => b.at - a.at);
   const sum = k => c.files.reduce((n, f) => n + (f[k] || 0), 0);
   return { ...row, tone: files.length ? 'todo' : c.files.length ? 'clear' : 'none', note: c.files.length ? '' : 'No changes', count: files.length, total: c.files.length, add: sum('add'), del: sum('del'), files };
 }
@@ -4514,14 +4514,19 @@ function drawReviewBoard(rows, zoomed) {
     x.fillStyle = r.color; x.beginPath(); x.arc(58, y + 46, 16, 0, 7); x.fill();
     x.fillStyle = '#F2F5F6'; x.font = '700 40px "Bricolage Grotesque", sans-serif'; const name = fitText(x, r.name, 640); x.fillText(name, 90, y + 60);
     const nx = 90 + x.measureText(name).width + 24; x.fillStyle = STATUS[r.state].hex; x.font = `600 28px ${SANS}`; x.fillText(STATUS[r.state].label, nx, y + 58);
-    x.textAlign = 'right'; x.fillStyle = TONE[r.tone]; x.font = `700 40px ${SANS}`;
-    x.fillText(r.tone === 'todo' ? `${r.count} to review` : r.tone === 'clear' ? 'All reviewed ✓' : fitText(x, r.note, 700), W - 40, y + 60);
+    x.font = `700 40px ${SANS}`; const right = r.tone === 'todo' ? `${r.count} to review` : r.tone === 'clear' ? 'All reviewed ✓' : fitText(x, r.note, 700), lim = W - 72 - x.measureText(right).width;
+    x.font = `600 28px ${SANS}`; let sx = nx + x.measureText(STATUS[r.state].label).width + 36;
+    for (let k = 0; k < r.subs.length; k++) { const s = r.subs[k], nm = fitText(x, s.name, 280), st = STATUS[s.state], w = 26 + x.measureText(nm).width + 12 + x.measureText(st.label).width, rest = r.subs.length - k;
+      if (sx + w > lim - (rest > 1 ? 70 : 0)) { x.fillStyle = '#7D8F98'; x.fillText(`+${rest}`, sx, y + 58); break; }   // never run into the review count
+      x.fillStyle = s.color; x.beginPath(); x.arc(sx + 8, y + 48, 8, 0, 7); x.fill();
+      x.fillStyle = '#DDE7EB'; x.fillText(nm, sx + 26, y + 58); x.fillStyle = st.hex; x.fillText(st.label, sx + 26 + x.measureText(nm).width + 12, y + 58); sx += w + 32; }
+    x.textAlign = 'right'; x.fillStyle = TONE[r.tone]; x.font = `700 40px ${SANS}`; x.fillText(right, W - 40, y + 60);
     x.fillStyle = '#7D8F98'; x.font = `500 26px ${SANS}`; if (r.total) x.fillText(`+${r.add} −${r.del} · ${r.total} changed`, W - 40, y + 104);
     x.textAlign = 'left'; x.font = `500 26px ${MONO}`;
     if (r.run) { x.fillStyle = r.run.failed ? '#FF7B72' : '#6FD69A'; x.fillText(fitText(x, `${r.run.failed ? '✗' : '✓'} ${r.run.cmd}`, 1280) + ` · ${hm(r.run.at)}`, 90, y + 104); }
     const lines = Math.floor((rowH - 124) / 38), slots = lines * 2, over = r.files.length > slots ? r.files.length - slots + 1 : 0;
     r.files.slice(0, over ? slots - 1 : slots).forEach((f, k) => { const fx = 90 + (k % 2) * 964, fy = y + 150 + Math.floor(k / 2) * 38;
-      if (f.fresh) { x.fillStyle = r.color; x.beginPath(); x.arc(fx - 20, fy - 9, 7, 0, 7); x.fill(); }
+      if (f.fresh) { x.fillStyle = f.color || r.color; x.beginPath(); x.arc(fx - 20, fy - 9, 7, 0, 7); x.fill(); }
       x.fillStyle = '#DDE7EB'; x.fillText(fitTail(x, f.path, 700), fx, fy);
       x.textAlign = 'right'; x.fillStyle = '#7D8F98'; x.fillText(f.add == null ? 'binary' : `+${f.add} −${f.del}`, fx + 900, fy); x.textAlign = 'left'; });
     if (over && slots) { x.fillStyle = '#7D8F98'; x.fillText(`and ${over} more`, 90 + ((slots - 1) % 2) * 964, y + 150 + Math.floor((slots - 1) / 2) * 38); }
@@ -4555,7 +4560,7 @@ function drawLatestEdit(le) {
 let screenSig = '';
 function drawScreens(force) {
   const mains = boardMains(), now = Date.now(), zoomed = viewMode === 'screen';
-  const rows = mains.map(m => { const c = changesOf(m); if (m.live && !c) loadChanges(m); return reviewRow(m, c, c && c.ok ? reviewedOf(c.root).sigs : {}, now); });
+  const rows = mains.map(m => { const c = changesOf(m); if (m.live && !c) loadChanges(m); return reviewRow(m, c, c && c.ok ? reviewedOf(c.root).sigs : {}, now, agents.filter(a => a.parent === m && !a.gone)); });
   const le = mains.map(m => m.lastEdit).filter(Boolean).sort((a, b) => b.at - a.at)[0] || null;
   const sig = JSON.stringify([curFloor.name, zoomed, codeOn, rows.map(r => ({ ...r, m: r.m.id })), le && [le.at, le.file, le.who.id, le.edit]]);
   if (!force && sig === screenSig) return; screenSig = sig;
