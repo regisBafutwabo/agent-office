@@ -108,6 +108,19 @@ test('permission prompts mark the session as waiting and SessionEnd forgets it',
   assert.equal(st.snapshot().sessions.length, 0);
 });
 
+test("a subagent's permission prompt leaves the main session working", () => {
+  const st = new Store();
+  st.ingest({ ...base, hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_input: { subagent_type: 'Explore', description: 'Look around' } });
+  st.ingest({ ...base, hook_event_name: 'SubagentStart', agent_id: 'x1', agent_type: 'Explore' });
+  st.ingest({ ...base, hook_event_name: 'PermissionRequest', agent_id: 'x1', tool_name: 'Bash', tool_input: { command: 'make test' } });
+  st.ingest({ ...base, hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'Claude needs your permission to use Bash' });
+  let s = st.snapshot().sessions[0];
+  assert.equal(s.status, 'working'); assert.equal(s.subagents[0].status, 'waiting');
+  st.ingest({ ...base, hook_event_name: 'PostToolUse', agent_id: 'x1', tool_name: 'Bash', tool_input: { command: 'make test' } });
+  s = st.snapshot().sessions[0];
+  assert.equal(s.subagents[0].status, 'thinking');
+});
+
 test('skips helper agents that only report SubagentStop', () => {
   const st = new Store();
   const e = st.ingest({ ...base, hook_event_name: 'SubagentStop', agent_id: 'helper', last_assistant_message: 'make it public' });

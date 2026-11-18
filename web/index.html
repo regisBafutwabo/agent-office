@@ -264,6 +264,50 @@ pre.json{margin:0;padding:12px;background:var(--panel-2);border:1px solid var(--
 .d-ctx .bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
 .d-ctx .bar i{display:block;height:100%;border-radius:3px;background:var(--c)}
 .d-ctx small{font-size:12px;font-variant-numeric:tabular-nums}
+.d-chg{display:grid;gap:8px;font:400 12px/16px var(--font-b);color:var(--muted)}
+.chg-top{display:flex;align-items:center;gap:10px}
+.chg-top b{font:700 30px/30px var(--font-d);color:var(--ink);font-variant-numeric:tabular-nums}
+.chg-top span{display:grid;color:var(--ink);font-size:13px;line-height:17px;min-width:0}
+.chg-top small{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chg-top .btn{margin-left:auto}
+.chg-edit{border-left:3px solid var(--c);padding-left:9px;min-width:0}
+.chg-edit header{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chg-edit header b{font:600 12px/16px var(--font-m)}
+.code{margin:5px 0 0;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel-2);font:400 11px/17px var(--font-m);color:var(--ink);overflow:hidden}
+.code .ln{display:block;padding:0 8px;white-space:pre;overflow:hidden;text-overflow:ellipsis}
+.code .add{background:color-mix(in srgb,var(--s-done) 15%,transparent)}
+.code .del{background:color-mix(in srgb,var(--s-err) 15%,transparent);color:var(--ink-2)}
+.code .hunk{color:var(--muted);background:color-mix(in srgb,var(--line) 45%,transparent)}
+.chg-warn{color:color-mix(in srgb,var(--s-wait) 70%,var(--ink))}
+.review{width:min(980px,calc(100% - 32px));height:min(720px,calc(100% - 32px));padding:0;border:1px solid var(--line);border-radius:var(--r-lg);color:var(--ink);background:var(--panel);box-shadow:var(--e-2);font:400 13px/18px var(--font-b);overflow:hidden}
+.review[open]{display:flex;flex-direction:column}
+.review::backdrop{background:rgba(11,17,20,.4);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+.review header{display:flex;align-items:flex-start;gap:12px;padding:16px 16px 12px}
+.review h2{margin:0;font:700 18px/22px var(--font-d)}
+.review header p{margin:2px 0 0;color:var(--muted);font-size:12px}
+.review header .icon-btn{margin-left:auto}
+.rv-warn{margin:0 16px 10px;font-size:12px}
+.rv-body{flex:1;display:grid;grid-template-columns:minmax(220px,320px) minmax(0,1fr);min-height:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.rv-files{list-style:none;margin:0;padding:6px;overflow:auto;border-right:1px solid var(--line)}
+.rv-files button{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;width:100%;padding:7px 8px;border:0;border-radius:var(--r-sm);background:none;color:var(--ink);text-align:left;cursor:pointer;font:inherit}
+.rv-files button:hover,.rv-files button.sel{background:var(--panel-2)}
+.rv-files button.seen{opacity:.5}
+.rv-files .path{font:500 12px/17px var(--font-m);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
+.rv-files .num{font:500 12px/17px var(--font-m);font-variant-numeric:tabular-nums;white-space:nowrap}
+.rv-files .num b{color:var(--s-done);font-weight:500} .rv-files .num i{color:var(--s-err);font-style:normal}
+.rv-files small{grid-column:1/-1;color:var(--muted);font-size:11px;line-height:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv-files .dot{display:inline-block;width:8px;height:8px;margin:0 6px 0 3px;border-radius:50%;background:var(--c)}
+.rv-files .dot.now{box-shadow:0 0 0 2px var(--panel),0 0 0 3px var(--c)}
+.rv-diff{overflow:auto;min-width:0}
+.rv-diff .code{margin:0;border:0;border-radius:0;background:none;min-width:max-content;font-size:12px;line-height:18px}
+.rv-diff .code .ln{overflow:visible;text-overflow:clip}
+.rv-diff p{margin:0;padding:16px;color:var(--muted)}
+.rv-diff .stale{position:sticky;top:0;left:0;display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel-2);border-bottom:1px solid var(--line);color:var(--ink)}
+.review footer{display:flex;align-items:center;gap:8px;padding:12px 16px}
+.rv-run{margin-right:auto;min-width:0;font-size:12px;color:var(--muted)}
+.rv-run b{display:block;color:var(--ink);font:500 12px/17px var(--font-m);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv-run .ok{color:var(--s-done)} .rv-run .bad{color:var(--s-err)}
+@media (max-width:640px){.rv-body{grid-template-columns:1fr;grid-template-rows:minmax(0,2fr) minmax(0,3fr)}.rv-files{border-right:0;border-bottom:1px solid var(--line)}.review footer{flex-wrap:wrap}}
 .d-mem{font:400 12px/16px var(--font-b);color:var(--muted)}
 .d-mem summary{cursor:pointer}
 .d-mem ol{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:3px;max-height:132px;overflow:auto}
@@ -471,6 +515,7 @@ body.live .speed-top, body.live .demo-only{display:none}
       <h3>Sounds</h3>
       <div class="toggles">
         <label><input type="checkbox" id="opt-sound" checked> Chime when an agent finishes or needs you</label>
+        <label title="Off: the office keeps and shows file names only, never the lines an agent changed."><input type="checkbox" id="opt-code" checked> Show code in agent cards and reviews</label>
       </div>
       <p class="note">Every agent hums its own little tune when it's done, so you can tell who finished without looking. When one needs you, it knocks.</p>
       <h3 class="demo-only">Demo speed</h3>
@@ -497,6 +542,11 @@ body.live .speed-top, body.live .demo-only{display:none}
     <p class="d-activity" id="d-activity"></p>
     <div class="d-alert" id="d-alert" hidden></div>
     <div class="d-ctx" id="d-ctx" hidden title="How much of its context window this chat fills. Near the top, Claude Code compacts it and the details get summarized."><span>Memory</span><span class="bar"><i id="d-ctx-bar"></i></span><small id="d-ctx-text"></small></div>
+    <div class="d-chg" id="d-chg" hidden>
+      <div class="chg-top"><b id="chg-n"></b><span><span id="chg-what"></span><small id="chg-since"></small></span><button class="btn sm" id="chg-open">Review</button></div>
+      <div class="chg-edit" id="chg-edit" hidden><header id="chg-edit-head"></header><div class="code" id="chg-edit-code" hidden></div></div>
+      <div class="chg-warn" id="chg-warn" hidden></div>
+    </div>
     <details class="d-mem" id="d-mem" hidden><summary id="d-mem-sum"></summary><ol id="d-mem-list"></ol></details>
     <div class="perm" id="d-perm" hidden>
       <div class="perm-head">Wants to run <b id="d-perm-tool"></b></div>
@@ -558,6 +608,13 @@ body.live .speed-top, body.live .demo-only{display:none}
     <div id="guide-tools"></div>
     <div class="guide-actions"><button class="btn ghost" id="guide-skip">Skip tour</button><button class="btn" id="guide-back">Back</button><button class="btn" id="guide-action" hidden></button><button class="btn primary" id="guide-next">Next</button></div>
   </section>
+  <dialog class="review" id="review" aria-labelledby="rv-title">
+    <header><div><h2 id="rv-title"></h2><p id="rv-sub"></p></div>
+      <button class="icon-btn sm" id="rv-close" aria-label="Close review"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
+    <p class="rv-warn chg-warn" id="rv-warn" hidden></p>
+    <div class="rv-body"><ol class="rv-files" id="rv-files"></ol><div class="rv-diff" id="rv-diff"></div></div>
+    <footer><div class="rv-run" id="rv-run"></div><button class="btn" id="rv-chat" hidden></button><button class="btn primary" id="rv-mark">Mark reviewed</button></footer>
+  </dialog>
   <dialog class="city-picker" id="city-picker" aria-labelledby="city-title" aria-describedby="city-description">
     <h2 id="city-title">Pick your city</h2>
     <p id="city-description">Choose the view outside. You can change it in Customize.</p>
@@ -1826,8 +1883,9 @@ plantBig(-13.1, -0.2, 1.1); plantBig(-13.1, 4.6, .95); plantBush(-13.1, -2.4, .9
 }
 
 /* ---------- zone: war room ---------- */
-const term = canvasTex(1024, 384); term.lines = [];
-const board = canvasTex(768, 280); board.items = [];
+// Two screens, sharp enough to read once the camera is up close: the floor's review board and its latest reported edit.
+const term = canvasTex(2048, 768), board = canvasTex(1536, 560);
+let screensDirty = true;
 { const gh = 2.6;
   const glassWall = (x, z, len, alongX) => {
     const gl = new THREE.Mesh(new THREE.BoxGeometry(alongX ? len : .03, gh, alongX ? .03 : len), mats.glass); gl.position.set(x, gh / 2, z); scene.add(gl);
@@ -1845,34 +1903,11 @@ const board = canvasTex(768, 280); board.items = [];
   // freestanding displays in front of the glass
   const st = grp(.8, -8.55); [-1.75, 1.75].forEach(x => { box(.06, 2.3, .06, mats.black, x, 1.15, 0, st); box(.5, .04, .5, mats.black, x, .02, 0, st); });
   box(3.6, 1.4, .06, mats.bezel, 0, 1.6, 0, st);
-  const ts = new THREE.Mesh(new THREE.PlaneGeometry(3.46, 1.3), new THREE.MeshBasicMaterial({ map: term.t })); ts.position.set(0, 1.6, .035); st.add(ts);
+  const ts = new THREE.Mesh(new THREE.PlaneGeometry(3.46, 1.3), new THREE.MeshBasicMaterial({ map: term.t })); ts.position.set(0, 1.6, .035); st.add(ts); term.mesh = ts;
   const sb = grp(3.95, -8.55); [-.95, .95].forEach(x => { box(.05, 2.0, .05, mats.black, x, 1.0, 0, sb); box(.4, .04, .4, mats.black, x, .02, 0, sb); });
   box(1.96, .76, .05, mats.steel, 0, 1.6, 0, sb);
-  const bs = new THREE.Mesh(new THREE.PlaneGeometry(1.86, .68), new THREE.MeshBasicMaterial({ map: board.t })); bs.position.set(0, 1.6, .03); sb.add(bs);
+  const bs = new THREE.Mesh(new THREE.PlaneGeometry(1.86, .68), new THREE.MeshBasicMaterial({ map: board.t })); bs.position.set(0, 1.6, .03); sb.add(bs); board.mesh = bs;
 }
-function drawTerm() {
-  const x = term.x; x.fillStyle = '#0A1115'; x.fillRect(0, 0, 1024, 384);
-  x.fillStyle = '#131E24'; x.fillRect(0, 0, 1024, 42);
-  ['#F25F5C','#FAC05E','#59CD90'].forEach((c, i) => { x.fillStyle = c; x.beginPath(); x.arc(24 + i * 22, 21, 7, 0, 7); x.fill(); });
-  x.fillStyle = '#7D8F98'; x.font = '500 19px "IBM Plex Mono", monospace'; x.fillText('shared terminal · every Bash call from every agent', 100, 28);
-  x.font = '400 22px "IBM Plex Mono", monospace';
-  (curFloor ? curFloor.termLines : []).forEach((l, i) => { const y = 76 + i * 28.5; let cx = 18;
-    x.fillStyle = l.tagColor; x.fillText(l.tag, cx, y); cx += x.measureText(l.tag + ' ').width;
-    x.fillStyle = l.color; x.fillText(fitText(x, l.text, 1000 - cx), cx, y); });
-  term.t.needsUpdate = true;
-}
-function termPush(a, text, color = '#DDE7EB') { const L = a.floor.termLines; L.push({ tag:`[${a.name}]`, tagColor:a.color, text, color }); if (L.length > 11) L.shift(); if (a.floor === curFloor) drawTerm(); }
-function drawBoard() {
-  const x = board.x; x.fillStyle = '#F7F8F6'; x.fillRect(0, 0, 768, 280);
-  x.fillStyle = '#5B6A72'; x.font = '600 20px "IBM Plex Sans", sans-serif'; x.fillText('E D I T I N G   N O W', 26, 38);
-  x.strokeStyle = '#C9D1D4'; x.lineWidth = 2; x.beginPath(); x.moveTo(26, 52); x.lineTo(742, 52); x.stroke();
-  (curFloor ? curFloor.boardItems : []).forEach((it, i) => { const y = 88 + i * 38;
-    x.fillStyle = it.color; x.beginPath(); x.arc(38, y - 7, 9, 0, 7); x.fill();
-    x.fillStyle = '#15212A'; x.font = '500 22px "IBM Plex Mono", monospace'; x.fillText(fitText(x, it.file, 520), 58, y);
-    x.fillStyle = '#6A7A82'; x.font = '500 20px "IBM Plex Sans", sans-serif'; x.textAlign = 'right'; x.fillText(it.who, 742, y); x.textAlign = 'left'; });
-  board.t.needsUpdate = true;
-}
-function boardPush(a, file) { const B = a.floor.boardItems; B.unshift({ file, who: a.name, color: a.color }); B.length = Math.min(B.length, 5); if (a.floor === curFloor) drawBoard(); }
 
 /* ---------- zone: café ---------- */
 const neon = canvasTex(512, 128);
@@ -2203,6 +2238,7 @@ function seeAgent(a) { if (a && a.floor && unseenOf(a.floor).delete(a.id)) uiDir
 const FLOOR_H = 4.6, FLOOR_BASE = 18;
 const floors = []; let curFloor = null, floorSeq = 0;
 let yOff = 0, yOffTarget = 0, viewMode = 'floor';
+const onFloor = () => viewMode === 'floor' || viewMode === 'screen';
 const floorNum = f => FLOOR_BASE + f.i;
 const floorAgents = f => agents.filter(a => a.floor === f);
 // Each floor gets its own copy of the seats so occupancy is per floor; the meshes (screens, chairs) are shared.
@@ -2227,7 +2263,7 @@ function bayBox(w, h, d, mat) {
 }
 function makeFloor(key, name, placeholder = false) {
   const { S, desks } = cloneSpots();
-  const f = { key, name, placeholder, i: floors.length, created: floorSeq++, SPOTS: S, deskSeats: desks, termLines: [], boardItems: [], signSig: '',
+  const f = { key, name, placeholder, i: floors.length, created: floorSeq++, SPOTS: S, deskSeats: desks, signSig: '',
     mGlass: new THREE.MeshLambertMaterial({ map: bayTex.t, emissiveMap: bayLit.t, emissive: new THREE.Color('#FFD9A0'), emissiveIntensity: 0 }),
     mSlab: M('#B9BAB4', { roughness: .9 }), sign: canvasTex(512, 128) };
   f.mSign = new THREE.MeshBasicMaterial({ map: f.sign.t, transparent: true, depthWrite: false });
@@ -2268,7 +2304,7 @@ function rebuildTower() {
 function refreshFloorVisuals() {
   curFloor.deskSeats.forEach(s => { s.chairMat.color.set(s.owner ? s.owner.color : sceneT.chair); s.screen.color.set(sceneT.screenOff); });
   agents.forEach(a => { if (a.floor === curFloor) updateScreen(a); });
-  drawTerm(); drawBoard(); deskDirty = true;
+  screensDirty = true; deskDirty = true;
   for (const s of Object.values(SPOTS).flat()) if (s.chair) s.chair.rotation.y = yawOf(s.face);   // not how the last floor's sitters left them
 }
 function goToFloor(i) {
@@ -2300,7 +2336,7 @@ function setCamPose(from, to, e) {
 function flyToFloor(i, then, agent) {
   const f = floors[i]; if (!f) return;
   if (unseenOf(f).size) { unseenOf(f).clear(); uiDirty = true; }   // you're going to look, so it's seen
-  if (reduced || view !== '3d' || renderer.xr.isPresenting || (f === curFloor && viewMode === 'floor' && !flight)) { goToFloor(i); if (then) then(); return; }
+  if (reduced || view !== '3d' || renderer.xr.isPresenting || (f === curFloor && onFloor() && !flight)) { goToFloor(i); if (then) then(); return; }
   const same = f === curFloor, dist = Math.abs(f.i - curFloor.i);
   const F = flight = { f, then, agent, t: 0, from: camPose(), same, swapped: same, y0: yOff, y1: -f.i * FLOOR_H,
     heli: { theta: cam.theta + .35, phi: 1.16, radius: Math.max(defaultRadius() * 2.3, 62), target: HELI_TARGET },
@@ -2398,7 +2434,7 @@ function renderLift() {
   const el = $('#lift-list'); if (!el) return;
   const rows = floors.slice().reverse().map(f => {
     const ag = floorAgents(f), w = ag.some(a => a.state === 'waiting');
-    return `<button class="lift-btn${f === curFloor && viewMode === 'floor' ? ' on' : ''}" data-floor="${f.i}" aria-label="Floor ${floorNum(f)}, ${esc(f.name)}">
+    return `<button class="lift-btn${f === curFloor && onFloor() ? ' on' : ''}" data-floor="${f.i}" aria-label="Floor ${floorNum(f)}, ${esc(f.name)}">
       ${floorBadge(f, w)}<span class="fl-name">${esc(f.name)}</span>
       ${floorNews(f) || `<span class="fl-count">${ag.filter(a => a.kind === 'main').length || ''}</span>`}</button>`;
   }).join('');
@@ -2952,13 +2988,6 @@ function makePlan(p) {
   s.push({ t:'think', label:'Writing a summary' });
   return s;
 }
-function bashResult(cmd) {
-  if (/test|pytest|e2e/.test(cmd)) return `✓ ${Math.floor(rand(18, 96))} passed (${rand(1.2, 9).toFixed(1)}s)`;
-  if (/lint|ruff|tsc|typecheck/.test(cmd)) return '✓ no problems found';
-  if (/build/.test(cmd)) return `✓ compiled in ${rand(4, 19).toFixed(1)}s`;
-  if (/push/.test(cmd)) return '→ pushed to origin';
-  return '✓ done';
-}
 function askPermission(a, tool, cmd) {
   return new Promise(res => { a.approval = { tool, cmd, deadline: simTime + 30, resolve: v => { a.approval = null; uiDirty = true; detailDirty = true; res(v); } }; uiDirty = true; detailDirty = true; });
 }
@@ -2971,18 +3000,17 @@ async function doTool(a, ws, tool, arg) {
   else if (a.spot !== ws) { setState(a, 'working', 'Back to work'); await walkTo(a, ws); }
   a.pose = a.spot && a.spot.type === 'library' ? 'read' : 'type';
   setState(a, 'working', label);
-  if (tool === 'Bash') termPush(a, '$ ' + arg, '#F3F7F8');
-  if (tool === 'Edit' || tool === 'Write') boardPush(a, arg);
   const bash = tool === 'Bash', long = bash && /test|build|e2e/.test(arg);
   let fails = 0;
   if (bash) a.run = { at: Date.now() };
   if (bash && Math.random() < .18) for (const n = Math.random() < .3 ? 3 : 1; fails < n; fails++) {
-    await wait(rand(2, 3.5)); termPush(a, '✗ failed', '#FF7B72'); emit(a, 'PostToolUseFailure', label); react(a, { kind: 'soot' });
+    await wait(rand(2, 3.5)); emit(a, 'PostToolUseFailure', label); noteWork(a, { tool, summary: arg, failed: true }); react(a, { kind: 'soot' });
     a.pose = 'think'; setState(a, 'thinking', `${tool} failed, rethinking`); await wait(rand(1.5, 2.5)); a.pose = 'type'; setState(a, 'working', label);
   }
   await wait(long ? rand(8, 12) : rand(2.2, 4));
-  if (bash) { termPush(a, bashResult(arg), '#6FD69A'); a.run = null; react(a, outcomeOf({ tool }, fails, long ? RUN_LONG_MS : 0), Date.now()); }
+  if (bash) { a.run = null; react(a, outcomeOf({ tool }, fails, long ? RUN_LONG_MS : 0), Date.now()); }
   emit(a, 'PostToolUse', label);
+  noteWork(a, { tool, summary: arg, edit: tool === 'Edit' || tool === 'Write' ? { ...pick(DEMO_EDITS), more: 0 } : null });
 }
 async function mainLoop(a) {
   emit(a, 'SessionStart', '~/Documents/' + a.project.key);
@@ -3230,7 +3258,33 @@ function setView(v) {
   if (v === 'plan') { goal.phi = .02; goal.theta = 0; goal.radius = planRadius(); goal.target.set(0, 0, 0); }
   else { goal.phi = .9; goal.theta = .36; goal.radius = defaultRadius(); goal.target.set(0, 0, -.3); }
 }
+/* Reading a war room screen: the camera flies to face it square-on. Agents and chairs sit between the two, so once
+   it has arrived the camera stops drawing anything nearer than the screen. */
+let zoom = null;                                 // { on, back, theta } while viewMode === 'screen'
+// Up close, a screen is framed in the gap the panels leave.
+function screenFrame(w, h) {
+  if (isMobile()) return { ox: vo.tx, oy: vo.ty, gw: w, gh: h * .5 };
+  const L = liftEl.classList.contains('collapsed') ? 16 : liftEl.getBoundingClientRect().right - stage.getBoundingClientRect().left + 16;
+  const R = w - (appEl.classList.contains('panel-off') ? 0 : panel.offsetWidth + 16) - 16, T = 72, B = h - 24;
+  return { ox: w / 2 - (L + R) / 2, oy: h / 2 - (T + B) / 2, gw: Math.max(200, R - L), gh: B - T };
+}
+function zoomTo(s) {
+  const p = s.mesh.getWorldPosition(new THREE.Vector3()), g = s.mesh.geometry.parameters, t = Math.tan(camera.fov * Math.PI / 360);
+  zoom = { on: s, theta: Math.round(cam.theta / (Math.PI * 2)) * Math.PI * 2, back: viewMode === 'screen' ? zoom.back : { theta: goal.theta, phi: goal.phi, radius: goal.radius, target: goal.target.clone() } };
+  viewMode = 'screen'; goal.theta = zoom.theta; goal.phi = Math.PI / 2; goal.target.copy(p);
+  const h = stage.clientHeight || 1, fr = screenFrame(stage.clientWidth, h);
+  goal.radius = Math.max(g.height * h / (2 * t * fr.gh * .94), g.width * h / (2 * t * fr.gw * .96));
+  screensDirty = true; renderLift();
+}
+function unzoom() {
+  if (viewMode !== 'screen') return;
+  viewMode = 'floor'; goal.theta = zoom.back.theta; goal.phi = zoom.back.phi; goal.radius = zoom.back.radius; goal.target.copy(zoom.back.target);
+  screensDirty = true; renderLift();
+}
 function applyCam() {
+  const facing = viewMode === 'screen' && Math.abs(cam.theta - zoom.theta) < .04 && Math.abs(cam.phi - Math.PI / 2) < .04 && cam.target.distanceTo(goal.target) < .3;
+  const near = facing ? Math.max(.1, cam.radius - .3) : .1;
+  if (camera.near !== near) { camera.near = near; camera.updateProjectionMatrix(); }
   const sp = Math.sin(cam.phi);
   camera.position.set(cam.target.x + cam.radius * sp * Math.sin(cam.theta), cam.target.y + cam.radius * Math.cos(cam.phi), cam.target.z + cam.radius * sp * Math.cos(cam.theta));
   camera.lookAt(cam.target);
@@ -3239,8 +3293,8 @@ function updateCam(dt) {
   if (flight && !flight.landing) { applyCam(); return; }            // the flight drives the camera itself
   if (viewMode === 'building') goal.target.y = yOff + (floors.length - 1) * FLOOR_H / 2 + 1.7;
   else if (viewMode === 'roof') goal.target.y = yOff + (floors.length - 1) * FLOOR_H + ROOF_Y;
-  else goal.target.y = 0;
-  if (follow && selected && !flight) { const p = worldPos(selected); goal.target.x += (p.x - goal.target.x) * (1 - Math.exp(-dt * 4)); goal.target.z += (p.z - goal.target.z) * (1 - Math.exp(-dt * 4)); }
+  else if (viewMode !== 'screen') goal.target.y = 0;
+  if (follow && selected && !flight && viewMode !== 'screen') { const p = worldPos(selected); goal.target.x += (p.x - goal.target.x) * (1 - Math.exp(-dt * 4)); goal.target.z += (p.z - goal.target.z) * (1 - Math.exp(-dt * 4)); }
   const k = reduced ? 1 : 1 - Math.exp(-dt * 8);
   cam.theta += (goal.theta - cam.theta) * k; cam.phi += (goal.phi - cam.phi) * k; cam.radius += (goal.radius - cam.radius) * k;
   cam.target.lerp(goal.target, k); applyCam();
@@ -3256,6 +3310,12 @@ function pan(dx, dy) {
 /* ---------- input ---------- */
 const ptrs = new Map(); let moved = 0, panMode = false, pinch = null;
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function screenAt(cx, cy) {
+  if (view !== '3d' || !onFloor() || flight || renderer.xr.isPresenting) return null;
+  const r = canvas.getBoundingClientRect(); ndc.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera); const h = ray.intersectObjects([term.mesh, board.mesh], false)[0];
+  return h ? { on: h.object === term.mesh ? term : board, y: (1 - h.uv.y) * (h.object === term.mesh ? term : board).c.height } : null;
+}
 function agentAt(cx, cy) {
   const r = canvas.getBoundingClientRect(); ndc.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(ndc, camera); const h = ray.intersectObjects(pickables, false);
@@ -3273,7 +3333,7 @@ canvas.addEventListener('pointerdown', e => {
 let hoverT = 0;
 canvas.addEventListener('pointermove', e => {
   const p = ptrs.get(e.pointerId);
-  if (!p) { const now = performance.now(); if (e.pointerType === 'mouse' && now - hoverT > 80) { hoverT = now; canvas.style.cursor = agentAt(e.clientX, e.clientY) ? 'pointer' : 'grab'; } return; }
+  if (!p) { const now = performance.now(); if (e.pointerType === 'mouse' && now - hoverT > 80) { hoverT = now; canvas.style.cursor = agentAt(e.clientX, e.clientY) || screenAt(e.clientX, e.clientY) ? 'pointer' : 'grab'; } return; }
   // the pointerup can be lost when focus moves to another window or monitor mid-drag
   if (e.pointerType === 'mouse' && e.buttons === 0) { dropPtrs(); return; }
   const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
@@ -3286,8 +3346,12 @@ canvas.addEventListener('pointermove', e => {
   }
 });
 function endPtr(e) {
-  if (ptrs.size === 1 && moved < 6 && e.type === 'pointerup') { const a = agentAt(e.clientX, e.clientY);
-    if (a) select(a, true); else { const f = floorAt(e.clientX, e.clientY); if (f && (f !== curFloor || viewMode === 'building')) flyToFloor(f.i); else select(null); } }
+  if (ptrs.size === 1 && moved < 6 && e.type === 'pointerup') { const s = screenAt(e.clientX, e.clientY), a = viewMode === 'screen' ? null : agentAt(e.clientX, e.clientY);
+    if (viewMode === 'screen') {                                    // up close: a row opens that agent's changes, anywhere off the screens goes back
+      const row = s && s.on === zoom.on && (s.on.rows || []).find(r => s.y >= r.y0 && s.y < r.y1);
+      if (!s) unzoom(); else if (s.on !== zoom.on) zoomTo(s.on); else if (row) openReview(row.m);
+    } else if (a) select(a, true); else if (s) zoomTo(s.on);
+    else { const f = floorAt(e.clientX, e.clientY); if (f && (f !== curFloor || viewMode === 'building')) flyToFloor(f.i); else select(null); } }
   ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null;
 }
 function dropPtrs() { ptrs.clear(); pinch = null; }
@@ -3298,7 +3362,7 @@ canvas.addEventListener('wheel', e => { e.preventDefault(); goal.radius = clamp(
 const keys = new Set();
 addEventListener('keydown', e => {
   if (e.target.closest('input,textarea,select,dialog')) return;
-  if (e.key === 'Escape') select(null);
+  if (e.key === 'Escape') { if (viewMode === 'screen') unzoom(); else select(null); }
   if (e.key === '[') setLiftOpen(liftEl.classList.contains('collapsed'));
   if (e.key === ']') setPanelOpen(!panelOpen());
   if (e.key === '\\') { const show = liftEl.classList.contains('collapsed') && !panelOpen(); setLiftOpen(show); setPanelOpen(show); }
@@ -3425,6 +3489,7 @@ function renderDetail() {
   const ctx = a.kind === 'main' && a.context, cx = $('#d-ctx'); cx.hidden = !ctx;
   if (ctx) { const k = ctxShare(ctx); cx.style.setProperty('--c', ctxColor(ctx)); $('#d-ctx-bar').style.width = `${Math.round(k * 100)}%`;
     $('#d-ctx-text').textContent = `${kTok(ctx.used)} of ${kTok(ctx.max)} · ${Math.round(k * 100)}%`; }
+  renderGlance(a);
   const mem = $('#d-mem'), desk = a.kind === 'main' ? deskOf(a) : emptyDesk(); mem.hidden = !desk.dayCount && !desk.moments.length;
   if (!mem.hidden) {
     $('#d-mem-sum').textContent = `Desk memories · ${desk.dayCount} day${desk.dayCount === 1 ? '' : 's'} here · ${desk.merges} merge${desk.merges === 1 ? '' : 's'}`;
@@ -3834,6 +3899,7 @@ function layout() {
     else oy = h / 2 - (detail.getBoundingClientRect().bottom + pr.top) / 2 + st.top;   // centre the view in the gap between card and list
   }
   else { ox = appEl.classList.contains('panel-off') ? 0 : (panel.offsetWidth + 16) / 2; const hb = $('#panel-hide'); hb.setAttribute('aria-label', 'Hide panel'); hb.title = 'Hide panel  ]'; }
+  vo.zoomed = viewMode === 'screen'; if (vo.zoomed) ({ ox, oy } = screenFrame(w, h));
   Object.assign(vo, { tx: ox, ty: oy, w, h });
   if (!vo.init || reduced) { vo.x = ox; vo.y = oy; vo.init = true; }
   applyViewOffset();
@@ -3891,7 +3957,6 @@ const customName = (saved, project) => (saved.customName || (saved.customName ==
 // Work got merged: the agent jumps for joy for a few seconds and the office hears about it.
 function celebrate(a) {
   a.cheerUntil = performance.now() + 5000;
-  if (a.floor === curFloor) termPush(a, '🎉 merged', '#FFD166');
   toast(`${a.name} got merged`, 'Show me', () => select(a, true), a, 'done');
 }
 function retitle(a, title) {
@@ -4244,7 +4309,7 @@ const fx = [];
 const FX_GEO = { conf: new THREE.PlaneGeometry(.1, .06), soot: new THREE.SphereGeometry(.05, 8, 6), spark: new THREE.SphereGeometry(.016, 6, 4), parcel: new THREE.BoxGeometry(.26, .2, .22), gear: new THREE.TorusGeometry(.06, .02, 5, 9) };
 const FX_MAT = { conf: ['#FFD166', '#EF476F', '#06D6A0', '#4CC9F0', '#F2F5F6'].map(c => new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide })),
   soot: M('#34393C'), spark: new THREE.MeshBasicMaterial({ color: '#6FD69A' }), parcel: M('#C39A6B') };
-const inView = a => a.floor === curFloor && !a.onRoof && viewMode === 'floor' && a.g.visible && !document.hidden;
+const inView = a => a.floor === curFloor && !a.onRoof && onFloor() && a.g.visible && !document.hidden;
 function burst(a, kind) {
   if (!inView(a)) return;
   const p = a.g.position, f = !a.path.length && a.spot && a.spot.face || [0, 0];   // over the desk it faces, or over itself mid-walk
@@ -4283,6 +4348,218 @@ function react(who, o, at) {
   if (big) { emit(who, 'Unstuck', `Worked after ${o.fails} failed tries`, at); changeDesk(who, d => remember(d, 'unstuck', at, o.fails)); }
   else if (now - (who.cheeredAt || -1e9) < CHEER_GAP_MS) return;
   who.cheeredAt = now; who.cheerUntil = now + (big ? 4500 : 2200); burst(who, big ? 'big' : 'small');
+}
+
+/* ---------- changes: what a checkout holds that you haven't reviewed, and the last edit each agent reported ---------- */
+// The file list is git's, per checkout, so agents sharing one folder share one list. Which agent touched a file comes from its hooks.
+const CHG_POLL_MS = 20000;                      // how stale the open card's file list may get with no news from the agent
+const EDIT_FRESH_MS = 60000;                    // an edit reported this recently gets a ring in the review list
+const chg = new Map();                          // session → { data, at, busy }
+const mainOf = a => a.parent || a;
+const hm = t => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const fileName = p => p.slice(p.lastIndexOf('/') + 1);
+let codeOn = true;                              // the office server's "Show code" setting; off means no changed lines anywhere
+const reviewedOf = root => { try { return JSON.parse(localStorage.getItem('agent-office:reviewed:' + root)) || { sigs: {} }; } catch (_) { return { sigs: {} }; } };
+const unreviewed = c => { const seen = reviewedOf(c.root).sigs; return c.files.filter(f => seen[f.path] !== f.sig); };
+// Hooks name files relative to the session's folder; git names them relative to the checkout.
+const inCheckout = (c, file) => file.startsWith('/') ? (file.startsWith(c.root + '/') ? file.slice(c.root.length + 1) : file) : (c.prefix || '') + file;
+// One row of the war room's review board: what a session's checkout holds that you haven't reviewed, files with a reported edit first.
+function reviewRow(m, c, seen, now) {
+  const row = { m, name: m.name, color: m.color, state: m.state, run: m.lastRun || null, tone: 'wait', note: 'Reading the checkout…', count: 0, total: 0, add: 0, del: 0, files: [] };
+  if (!c) return row;
+  if (!c.ok) return { ...row, tone: 'none', note: c.error };
+  const by = new Map(); for (const [file, t] of m.touched || []) by.set(inCheckout(c, file), t.at);
+  const files = c.files.filter(f => seen[f.path] !== f.sig).map(f => { const at = by.get(f.path) || 0; return { path: f.path, add: f.add, del: f.del, at, fresh: now - at < EDIT_FRESH_MS }; }).sort((a, b) => b.at - a.at);
+  const sum = k => c.files.reduce((n, f) => n + (f[k] || 0), 0);
+  return { ...row, tone: files.length ? 'todo' : c.files.length ? 'clear' : 'none', note: c.files.length ? '' : 'No changes', count: files.length, total: c.files.length, add: sum('add'), del: sum('del'), files };
+}
+function noteWork(who, e) {
+  const m = mainOf(who), at = e.at || Date.now();
+  m.chgStale = true;
+  if (e.tool === 'Bash') m.lastRun = { cmd: e.summary, failed: !!e.failed, at };
+  if (!EDIT_TOOLS.has(e.tool) || e.failed || !e.summary) return;
+  (m.touched || (m.touched = new Map())).set(e.summary, { at, who });
+  m.lastEdit = { file: e.summary, at, who, edit: e.edit || null };
+  if (selected && mainOf(selected) === m) detailDirty = true;
+  changesSoon(m);
+}
+const DEMO_EDITS = [
+  { del: ['  return items;'], add: ['  if (!items.length) return [];', '  return items.sort(byDueDate);'] },
+  { del: ['const TIMEOUT = 3000;'], add: ['const TIMEOUT = Number(process.env.TIMEOUT_MS) || 3000;'] },
+  { del: [], add: ['export function isOverdue(task, now = Date.now()) {', '  return !task.done && task.due < now;', '}'] },
+  { del: ['    throw new Error("failed");'], add: ['    throw new HttpError(404, `No such list: ${id}`);'] },
+];
+function demoChanges(m) {
+  const files = [...(m.touched || [])].map(([file, t]) => { const h = hashStr(file); return { path: file, status: h % 5 ? 'modified' : 'added', add: 3 + h % 40, del: h % 5 ? h % 9 : 0, sig: String(t.at) }; });
+  return { ok: true, root: 'demo:' + m.project.key, branch: 'feat/' + m.project.key, base: 'main', prefix: '', files, shared: [], at: Date.now() };
+}
+const changesOf = m => !m.live ? demoChanges(m) : (chg.get(m.sessionId) || {}).data || null;
+async function loadChanges(m, force) {
+  if (!m.live || !m.sessionId || !m.cwd) return;
+  const st = chg.get(m.sessionId) || {}; chg.set(m.sessionId, st);
+  if (st.busy || (!force && Date.now() - (st.at || 0) < CHG_POLL_MS)) return;
+  st.busy = true;
+  try { st.data = await (await fetch('/api/changes?session=' + encodeURIComponent(m.sessionId))).json(); } catch (_) { st.data = { ok: false, error: 'The office server did not answer' }; }
+  st.busy = false; st.at = Date.now(); m.chgStale = false;
+  if (selected && mainOf(selected) === m) detailDirty = true;
+  if (reviewing === m) renderReview();
+}
+let chgTimer = 0;
+function changesSoon(m) {                        // an edit or a command just finished: read the checkout again, once things settle
+  if (reviewing === m && !m.live) renderReview();
+  if (!m.live || !(reviewing === m || (selected && mainOf(selected) === m))) return;
+  clearTimeout(chgTimer); chgTimer = setTimeout(() => loadChanges(m, true), 1200);
+}
+const boardMains = () => floorAgents(curFloor).filter(a => a.kind === 'main' && !a.gone);
+setInterval(() => {                              // the open card or review, and any agent on this floor's board that has worked since its last reading
+  if (document.hidden) return;
+  const m = reviewing || (selected && mainOf(selected)); if (m) loadChanges(m);
+  for (const b of boardMains()) if (b !== m && b.chgStale !== false) loadChanges(b);
+}, 5000);
+const codeLines = (del, add) => del.map(l => `<span class="ln del">- ${esc(l)}</span>`).join('') + add.map(l => `<span class="ln add">+ ${esc(l)}</span>`).join('');
+function renderGlance(a) {
+  const m = mainOf(a), el = $('#d-chg'), c = changesOf(m), le = m.lastEdit, has = c && c.ok && c.files.length > 0;
+  if (m.live && !c) loadChanges(m);
+  el.hidden = !le && !has; if (el.hidden) return;
+  el.style.setProperty('--c', le ? le.who.color : m.color);
+  const todo = has ? unreviewed(c) : [], seenAt = has && reviewedOf(c.root).at;
+  $('#chg-n').textContent = has ? todo.length : '';
+  $('#chg-what').textContent = has ? (todo.length ? `file${todo.length === 1 ? '' : 's'} to review` : 'files to review: all caught up') : !c ? 'Reading the checkout…' : c.ok ? 'Nothing changed in this checkout' : c.error;
+  $('#chg-since').textContent = !has ? '' : (seenAt ? `Since your review at ${hm(seenAt)}` : c.base ? `Since ${c.base}` : 'Not committed yet') + ` · ${c.files.length} changed in all`;
+  $('#chg-open').hidden = !has;
+  $('#chg-edit').hidden = !le;
+  if (le) {
+    const ed = codeOn && le.edit, by = le.who !== a ? ` · ${le.who.name}` : '';
+    $('#chg-edit-head').innerHTML = `Latest reported edit · ${hm(le.at)}${esc(by)} · <b title="${esc(le.file)}">${esc(fileName(le.file))}</b>`;
+    const code = $('#chg-edit-code'); code.hidden = !ed || !(ed.del.length + ed.add.length);
+    code.innerHTML = code.hidden ? '' : codeLines(ed.del, ed.add) + (ed.more ? `<span class="ln hunk">${ed.more} more line${ed.more === 1 ? '' : 's'}</span>` : '');
+  }
+  const warn = $('#chg-warn'), n = has ? c.shared.length : 0; warn.hidden = !n;
+  if (n) warn.textContent = `⚠ ${n} other agent${n === 1 ? ' shares' : 's share'} this checkout, so the list may include their work.`;
+}
+// The review window: the checkout's files on the left, one file's changes on the right. Nothing in the right pane moves while you read.
+const review = $('#review');
+let reviewing = null, rvDiff = null;             // rvDiff: { path, sig, text, truncated, error }
+function openReview(a) { reviewing = mainOf(a); rvDiff = null; renderReview(); if (!review.open) review.showModal(); loadChanges(reviewing, true); }
+review.addEventListener('close', () => { reviewing = null; rvDiff = null; });
+$('#rv-close').onclick = () => review.close();
+$('#chg-open').onclick = () => selected && openReview(selected);
+function renderReview() {
+  const m = reviewing; if (!m) return;
+  const c = changesOf(m), ok = c && c.ok;
+  $('#rv-title').textContent = `Changes in ${m.project.key}`;
+  $('#rv-sub').textContent = !c ? 'Reading the checkout…' : !ok ? c.error : `${c.branch || 'detached'} · ${c.base ? `since ${c.base}` : 'not committed yet'} · read at ${hm(c.at)}`;
+  const warn = $('#rv-warn'), n = ok ? c.shared.length : 0; warn.hidden = !n;
+  if (n) warn.textContent = `⚠ ${n} other agent${n === 1 ? ' shares' : 's share'} this checkout. Git can't tell whose change is whose; the dots show which agent reported an edit to a file.`;
+  const seen = ok ? reviewedOf(c.root).sigs : {}, now = Date.now(), by = new Map();
+  if (ok) for (const [file, t] of m.touched || []) by.set(inCheckout(c, file), t);
+  const top = ok ? Math.max(1, ...c.files.map(f => (f.add || 0) + (f.del || 0))) : 1;
+  $('#rv-files').innerHTML = !ok ? '' : c.files.map(f => { const t = by.get(f.path), fresh = t && now - t.at < EDIT_FRESH_MS;
+    const note = f.status === 'modified' ? '' : f.status[0].toUpperCase() + f.status.slice(1);
+    const who = t ? `<i class="dot${fresh ? ' now' : ''}" style="--c:${t.who.color}"></i>${esc(t.who.name)} · ${fresh ? 'edit just reported' : `edit reported ${hm(t.at)}`}` : '';
+    return `<li><button class="${seen[f.path] === f.sig ? 'seen' : ''}${rvDiff && rvDiff.path === f.path ? ' sel' : ''}" data-path="${esc(f.path)}"><span class="path" title="${esc(f.path)}">&lrm;${esc(f.path)}</span>`
+      + `<span class="num">${f.add == null ? 'binary' : `<b>+${f.add}</b> <i>−${f.del}</i>`}</span>${note || who ? `<small>${[note, who].filter(Boolean).join(' · ')}</small>` : ''}</button></li>`; }).join('')
+    || '<li><p style="margin:10px;color:var(--muted)">Nothing has changed in this checkout.</p></li>';
+  const pane = $('#rv-diff'), cur = rvDiff && ok && c.files.find(f => f.path === rvDiff.path);
+  if (!rvDiff) pane.innerHTML = `<p>${codeOn ? 'Select a file to see its changes. They stay still while you read.' : 'Code is hidden. Turn on “Show code” in Customize to read changes here.'}</p>`;
+  else if (rvDiff.loading) pane.innerHTML = '<p>Reading…</p>';
+  else if (rvDiff.error) pane.innerHTML = `<p>${esc(rvDiff.error)}</p>`;
+  else pane.innerHTML = (cur && cur.sig !== rvDiff.sig ? '<div class="stale">This file changed since you opened it.<button class="btn sm" id="rv-reload">Show the new version</button></div>' : '')
+    + `<div class="code">${rvDiff.text.split('\n').filter(l => !/^(diff --git |index |--- |\+\+\+ |new file mode|deleted file mode)/.test(l)).map(l => `<span class="ln ${l.startsWith('@@') ? 'hunk' : l[0] === '+' ? 'add' : l[0] === '-' ? 'del' : ''}">${esc(l) || ' '}</span>`).join('')}</div>`
+    + (rvDiff.truncated ? '<p>This diff is long. The rest is in your editor.</p>' : '');
+  const run = m.lastRun, runEl = $('#rv-run');
+  runEl.innerHTML = run ? `<span class="${run.failed ? 'bad' : 'ok'}">${run.failed ? '✗ Last command failed' : '✓ Last command passed'}</span> · ${hm(run.at)} · one command, not a verdict on the checkout<b title="${esc(run.cmd)}">${esc(run.cmd)}</b>` : '';
+  const chat = $('#rv-chat'); chat.hidden = !(m.live && hostName(m)); if (!chat.hidden) chat.textContent = openLabel(m);
+  $('#rv-mark').disabled = !ok || !unreviewed(c).length;
+}
+async function showDiff(path) {
+  const m = reviewing, c = m && changesOf(m), f = c && c.ok && c.files.find(x => x.path === path); if (!f || !codeOn) return;
+  rvDiff = { path, sig: f.sig, loading: true }; renderReview();
+  let d;
+  if (!m.live) { const e = DEMO_EDITS[hashStr(path) % DEMO_EDITS.length]; d = { ok: true, text: `@@ -${10 + hashStr(path) % 80},6 +${10 + hashStr(path) % 80},7 @@\n   // demo: invented lines\n${e.del.map(l => '-' + l).join('\n')}${e.del.length ? '\n' : ''}${e.add.map(l => '+' + l).join('\n')}` }; }
+  else try { d = await (await fetch(`/api/changes/diff?session=${encodeURIComponent(m.sessionId)}&path=${encodeURIComponent(path)}`)).json(); } catch (_) { d = { ok: false, error: 'The office server did not answer' }; }
+  if (reviewing !== m || !rvDiff || rvDiff.path !== path) return;
+  rvDiff = d.ok ? { path, sig: f.sig, text: d.text, truncated: d.truncated } : { path, sig: f.sig, error: d.error };
+  renderReview(); $('#rv-diff').scrollTop = 0;
+}
+$('#rv-files').addEventListener('click', e => { const b = e.target.closest('[data-path]'); if (b) showDiff(b.dataset.path); });
+$('#rv-diff').addEventListener('click', e => { if (e.target.id === 'rv-reload' && rvDiff) showDiff(rvDiff.path); });
+$('#rv-chat').onclick = () => reviewing && openHost(reviewing);
+$('#rv-mark').onclick = () => {                 // these versions are seen; a later edit to any of them brings it back
+  const c = reviewing && changesOf(reviewing); if (!c || !c.ok) return;
+  try { localStorage.setItem('agent-office:reviewed:' + c.root, JSON.stringify({ at: Date.now(), sigs: Object.fromEntries(c.files.map(f => [f.path, f.sig])) })); } catch (_) {}
+  renderReview(); detailDirty = true; toast(`Marked ${c.files.length} file${c.files.length === 1 ? '' : 's'} as reviewed`);
+};
+function setCodeOn(v) { codeOn = v; $('#opt-code').checked = v; detailDirty = true; if (!v) { rvDiff = null; for (const a of agents) if (a.lastEdit) a.lastEdit.edit = null; } if (reviewing) renderReview(); }
+$('#opt-code').onchange = e => { uiPrefs.code = e.target.checked; saveUi(); setCodeOn(e.target.checked); if (live.ws && live.ws.readyState === 1) live.ws.send(JSON.stringify({ type: 'code', show: e.target.checked })); };
+
+/* ---------- war room screens: the floor's review board and its latest reported edit ---------- */
+const BOARD_ROWS = 5, EDIT_ROWS = 8;
+const TONE = { todo: '#F2A22C', clear: '#52C96F', none: '#7D8F98', wait: '#7D8F98' };
+const MONO = '"IBM Plex Mono", monospace', SANS = '"IBM Plex Sans", sans-serif';
+// Long paths lose their start, not the file name.
+function fitTail(x, s, max) { if (x.measureText(s).width <= max) return s; while (s.length > 1 && x.measureText('…' + s).width > max) s = s.slice(1); return '…' + s; }
+function drawReviewBoard(rows, zoomed) {
+  const x = term.x, W = 2048, H = 768, HEAD = 84, more = rows.length - BOARD_ROWS; rows = rows.slice(0, BOARD_ROWS);
+  x.textAlign = 'left'; x.fillStyle = '#0A1115'; x.fillRect(0, 0, W, H); x.fillStyle = '#131E24'; x.fillRect(0, 0, W, HEAD);
+  x.fillStyle = '#DDE7EB'; x.font = `600 34px ${SANS}`; x.fillText('R E V I E W   B O A R D', 40, 54);
+  x.fillStyle = '#7D8F98'; x.font = `500 28px ${SANS}`; x.fillText(fitText(x, curFloor.name, 560), 480, 54);
+  x.textAlign = 'right'; x.fillText((more > 0 ? `${more} more not shown · ` : '') + (zoomed ? 'Click a row to open its changes · Esc to go back' : 'Click to read'), W - 40, 54); x.textAlign = 'left';
+  term.rows = [];
+  if (!rows.length) { x.font = `500 38px ${SANS}`; x.textAlign = 'center'; x.fillText('No agents on this floor', W / 2, H / 2 + 40); x.textAlign = 'left'; }
+  const rowH = Math.min(342, (H - HEAD) / Math.max(1, rows.length));
+  rows.forEach((r, i) => {
+    const y = HEAD + i * rowH; term.rows.push({ y0: y, y1: y + rowH, m: r.m });
+    if (i) { x.fillStyle = '#1D2A31'; x.fillRect(40, y, W - 80, 2); }
+    x.fillStyle = r.color; x.beginPath(); x.arc(58, y + 46, 16, 0, 7); x.fill();
+    x.fillStyle = '#F2F5F6'; x.font = '700 40px "Bricolage Grotesque", sans-serif'; const name = fitText(x, r.name, 640); x.fillText(name, 90, y + 60);
+    const nx = 90 + x.measureText(name).width + 24; x.fillStyle = STATUS[r.state].hex; x.font = `600 28px ${SANS}`; x.fillText(STATUS[r.state].label, nx, y + 58);
+    x.textAlign = 'right'; x.fillStyle = TONE[r.tone]; x.font = `700 40px ${SANS}`;
+    x.fillText(r.tone === 'todo' ? `${r.count} to review` : r.tone === 'clear' ? 'All reviewed ✓' : fitText(x, r.note, 700), W - 40, y + 60);
+    x.fillStyle = '#7D8F98'; x.font = `500 26px ${SANS}`; if (r.total) x.fillText(`+${r.add} −${r.del} · ${r.total} changed`, W - 40, y + 104);
+    x.textAlign = 'left'; x.font = `500 26px ${MONO}`;
+    if (r.run) { x.fillStyle = r.run.failed ? '#FF7B72' : '#6FD69A'; x.fillText(fitText(x, `${r.run.failed ? '✗' : '✓'} ${r.run.cmd}`, 1280) + ` · ${hm(r.run.at)}`, 90, y + 104); }
+    const lines = Math.floor((rowH - 124) / 38), slots = lines * 2, over = r.files.length > slots ? r.files.length - slots + 1 : 0;
+    r.files.slice(0, over ? slots - 1 : slots).forEach((f, k) => { const fx = 90 + (k % 2) * 964, fy = y + 150 + Math.floor(k / 2) * 38;
+      if (f.fresh) { x.fillStyle = r.color; x.beginPath(); x.arc(fx - 20, fy - 9, 7, 0, 7); x.fill(); }
+      x.fillStyle = '#DDE7EB'; x.fillText(fitTail(x, f.path, 700), fx, fy);
+      x.textAlign = 'right'; x.fillStyle = '#7D8F98'; x.fillText(f.add == null ? 'binary' : `+${f.add} −${f.del}`, fx + 900, fy); x.textAlign = 'left'; });
+    if (over && slots) { x.fillStyle = '#7D8F98'; x.fillText(`and ${over} more`, 90 + ((slots - 1) % 2) * 964, y + 150 + Math.floor((slots - 1) / 2) * 38); }
+  });
+  term.t.needsUpdate = true;
+}
+function drawLatestEdit(le) {
+  const x = board.x, W = 1536, H = 560;
+  x.textAlign = 'left'; x.fillStyle = '#F7F8F6'; x.fillRect(0, 0, W, H);
+  x.fillStyle = '#5B6A72'; x.font = `600 30px ${SANS}`; x.fillText('L A T E S T   E D I T', 44, 62);
+  x.fillStyle = '#C9D1D4'; x.fillRect(44, 84, W - 88, 3);
+  if (!le) { x.fillStyle = '#6A7A82'; x.font = `500 34px ${SANS}`; x.fillText('No edits reported on this floor yet', 44, 150); board.t.needsUpdate = true; return; }
+  x.textAlign = 'right'; x.fillText(hm(le.at), W - 44, 62); x.textAlign = 'left';
+  x.fillStyle = le.who.color; x.beginPath(); x.arc(60, 134, 14, 0, 7); x.fill();
+  x.fillStyle = '#15212A'; x.font = `600 34px ${SANS}`; const who = fitText(x, le.who.name, 420); x.fillText(who, 88, 146);
+  const fx = 88 + x.measureText(who).width + 24; x.font = `500 32px ${MONO}`; x.fillText(fitTail(x, le.file, W - 44 - fx), fx, 146);
+  x.fillStyle = '#101A20'; rrect(x, 36, 178, W - 72, 346, 16); x.fill();
+  const ed = codeOn && le.edit, all = ed ? [...ed.del.map(l => ['-', l]), ...ed.add.map(l => ['+', l])] : [];
+  const cut = all.length > EDIT_ROWS || (ed && ed.more) ? EDIT_ROWS - 1 : EDIT_ROWS;
+  x.font = `500 28px ${MONO}`;
+  all.slice(0, cut).forEach(([sign, l], k) => { const y = 196 + k * 39;
+    x.fillStyle = sign === '+' ? 'rgba(82,201,111,.16)' : 'rgba(255,123,114,.16)'; x.fillRect(36, y, W - 72, 39);
+    x.fillStyle = sign === '+' ? '#8FE3AE' : '#FF9B93'; x.fillText(fitText(x, `${sign} ${l}`, W - 120), 60, y + 28); });
+  const rest = all.length - Math.min(all.length, cut) + (ed ? ed.more : 0);
+  x.fillStyle = '#7D8F98';
+  if (!all.length) x.fillText(codeOn ? 'No changed lines were reported for this edit' : 'Code is hidden. Turn on “Show code” in Customize.', 60, 230);
+  else if (rest) x.fillText(`${rest} more line${rest === 1 ? '' : 's'}`, 60, 196 + cut * 39 + 28);
+  board.t.needsUpdate = true;
+}
+// Redrawn only when what they show has changed.
+let screenSig = '';
+function drawScreens(force) {
+  const mains = boardMains(), now = Date.now(), zoomed = viewMode === 'screen';
+  const rows = mains.map(m => { const c = changesOf(m); if (m.live && !c) loadChanges(m); return reviewRow(m, c, c && c.ok ? reviewedOf(c.root).sigs : {}, now); });
+  const le = mains.map(m => m.lastEdit).filter(Boolean).sort((a, b) => b.at - a.at)[0] || null;
+  const sig = JSON.stringify([curFloor.name, zoomed, codeOn, rows.map(r => ({ ...r, m: r.m.id })), le && [le.at, le.file, le.who.id, le.edit]]);
+  if (!force && sig === screenSig) return; screenSig = sig;
+  drawReviewBoard(rows, zoomed); drawLatestEdit(le);
 }
 
 function onLiveEvent(e, replay) {
@@ -4331,27 +4608,29 @@ function onLiveEvent(e, replay) {
       place(a, s.permissionMode === 'plan' ? (spotOfType(a, ['meeting']) || a.ws) : a.ws, true);
       break;
     case 'PreToolUse':
-      emit(who, 'PreToolUse', label, e.at); toolCalls++;
+      emit(who, 'PreToolUse', label, e.at); toolCalls++; who.asked = null;
       if (who === a && (e.tool === 'Task' || e.tool === 'Agent')) { applyStatus(a, 'working', `Waiting on ${e.summary.split(':')[0] || 'a'} subagent`); break; }
       applyStatus(who, 'working', label);
       place(who, who === a ? spotForTool(a, e.tool, s) : (READ_TOOLS.has(e.tool) && Math.random() < .6 ? spotOfType(who, ['library']) : null) || who.ws);
       if (e.tool === 'Bash') who.run = { at: e.at };
-      if (e.tool === 'Bash' && !replay) termPush(who, '$ ' + e.summary, '#F3F7F8');
-      if (EDIT_TOOLS.has(e.tool) && !replay) boardPush(who, e.summary);
       if (EDIT_TOOLS.has(e.tool)) noteEdit(who, e.summary, replay);
       break;
     case 'PostToolUse': case 'PostToolUseFailure':
       if (e.failed) emit(who, 'PostToolUseFailure', label, e.at);
-      if (e.tool === 'Bash' && !replay) termPush(who, e.failed ? '✗ failed' : '✓ done', e.failed ? '#FF7B72' : '#6FD69A');
+      noteWork(who, e);
       { const before = noteResult(who, e, replay), ran = e.tool === 'Bash' && who.run; if (ran) who.run = null;
         if (!replay) react(who, outcomeOf(e, before, ran ? e.at - ran.at : 0), e.at); }
-      if (who.state !== 'waiting') applyStatus(who, 'thinking', e.failed ? `${e.tool} failed, rethinking` : who.review && !who.reviewDone ? reviewLabel(who.review) : 'Thinking');
+      // The call it asked about has run, so you answered. Another call finishing meanwhile says nothing about the one it asked for.
+      { const answered = who.state === 'waiting' && (!who.asked || who.asked === label); if (answered) who.asked = null;
+        if (who.state !== 'waiting' || answered) applyStatus(who, 'thinking', e.failed ? `${e.tool} failed, rethinking` : who.review && !who.reviewDone ? reviewLabel(who.review) : 'Thinking'); }
       if (e.merged) { emit(who, 'Merged', label, e.at); if (!replay) { celebrate(who); chime('merged', a); changeDesk(a, d => remember(d, 'merge', e.at)); } }
       break;
     case 'PermissionRequest': case 'Notification': {
       const perm = e.type === 'PermissionRequest' || e.notificationType === 'permission_prompt';
       if (e.type === 'Notification') emit(a, 'Notification', e.message || e.notificationType || 'Notification', e.at);
-      else emit(who, 'PermissionRequest', label, e.at);
+      else { emit(who, 'PermissionRequest', label, e.at); who.asked = label; }
+      // The prompt names no agent. When a subagent has just asked, it's that subagent's: the main agent isn't the one blocked.
+      if (e.type === 'Notification' && perm && [...a.subs.values()].some(x => x.state === 'waiting')) break;
       if (perm) {
         applyStatus(who, 'waiting', e.type === 'PermissionRequest' ? `Needs permission: ${label}` : (e.message || 'Needs your permission'));
         if (!replay) { toast(`${a.name} needs your permission in the ${whereFrom(a).toLowerCase()}`, 'Show me', () => select(who, true), who, 'waiting'); chime('needs', a); nudgeTitle(`✋ ${a.name} needs you`); }
@@ -4373,6 +4652,7 @@ function onLiveEvent(e, replay) {
 
 function onSnapshot(msg) {
   if (!live.gotSnapshot) { live.gotSnapshot = true; rosterEl._html = null; uiDirty = true; setTimeout(setModeLine); }
+  setCodeOn(msg.showCode !== false);
   musicSupported = !!msg.musicSupported; music = musicOn && msg.music || null; updateMusicBtn();
   const ids = new Set(msg.sessions.map(s => s.id));
   for (const [id, a] of live.byId) if (!ids.has(id)) leaveOffice(a);
@@ -4396,6 +4676,7 @@ function onSnapshot(msg) {
     const who = e.agentId && a.subs.get(e.agentId) || a;
     const detail = e.prompt ? `"${e.prompt}"` : e.message || `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}` || e.type;
     emit(who, e.type, detail, e.at);
+    if (e.type === 'PostToolUse') noteWork(who, e);              // so a reopened office still knows each agent's last edit
   }
   for (const ap of msg.approvals || []) onApproval(ap, false);   // requests still waiting for an answer
   setModeLine();
@@ -4583,10 +4864,12 @@ function connectLive() {
   const fallback = setTimeout(() => { if (!live.everConnected) { try { ws.close(); } catch (_) {} startDemo(); } }, 2500);
   live.ws = ws;
   ws.onopen = () => { live.connected = live.everConnected = true; clearTimeout(fallback); setModeLine(); sendPresence(); loadSetup();
-    if (musicOn) ws.send(JSON.stringify({ type: 'music', on: true })); };
+    if (musicOn) ws.send(JSON.stringify({ type: 'music', on: true }));
+    if (uiPrefs.code === false) ws.send(JSON.stringify({ type: 'code', show: false })); };
   ws.onmessage = m => { let msg; try { msg = JSON.parse(m.data); } catch (_) { return; }
     if (msg.type === 'snapshot') onSnapshot(msg); else if (msg.type === 'event') onLiveEvent(msg.event, false);
     else if (msg.type === 'focus-result') toast(msg.message);
+    else if (msg.type === 'code') setCodeOn(!!msg.show);
     else if (msg.type === 'music') music = musicOn && msg.music || null;
     else if (msg.type === 'setup') loadSetup();
     else if (msg.type === 'approval') onApproval(msg.approval, true); else if (msg.type === 'approval-resolved') onApprovalResolved(msg); };
@@ -4642,11 +4925,11 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 /* ---------- boot ---------- */
-window.agentOffice = { agents, SPOTS, DOOR };   // for debugging from the console
+window.agentOffice = { agents, SPOTS, DOOR, camera };   // for debugging from the console
 curFloor = makeFloor('lobby', 'Your first project', true); rebuildTower();
 setLiftOpen(uiPrefs.lift !== false); if (uiPrefs.panel === false) setPanelOpen(false);
 showDetailTab(uiPrefs.detailTab === 'activity' ? 'activity' : 'chat');
-applyScene(uiPrefs.theme in SCENES ? uiPrefs.theme : 'auto'); buildCustomize(); renderJSON(); drawTerm(); drawBoard(); layout(); loadPacks();
+applyScene(uiPrefs.theme in SCENES ? uiPrefs.theme : 'auto'); buildCustomize(); renderJSON(); layout(); loadPacks();
 if (Object.hasOwn(CITIES, uiPrefs.city)) setCity(uiPrefs.city);
 setView('3d'); Object.assign(cam, { theta: goal.theta, phi: goal.phi, radius: goal.radius }); cam.target.copy(goal.target); applyCam();
 if (MODE === 'demo' || !/^https?:$/.test(location.protocol)) startDemo(); else connectLive();
@@ -4654,11 +4937,13 @@ syncCrewButtons();
 if (!uiPrefs.guideDone && !uiPrefs.crew) openWelcome();
 else if (!Object.hasOwn(CITIES, uiPrefs.city)) { tourAfterCity = !uiPrefs.guideDone || params.has('tour'); $('#city-picker').showModal(); $('#city-choices [aria-pressed="true"]')?.focus(); }
 else if (!uiPrefs.guideDone || params.has('tour')) startGuide(Number.isInteger(uiPrefs.guideStep) ? uiPrefs.guideStep : 0);
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { agents.forEach(a => a.labelDirty = true); floorLabels.forEach(l => l.draw()); drawTerm(); drawBoard(); drawNeon(); floors.forEach(f => drawSign(f, true)); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { agents.forEach(a => a.labelDirty = true); floorLabels.forEach(l => l.draw()); screensDirty = true; drawNeon(); floors.forEach(f => drawSign(f, true)); });
 
 let last = performance.now(), uiT = 0;
+let screenT = 0;
 function step(dt) {
   if (Math.abs(vo.x - vo.tx) > .3 || Math.abs(vo.y - vo.ty) > .3) { const k = 1 - Math.exp(-dt * 9); vo.x += (vo.tx - vo.x) * k; vo.y += (vo.ty - vo.y) * k; applyViewOffset(); }
+  if ((viewMode === 'screen') !== !!vo.zoomed) layout();            // entering or leaving a screen reframes the view
   const sdt = dt * speed; simTime += sdt; tickTimers();
   if (MODE === 'live') liveTick(dt);
   stepFlight(dt); if (!flight || flight.landing) skyDome.position.y = 0;
@@ -4670,6 +4955,7 @@ function step(dt) {
     lift.open += (want - lift.open) * (1 - Math.exp(-dt * 6));
     lift.l.position.z = -1.8 - .275 - lift.open * .5; lift.r.position.z = -1.8 + .275 + lift.open * .5;
     lift.lamp.color.set(want ? '#59CD90' : '#2A3238'); }
+  screenT += dt; if (screensDirty || screenT > .5) { drawScreens(screensDirty); screensDirty = false; screenT = 0; }
   let n = 0; for (const a of agents) if (a.labelDirty && n < 4) { drawLabel(a); n++; }
   if (!renderer.xr.isPresenting) { keyPan(dt); updateCam(dt); updateShell(); }
   uiT += dt;
@@ -4678,9 +4964,11 @@ function step(dt) {
     const txt = ap.live ? `Claude Code asks you itself in ${Math.max(0, Math.ceil((ap.expiresAt - Date.now()) / 1000))}s` : `Demo auto-approves in ${Math.max(0, Math.ceil(ap.deadline - simTime))}s`;
     if (tEl.textContent !== txt) tEl.textContent = txt; }
 }
+let hiddenFrames = 0;
 renderer.setAnimationLoop(() => {
   const now = performance.now(), dt = Math.min(.05, (now - last) / 1000); last = now;
-  step(dt); renderer.render(scene, camera);
+  step(dt);
+  if (!review.open || ++hiddenFrames % 30 === 0) renderer.render(scene, camera);   // the review window covers the office: a frame now and then is enough
 });
 // Debug helper: fast-forward the office (runs even when the tab is in the background).
 window.agentOffice.advance = async seconds => { for (let t = 0; t < seconds; t += .05) { step(.05); for (let k = 0; k < 6; k++) await null; } renderer.render(scene, camera); };

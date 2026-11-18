@@ -141,6 +141,19 @@ Agents react to how a command went, not to finishing a reply:
 
 Each project's desk keeps what happened there. A plant grows after 1, 3, 7, 14 and 30 days of work, every merge adds a gold cup (the first becomes a big one at five), and a steel knot marks the times an agent got itself unstuck. The agent's card lists the dated moments under **Desk memories**. Memories hold counts and dates only, never prompts, commands or file names, and they are saved in this browser.
 
+## Reviewing what changed
+
+An agent's card shows what its checkout holds that you haven't reviewed, so you don't have to open a diff to find out:
+
+- **Files to review:** the count of changed files, including committed, uncommitted and untracked ones, since the checkout's base branch (`origin/HEAD`, else `main`, `master` or `develop`).
+- **Latest reported edit:** the file an agent last changed, with the lines it took out and put in. Hooks report an edit once it is made, so the lines appear whole.
+- **Review:** opens the file list beside one file's diff. The diff stays still while you read; if the file changes meanwhile, the window says so and lets you load the new version. A dot shows which agent reported an edit to a file.
+- **Mark reviewed:** remembers the versions you saw, in this browser. A file comes back when it changes again.
+
+Git reads the checkout, so agents working in one folder share one list, and the card says when that is the case. Claude Code reports the changed lines; other tools show the file name only. To keep code out of the office altogether, turn off **Customize → Show code in agent cards and reviews**: the office then keeps and shows file names only.
+
+The two screens in the war room show the same thing for the whole floor. The large one is a review board: one row per session with its files to review, its last command and the files it reported editing. The small one shows the floor's latest reported edit. Click a screen to bring the camera up close, click a row on the board to open that session's review, and press Escape or click away to go back. The screens are 3D only; the plan view doesn't show them.
+
 ## Approving from the office
 
 When an agent needs permission, it raises its hand and its floor pulses amber. If the office is open on your screen, you can answer right there: **Allow**, **Deny**, or **Answer in Claude Code**. You can do this from the agent's card or from the pop-up alert.

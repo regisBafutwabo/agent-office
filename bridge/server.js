@@ -12,6 +12,7 @@ import { watchMusic } from './music.js';
 import { scan, archivedChats } from './discover.js';
 import { pollOllama } from './ollama.js';
 import { listPacks, packFile } from './packs.js';
+import { changes, fileDiff, rootOf } from './changes.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = path.join(ROOT, 'web');
@@ -107,6 +108,14 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/state') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(snapshot())); return; }
   if (url.pathname === '/vendor/three.min.js') return sendFile(res, THREE_JS);
   if (VENDOR[url.pathname]) return sendFile(res, VENDOR[url.pathname]);
+  if (url.pathname === '/api/changes' || url.pathname === '/api/changes/diff') {   // what a session's checkout holds, for its card
+    const s = store.sessions.get(url.searchParams.get('session')), json = body => { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
+    if (!s) return json({ ok: false, error: 'That session has ended' });
+    if (url.pathname.endsWith('/diff')) return json(store.showCode ? await fileDiff(s.cwd, url.searchParams.get('path')) : { ok: false, error: 'Code is hidden in Customize' });
+    const c = await changes(s.cwd);
+    if (c.ok) { const others = [...store.sessions.values()].filter(o => o !== s); c.shared = (await Promise.all(others.map(async o => await rootOf(o.cwd) === c.root ? o.id : null))).filter(Boolean); }
+    return json(c);
+  }
   if (url.pathname === '/api/packs') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(listPacks())); return; }
   if (url.pathname.startsWith('/packs/')) { const file = packFile(url.pathname); if (!file) { res.writeHead(403); res.end(); return; } return sendFile(res, file); }
   if (url.pathname.startsWith('/api/app-icon/')) {               // real app icons for floor signs and the agent list
@@ -123,7 +132,7 @@ const server = http.createServer(async (req, res) => {
 
 const wss = new WebSocketServer({ server, path: '/ws', verifyClient: ({ req }) => originOk(req) });
 let music = null;                                               // what the rooftop DJ plays: your Spotify or Apple Music song
-const snapshot = () => ({ ...store.snapshot(), approvals: [...pending.values()].map(p => p.approval), music, musicSupported: process.platform === 'darwin' });
+const snapshot = () => ({ ...store.snapshot(), showCode: store.showCode, approvals: [...pending.values()].map(p => p.approval), music, musicSupported: process.platform === 'darwin' });
 // Office pages report whether they're visible; requests are only held while at least one is.
 const watchers = () => [...wss.clients].filter(c => c.readyState === 1 && c.visible).length;
 function broadcast(msg) {
@@ -135,6 +144,10 @@ wss.on('connection', ws => {
   ws.on('message', raw => {
     let msg; try { msg = JSON.parse(raw); } catch { return; }
     if (msg.type === 'presence') ws.visible = !!msg.visible;
+    if (msg.type === 'code') {                                     // "Show code" in Customize: off drops what was kept, too
+      store.showCode = !!msg.show; if (!store.showCode) for (const e of store.recent) delete e.edit;
+      broadcast({ type: 'code', show: store.showCode });
+    }
     if (msg.type === 'music') ws.music = !!msg.on;                // the viewer turned "Play my music" on or off at the rooftop
     if (msg.type === 'focus') {                                    // "Open in …" from the agent card
       const s = store.sessions.get(msg.sessionId);

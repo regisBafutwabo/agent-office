@@ -244,6 +244,8 @@ pub struct Store {
     codex_ids: HashSet<String>,
     /// (session id, agent id) → when that subagent reported SubagentStop.
     stopped_subs: HashMap<(String, String), u64>,
+    /// "Show code" turned off in Customize: edited lines are never kept or sent, only file names.
+    hide_code: bool,
 }
 
 fn set_status(s: &mut Session, sub: Option<usize>, status: &str, activity: String) {
@@ -392,7 +394,22 @@ impl Store {
     }
 
     /// Same as `ingest`, for a payload already translated from another tool by adapters.rs.
+    pub fn show_code(&self) -> bool {
+        !self.hide_code
+    }
+
+    /// Turning it off drops the lines already kept, too.
+    pub fn set_show_code(&mut self, show: bool) {
+        self.hide_code = !show;
+        if !show {
+            for e in self.recent.iter_mut() {
+                if let Some(o) = e.as_object_mut() { o.remove("edit"); }
+            }
+        }
+    }
+
     pub fn ingest_from(&mut self, p: &Value, entrypoint: Option<&str>, project_dir: Option<&str>, agent: &str, origin: Origin) -> Option<Value> {
+        let hide_code = self.hide_code;
         let kind = str_of(p, "hook_event_name");
         let sid = str_of(p, "session_id");
         if kind.is_empty() || sid.is_empty() {
@@ -540,6 +557,9 @@ impl Store {
                 e.insert("tool".into(), tool.into());
                 e.insert("summary".into(), summary.clone().into());
                 e.insert("failed".into(), failed.into());
+                if !failed && !hide_code {
+                    if let Some(edit) = crate::changes::edit_of(tool, p.get("tool_input").unwrap_or(&Value::Null)) { e.insert("edit".into(), edit); }
+                }
                 set_status(s, sub, "thinking", if failed { format!("{tool} failed") } else { "Thinking".into() });
                 if !failed && is_merge(tool, p.get("tool_input").unwrap_or(&Value::Null)) {
                     e.insert("merged".into(), true.into());
@@ -560,8 +580,11 @@ impl Store {
                 e.insert("message".into(), message.clone().into());
                 e.insert("notificationType".into(), if nt.is_empty() { Value::Null } else { nt.into() });
                 if nt == "permission_prompt" {
-                    s.status = "waiting".into();
-                    s.activity = if message.is_empty() { "Needs your permission".into() } else { message };
+                    // The prompt names no agent. When a subagent has just asked, it's that subagent's, and the session itself isn't blocked.
+                    if !s.subagents.iter().any(|a| a.status == "waiting") {
+                        s.status = "waiting".into();
+                        s.activity = if message.is_empty() { "Needs your permission".into() } else { message };
+                    }
                 } else if nt == "idle_prompt" {
                     s.status = "idle".into();
                     s.activity = "Waiting for your input".into();
@@ -750,6 +773,31 @@ mod tests {
         assert_eq!(st.waiting_count(), 1);
         st.ingest(&base(json!({ "hook_event_name": "SessionEnd", "reason": "exit" })), None, None);
         assert!(st.sessions.is_empty());
+    }
+
+    #[test]
+    fn a_subagents_permission_prompt_leaves_the_main_session_working() {
+        let mut st = Store::default();
+        st.ingest(&base(json!({ "hook_event_name": "PreToolUse", "tool_name": "Agent", "tool_input": { "subagent_type": "Explore", "description": "Look around" } })), None, None);
+        st.ingest(&base(json!({ "hook_event_name": "SubagentStart", "agent_id": "x1", "agent_type": "Explore" })), None, None);
+        st.ingest(&base(json!({ "hook_event_name": "PermissionRequest", "agent_id": "x1", "tool_name": "Bash", "tool_input": { "command": "make test" } })), None, None);
+        st.ingest(&base(json!({ "hook_event_name": "Notification", "notification_type": "permission_prompt", "message": "Claude needs your permission to use Bash" })), None, None);
+        assert_eq!(st.sessions[0].status, "working");
+        assert_eq!(st.waiting_count(), 1);
+        st.ingest(&base(json!({ "hook_event_name": "PostToolUse", "agent_id": "x1", "tool_name": "Bash", "tool_input": { "command": "make test" } })), None, None);
+        assert_eq!(st.waiting_count(), 0);
+    }
+
+    #[test]
+    fn edited_lines_ride_on_a_finished_edit_and_not_at_all_once_code_is_hidden() {
+        let mut st = Store::default();
+        let post = |kind: &str| base(json!({ "hook_event_name": kind, "tool_name": "Edit", "tool_input": { "file_path": "/Users/me/code/shop/a.js", "old_string": "x = 1", "new_string": "x = 2" } }));
+        assert_eq!(st.ingest(&post("PostToolUse"), None, None).unwrap()["edit"], json!({ "del": ["x = 1"], "add": ["x = 2"], "more": 0 }));
+        assert!(st.ingest(&post("PreToolUse"), None, None).unwrap().get("edit").is_none());
+        assert!(st.ingest(&post("PostToolUseFailure"), None, None).unwrap().get("edit").is_none());
+        st.set_show_code(false);
+        assert!(st.ingest(&post("PostToolUse"), None, None).unwrap().get("edit").is_none());
+        assert!(st.snapshot()["recent"].as_array().unwrap().iter().all(|e| e.get("edit").is_none()));
     }
 
     #[test]

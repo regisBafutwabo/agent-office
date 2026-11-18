@@ -2,6 +2,7 @@
 // and answers permission requests you allow or deny from the office.
 // Same endpoints as bridge/server.js, so phones and VR headsets can connect to it too.
 use crate::adapters;
+use crate::changes;
 use crate::discover;
 use crate::focus;
 use crate::music;
@@ -96,6 +97,8 @@ pub fn router(port: u16, on_change: OnChange) -> Router {
         .route("/hook", post(hook))
         .route("/permission", post(permission))
         .route("/api/state", get(state_json))
+        .route("/api/changes", get(changes_json))
+        .route("/api/changes/diff", get(changes_diff))
         .route("/api/log", post(client_log))
         .route("/api/app-icon/{file}", get(app_icon))
         .route("/api/setup", get(setup_status))
@@ -343,8 +346,39 @@ async fn client_log(body: Bytes) -> StatusCode {
     StatusCode::NO_CONTENT
 }
 
+/// What a session's checkout holds, for its card. Git runs off the runtime and never under the store's lock.
+async fn changes_json(State(st): State<AppState>, Query(query): Query<HashMap<String, String>>) -> Json<Value> {
+    let found = {
+        let store = st.store.lock().unwrap();
+        store.sessions.iter().find(|s| Some(&s.id) == query.get("session"))
+            .map(|s| (s.cwd.clone(), store.sessions.iter().filter(|o| o.id != s.id).map(|o| (o.id.clone(), o.cwd.clone())).collect::<Vec<_>>()))
+    };
+    let Some((cwd, others)) = found else { return Json(json!({ "ok": false, "error": "That session has ended" })) };
+    let read = tokio::task::spawn_blocking(move || {
+        let mut c = changes::changes(&cwd);
+        if c["ok"] == true {
+            let root = c["root"].as_str().unwrap_or("").to_string();
+            c["shared"] = others.iter().filter(|(_, cwd)| changes::root_of(cwd).as_deref() == Some(root.as_str())).map(|(id, _)| id.clone()).collect::<Vec<_>>().into();
+        }
+        c
+    });
+    Json(read.await.unwrap_or_else(|_| json!({ "ok": false, "error": "Git could not read this checkout" })))
+}
+
+async fn changes_diff(State(st): State<AppState>, Query(query): Query<HashMap<String, String>>) -> Json<Value> {
+    let (cwd, show) = {
+        let store = st.store.lock().unwrap();
+        (store.sessions.iter().find(|s| Some(&s.id) == query.get("session")).map(|s| s.cwd.clone()), store.show_code())
+    };
+    let Some(cwd) = cwd else { return Json(json!({ "ok": false, "error": "That session has ended" })) };
+    if !show { return Json(json!({ "ok": false, "error": "Code is hidden in Customize" })); }
+    let path = query.get("path").cloned().unwrap_or_default();
+    Json(tokio::task::spawn_blocking(move || changes::file_diff(&cwd, &path)).await.unwrap_or_else(|_| json!({ "ok": false, "error": "Git could not read this checkout" })))
+}
+
 fn snapshot(st: &Shared) -> Value {
-    let mut v = st.store.lock().unwrap().snapshot();
+    let (mut v, show_code) = { let mut store = st.store.lock().unwrap(); (store.snapshot(), store.show_code()) };
+    v["showCode"] = show_code.into();
     v["approvals"] = st.pending.lock().unwrap().values().map(|p| p.approval.clone()).collect::<Vec<_>>().into();
     v["music"] = st.music.lock().unwrap().clone();
     v["musicSupported"] = cfg!(target_os = "macos").into();
@@ -408,6 +442,12 @@ async fn client(mut socket: WebSocket, st: AppState) {
                             let reply = match result { Ok(m) => json!({ "type": "focus-result", "ok": true, "message": m }), Err(m) => json!({ "type": "focus-result", "ok": false, "message": m }) };
                             if socket.send(Message::Text(reply.to_string().into())).await.is_err() { break; }
                         }
+                        Some("code") => {
+                            // "Show code" in Customize
+                            let show = msg["show"].as_bool().unwrap_or(true);
+                            st.store.lock().unwrap().set_show_code(show);
+                            broadcast(&st, json!({ "type": "code", "show": show }));
+                        }
                         Some("decide") => {
                             let decision = match msg["decision"].as_str() { Some("allow") => "allow", Some("deny") => "deny", _ => "defer" };
                             let entry = msg["id"].as_str().and_then(|id| st.pending.lock().unwrap().remove(id));
@@ -455,5 +495,55 @@ async fn asset(uri: Uri) -> Response {
             ([(header::CONTENT_TYPE, content_type), (header::CACHE_CONTROL, "no-cache".to_string())], file.data.into_owned()).into_response()
         }
         None => (StatusCode::NOT_FOUND, "Not found").into_response(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Read, Write};
+
+    fn http(port: u16, method: &str, path: &str, body: &str) -> String {
+        let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        write!(s, "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}", body.len()).unwrap();
+        let mut out = String::new();
+        s.read_to_string(&mut out).unwrap();
+        out.split_once("\r\n\r\n").map(|(_, b)| b.to_string()).unwrap_or_default()
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_sessions_card_can_read_its_checkout_and_one_files_diff() {
+        let dir = std::env::temp_dir().join(format!("office-server-{}-{}", std::process::id(), store::now_ms()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let dir = std::fs::canonicalize(&dir).unwrap();
+        let git = |args: &[&str]| assert!(std::process::Command::new("git").args(args).current_dir(&dir)
+            .envs([("GIT_AUTHOR_NAME", "t"), ("GIT_AUTHOR_EMAIL", "t@t"), ("GIT_COMMITTER_NAME", "t"), ("GIT_COMMITTER_EMAIL", "t@t")]).output().unwrap().status.success());
+        git(&["init", "-q", "-b", "main"]);
+        std::fs::write(dir.join("a.txt"), "one\n").unwrap();
+        git(&["add", "."]); git(&["commit", "-q", "-m", "base"]);
+        std::fs::write(dir.join("a.txt"), "one\ntwo\n").unwrap();
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move { axum::serve(listener, router(port, Box::new(|_, _| {}))).await.unwrap() });
+        let cwd = dir.to_string_lossy().into_owned();
+        let read = tokio::task::spawn_blocking(move || {
+            let hook = json!({ "hook_event_name": "PostToolUse", "session_id": "card-test", "cwd": cwd, "tool_name": "Edit",
+                "tool_input": { "file_path": format!("{cwd}/a.txt"), "old_string": "one\n", "new_string": "one\ntwo\n" } });
+            http(port, "POST", "/hook", &hook.to_string());
+            let state: Value = serde_json::from_str(&http(port, "GET", "/api/state", "")).unwrap();
+            let list: Value = serde_json::from_str(&http(port, "GET", "/api/changes?session=card-test", "")).unwrap();
+            let diff: Value = serde_json::from_str(&http(port, "GET", "/api/changes/diff?session=card-test&path=a.txt", "")).unwrap();
+            let gone: Value = serde_json::from_str(&http(port, "GET", "/api/changes?session=nobody", "")).unwrap();
+            (state, list, diff, gone)
+        });
+        let (state, list, diff, gone) = read.await.unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(state["showCode"], true);
+        assert!(state["recent"].as_array().unwrap().iter().any(|e| e["edit"] == json!({ "del": [], "add": ["two"], "more": 0 })));
+        assert_eq!((list["ok"].clone(), list["files"][0]["path"].as_str(), list["files"][0]["add"].as_u64()), (json!(true), Some("a.txt"), Some(1)));
+        assert!(list["shared"].is_array());
+        assert!(diff["text"].as_str().unwrap().lines().any(|l| l == "+two"));
+        assert_eq!(gone["ok"], false);
     }
 }

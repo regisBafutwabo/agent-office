@@ -3,6 +3,7 @@ import path from 'node:path';
 import { validTty, validChat } from './focus.js';
 import { readTranscript, MESSAGE_CHARS } from './transcript.js';
 import { FOUND_WINDOW_MS } from './discover.js';
+import { editOf } from './changes.js';
 
 const STALE_MS = 6 * 60 * 60 * 1000;   // forget sessions that went silent (crashed without SessionEnd)
 const RECENT_MAX = 200;
@@ -62,7 +63,8 @@ export function isMerge(tool, input = {}) {
 
 export class Store {
   constructor(read = readTranscript) { this.sessions = new Map(); this.recent = []; this.read = read; this.transcriptChecks = new Map(); this.pendingTasks = new Map();
-    this.ended = new Set(); this.codexIds = new Set(); this.stoppedSubs = new Map(); }   // ended logs and imported hooks mustn't bring sessions back
+    this.ended = new Set(); this.codexIds = new Set(); this.stoppedSubs = new Map();
+    this.showCode = true; }   // off: edited lines are never kept or sent, only file names   // ended logs and imported hooks mustn't bring sessions back
 
   // Imported Claude hooks can report a Codex thread without the tool header. Only an exact
   // thread-id match proves it's the same session; sharing a project or terminal doesn't.
@@ -243,13 +245,15 @@ export class Store {
         e.tool = p.tool_name; e.summary = summarizeTool(p.tool_name, p.tool_input, s.cwd); e.failed = type === 'PostToolUseFailure';
         target.status = 'thinking'; target.activity = e.failed ? `${e.tool} failed` : 'Thinking'; target.tool = null;
         if (!e.failed && isMerge(e.tool, p.tool_input)) { e.merged = true; s.merged = true; }
+        if (!e.failed && this.showCode) { const edit = editOf(e.tool, p.tool_input); if (edit) e.edit = edit; }
         break;
       case 'PermissionRequest':
         e.tool = p.tool_name; e.summary = summarizeTool(p.tool_name, p.tool_input, s.cwd);
         target.status = 'waiting'; target.activity = `Needs permission: ${e.tool}${e.summary ? ' ' + e.summary : ''}`; break;
       case 'Notification':
         e.message = clip(p.message, 160); e.notificationType = p.notification_type || null;
-        if (e.notificationType === 'permission_prompt') { s.status = 'waiting'; s.activity = e.message || 'Needs your permission'; }
+        // The prompt names no agent. When a subagent has just asked, it's that subagent's, and the session itself isn't blocked.
+        if (e.notificationType === 'permission_prompt') { if (!Object.values(s.subagents).some(x => x.status === 'waiting')) { s.status = 'waiting'; s.activity = e.message || 'Needs your permission'; } }
         else if (e.notificationType === 'idle_prompt') { s.status = 'idle'; s.activity = 'Waiting for your input'; }
         break;
       case 'Stop': s.status = 'done'; s.activity = s.merged ? 'Finished · merged' : 'Finished'; s.tool = null; break;
