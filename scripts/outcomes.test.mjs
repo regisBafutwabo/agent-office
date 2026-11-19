@@ -45,3 +45,14 @@ test('old moments drop off but the counts stay', () => {
   assert.equal(run('d.moments.length'), run('MOMENTS_MAX'));
   assert.equal(run('d.merges'), run('MOMENTS_MAX') + 5);
 });
+
+test('a reaction bubble names the command in a few words, and how long it ran', () => {
+  assert.equal(run(`cmdShort('npm test')`), 'npm test');
+  assert.equal(run(`cmdShort('cd api && CI=1 uv run pytest -x tests/')`), 'uv run pytest');
+  assert.equal(run(`cmdShort('/usr/local/bin/cargo build --release | tail -5')`), 'cargo build --release'.split(' --')[0]);
+  assert.equal(run(`cmdShort('export A=1; make e2e')`), 'make e2e');
+  assert.equal(run(`cmdShort('')`), '');
+  assert.ok(run(`cmdShort('averyveryverylongcommandname another')`).length <= 24);
+  assert.equal(run(`fmtDur(42000)`), '42s');
+  assert.equal(run(`fmtDur(185000)`), '3m 5s');
+});
