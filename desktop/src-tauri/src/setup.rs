@@ -34,7 +34,7 @@ impl Status {
 }
 
 fn home() -> PathBuf { PathBuf::from(std::env::var_os("HOME").unwrap_or_default()) }
-pub fn support_dir() -> PathBuf { home().join("Library/Application Support/Agent Office") }
+pub fn support_dir() -> PathBuf { crate::auth::data_dir() }
 fn hook_script() -> PathBuf { support_dir().join("hook.sh") }
 fn codex_hooks() -> PathBuf { home().join(".codex/hooks.json") }
 fn cursor_hooks() -> PathBuf { home().join(".cursor/hooks.json") }
@@ -90,6 +90,32 @@ pub fn update_plugin_if_newer() -> Option<String> {
     run_claude(&claude, &["plugin", "marketplace", "update", "agent-office"]).ok()?;
     run_claude(&claude, &["plugin", "update", PLUGIN_ID]).ok()?;
     Some(format!("Updated the Claude Code plugin from {installed} to {bundled}. New sessions use it."))
+}
+
+/// The first plugin that sends the office's hook key; older ones are refused (401) and their sessions can't appear.
+const FIRST_KEYED_PLUGIN: &str = "0.5.0";
+
+/// A plugin installed from elsewhere (a clone of the repo) that predates the hook key isn't updated by the app;
+/// say how to update it instead of letting its sessions silently vanish.
+pub fn outdated_plugin_notice() -> Option<String> {
+    let text = std::fs::read_to_string(home().join(".claude/plugins/installed_plugins.json")).ok()?;
+    outdated_plugin(&text).map(|v| format!("The Agent Office plugin for Claude Code is {v}, too old to report to this office. Update it: claude plugin marketplace update agent-office && claude plugin update {PLUGIN_ID}, then start new sessions."))
+}
+
+fn outdated_plugin(installed: &str) -> Option<String> {
+    let v: Value = serde_json::from_str(installed).ok()?;
+    v["plugins"][PLUGIN_ID].as_array()?.iter().filter_map(|p| p["version"].as_str())
+        .find(|ver| version(ver) < version(FIRST_KEYED_PLUGIN)).map(String::from)
+}
+
+/// Codex and Cursor run the app's copy of hook.sh; keep it the one this app carries (it sends the hook key now),
+/// but only where it was installed already. Returns what it did, if anything.
+pub fn refresh_hook_script() -> Option<String> {
+    let path = hook_script();
+    let current = std::fs::read_to_string(&path).ok()?;
+    if current == HOOK_SH { return None; }
+    write_file(&path, HOOK_SH, true).ok()?;
+    Some("Updated the Codex and Cursor hook script.".into())
 }
 
 fn write_file(path: &Path, text: &str, executable: bool) -> Result<(), String> {
@@ -248,6 +274,17 @@ mod tests {
     fn leaves_a_broken_file_alone() {
         assert!(merge_hooks(Some("{ not json"), Tool::Codex, Path::new(SCRIPT)).is_err());
         assert!(merge_hooks(Some("[]"), Tool::Codex, Path::new(SCRIPT)).is_err());
+    }
+
+    #[test]
+    fn a_plugin_from_before_the_hook_key_is_reported() {
+        let installed = |v: &str| format!(r#"{{"plugins":{{"agent-office@agent-office":[{{"version":"{v}"}}]}}}}"#);
+        assert_eq!(outdated_plugin(&installed("0.4.2")).as_deref(), Some("0.4.2"));
+        assert_eq!(outdated_plugin(&installed("0.5.0")), None);
+        assert_eq!(outdated_plugin(&installed("0.10.0")), None);
+        assert_eq!(outdated_plugin("{}"), None);
+        assert!(version(FIRST_KEYED_PLUGIN) <= version(serde_json::from_str::<Value>(PLUGIN_JSON).unwrap()["version"].as_str().unwrap()), "the bundled plugin sends the key");
+        assert!(SEND_SH.contains("hook-token") && PERMISSION_SH.contains("hook-token") && HOOK_SH.contains("hook-token"));
     }
 
     #[test]

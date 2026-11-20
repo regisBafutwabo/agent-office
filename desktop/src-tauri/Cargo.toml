@@ -14,7 +14,9 @@ tauri-plugin-notification = "2"
 notify-rust = "4"
 tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
-tauri-plugin-updater = "2"
+# Without the default "zip" feature: this app publishes v2 updater artifacts (raw installers and .app.tar.gz, which
+# macOS unpacks with tar and flate2 regardless), so the Windows-only zip 4.x and its advisories aren't needed.
+tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "system-proxy"] }
 axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1", features = ["net", "sync", "macros", "rt-multi-thread", "time"] }
 serde = { version = "1", features = ["derive"] }
@@ -22,6 +24,12 @@ serde_json = { version = "1", features = ["preserve_order"] }
 rust-embed = "8"
 mime_guess = "2"
 tauri-plugin-dialog = "2"
+getrandom = "0.3"
+sha2 = "0.10"
+base64 = "0.22"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 # Bring the app forward before an update dialog (macOS opens a windowless app's alerts behind other apps).
 [target.'cfg(target_os = "macos")'.dependencies]

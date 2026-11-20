@@ -26,11 +26,19 @@ test('a missing packs folder lists nothing', () => {
   assert.deepEqual(listPacks(path.join(os.tmpdir(), 'no-such-packs-' + Date.now())), []);
 });
 
-test('pack files stay inside the packs folder', () => {
-  const dir = '/data/packs';
-  assert.equal(packFile('/packs/kenney/chair.glb', dir), '/data/packs/kenney/chair.glb');
-  assert.equal(packFile('/packs/kenney/Textures/colormap.png', dir), '/data/packs/kenney/Textures/colormap.png');
-  assert.equal(packFile('/packs/../secret.txt', dir), null);
-  assert.equal(packFile('/packs/kenney/%2e%2e/%2e%2e/etc/passwd', dir), null);
-  assert.equal(packFile('/packs/pack.json', dir), null);
+test('pack files stay inside the packs folder, are models or textures, and never follow a symlink out', () => {
+  const { dir, add } = tmpPacks();
+  try {
+    add('kenney'); fs.mkdirSync(path.join(dir, 'kenney', 'Textures'));
+    for (const f of ['chair.glb', 'Textures/colormap.png', 'page.html', 'icon.svg', 'run.js', 'pack.json']) fs.writeFileSync(path.join(dir, 'kenney', f), 'x');
+    const outside = path.join(path.dirname(dir), path.basename(dir) + '-outside.png'); fs.writeFileSync(outside, 'AUDIT_FIXTURE_ONLY');
+    fs.symlinkSync(outside, path.join(dir, 'kenney', 'escape.png'));
+    const real = fs.realpathSync(dir);
+    assert.deepEqual(packFile('/packs/kenney/chair.glb', dir), { file: path.join(real, 'kenney/chair.glb'), type: 'model/gltf-binary' });
+    assert.equal(packFile('/packs/kenney/Textures/colormap.png', dir).type, 'image/png');
+    for (const p of ['/packs/../secret.txt', '/packs/kenney/%2e%2e/%2e%2e/etc/passwd', '/packs/pack.json', '/packs/kenney/page.html', '/packs/kenney/icon.svg',
+      '/packs/kenney/run.js', '/packs/kenney/pack.json', '/packs/kenney/escape.png', '/packs/kenney/missing.glb', '/packs/kenney/%ZZ.glb', '/packs/kenney/a%00.glb'])
+      assert.equal(packFile(p, dir), null, p);
+    fs.rmSync(outside);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

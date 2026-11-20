@@ -72,7 +72,7 @@ When a newer version of the app carries a newer plugin, the app updates the plug
    npm start
    ```
 
-   Then open <http://localhost:4747>. The office runs as long as that terminal is open.
+   Then open the link it prints (`http://localhost:4747/#k=…`). The link carries the office's key, so keep it to yourself; your browser remembers the key after the first visit. The office runs as long as that terminal is open.
 
    **Or build the Mac app:**
 
@@ -110,7 +110,8 @@ Don't run the browser office and the desktop app at once: they use the same port
 If nothing shows up, ask the office what it knows:
 
 ```bash
-curl -s http://localhost:4747/api/state
+KEY="$HOME/Library/Application Support/Agent Office/ui-token"   # ~/.config/agent-office/ui-token on Linux
+curl -s -H "Authorization: Bearer $(cat "$KEY")" http://localhost:4747/api/state
 ```
 
 - `"sessions":[]`: the hooks aren't reaching the office. See [Troubleshooting](#troubleshooting).
@@ -174,6 +175,17 @@ To use a different port, set `AGENT_OFFICE_PORT` for both the office and your ag
 
 **The office says "Demo".**
 It couldn't reach the server within a few seconds. Make sure you opened <http://localhost:4747>, not a saved file or the claude.ai preview.
+
+**The office says it needs its key.**
+Only pages holding the office's key can see your sessions or answer permission requests. Open it from the menu-bar icon (**Open Agent Office** or **Open in browser**, which signs the browser in with a one-time link, whichever office holds the port), or with the link `npm start` prints. The key lives in `ui-token` in the data folder (`~/Library/Application Support/Agent Office` on a Mac, `~/.config/agent-office` on Linux); delete that file and restart the office to change it. Hooks use their own key, `hook-token`, in the same folder.
+
+**Sessions stopped showing up after updating, or the office says your hooks need updating.**
+Since plugin 0.5.0 the office only accepts events that carry its hook key. Older hooks are refused, and the office says so (a notification from the app, a message in the office and in the `npm start` terminal). Permission requests from old hooks still fall back to Claude Code's own dialog.
+- **Desktop app, plugin installed from the app:** the app updates the plugin by itself at launch. Start new sessions afterwards; sessions that were already running keep the old hooks until they restart.
+- **Plugin installed from a clone of this repo:** `git pull`, then `claude plugin marketplace update agent-office && claude plugin update agent-office@agent-office`, and start new sessions.
+- **Codex or Cursor connected from the app:** the app refreshes its copy of `hook.sh` at launch. If you connected them from a clone, `git pull` updates `adapters/hook.sh`.
+- **OpenCode or Amp:** copy the plugin file from `adapters/` again.
+- **"Sent a key this office doesn't know":** the hooks read a different data folder from the office's. If you set `AGENT_OFFICE_DATA`, set it for your agents too.
 
 **Open chat brings the app forward but not the chat.**
 - **Claude:** needs plugin 0.4.0 or newer and a session started after connecting.

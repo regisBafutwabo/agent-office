@@ -14,6 +14,8 @@ const CACHE: Duration = Duration::from_secs(2);
 const MAX_FILES: usize = 300;
 /// Characters of one file's diff.
 const MAX_DIFF: usize = 200_000;
+/// Bytes read for it, git's output or a new file, before it is cut to MAX_DIFF characters.
+const MAX_READ: usize = 4 * MAX_DIFF;
 /// Untracked files larger than this don't get their lines counted.
 const COUNT_BYTES: u64 = 256 * 1024;
 const EDIT_LINES: usize = 6;
@@ -67,20 +69,31 @@ pub fn inside_root(root: &Path, rel: &str) -> Option<PathBuf> {
 
 /// Git's output, or whether it ran out of time.
 fn git(cwd: &Path, args: &[&str]) -> Result<String, bool> {
-    let mut child = Command::new("git").args(args).current_dir(cwd).env("GIT_OPTIONAL_LOCKS", "0")
+    git_upto(cwd, args, usize::MAX).map(|(out, _)| out)
+}
+/// At most `limit` bytes of git's output, and whether there was more (git is stopped then).
+/// Paths are always literal, so a file named like a pathspec (":(glob)*") is only ever that file.
+fn git_upto(cwd: &Path, args: &[&str], limit: usize) -> Result<(String, bool), bool> {
+    let mut child = Command::new("git").args(args).current_dir(cwd).env("GIT_OPTIONAL_LOCKS", "0").env("GIT_LITERAL_PATHSPECS", "1")
         .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().map_err(|_| false)?;
-    let mut out = child.stdout.take().ok_or(false)?;
-    let reader = std::thread::spawn(move || { let mut buf = Vec::new(); let _ = out.read_to_end(&mut buf); buf });
+    let out = child.stdout.take().ok_or(false)?;
+    let reader = std::thread::spawn(move || { let mut buf = Vec::new(); let _ = out.take(limit.saturating_add(1) as u64).read_to_end(&mut buf); buf });
     let started = Instant::now();
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(s)) => break s,
-            Ok(None) if started.elapsed() < GIT_TIMEOUT => std::thread::sleep(Duration::from_millis(10)),
-            _ => { let _ = child.kill(); let _ = child.wait(); return Err(true); }
-        }
-    };
+    let stop = |child: &mut std::process::Child| { let _ = child.kill(); let _ = child.wait(); };
+    while !reader.is_finished() {
+        if started.elapsed() >= GIT_TIMEOUT { stop(&mut child); return Err(true); }
+        std::thread::sleep(Duration::from_millis(10));
+    }
     let buf = reader.join().map_err(|_| false)?;
-    if status.success() { Ok(String::from_utf8_lossy(&buf).into_owned()) } else { Err(false) }
+    if buf.len() > limit { stop(&mut child); return Ok((String::from_utf8_lossy(&buf[..limit]).into_owned(), true)); }
+    loop {
+        match child.try_wait() {
+            Ok(Some(s)) if s.success() => return Ok((String::from_utf8_lossy(&buf).into_owned(), false)),
+            Ok(Some(_)) => return Err(false),
+            Ok(None) if started.elapsed() < GIT_TIMEOUT => std::thread::sleep(Duration::from_millis(10)),
+            _ => { stop(&mut child); return Err(true); }
+        }
+    }
 }
 fn quiet(cwd: &Path, args: &[&str]) -> String {
     git(cwd, args).map(|s| s.trim().to_string()).unwrap_or_default()
@@ -99,15 +112,17 @@ fn base_of(root: &Path) -> (String, Option<String>) {
 }
 
 /// A fingerprint that changes when the file does, so "reviewed" can mean "reviewed this version".
+/// symlink_metadata, here and below: a symlink in the checkout is described, never followed.
 fn sig_of(abs: &Path, add: &Value, del: &Value) -> String {
-    match std::fs::metadata(abs) {
+    match std::fs::symlink_metadata(abs) {
         Ok(m) => format!("{add}:{del}:{}:{}", m.len(), m.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_millis()).unwrap_or(0)),
         Err(_) => format!("{add}:{del}:gone"),
     }
 }
 fn count_lines(abs: &Path) -> Option<u64> {
-    if std::fs::metadata(abs).ok()?.len() > COUNT_BYTES { return None; }
-    let buf = std::fs::read(abs).ok()?;
+    let meta = std::fs::symlink_metadata(abs).ok()?;
+    if !meta.is_file() || meta.len() > COUNT_BYTES { return None; }
+    let (buf, _) = read_no_follow(abs, COUNT_BYTES as usize).ok()?;
     if buf.contains(&0) { return None; }
     Some(buf.iter().filter(|b| **b == b'\n').count() as u64 + u64::from(buf.last().is_some_and(|b| *b != b'\n')))
 }
@@ -163,22 +178,49 @@ pub fn changes(cwd: &str) -> Value {
     v
 }
 
+/// Up to `max` bytes of a regular file, and whether it holds more. A symlink as its last component is refused.
+fn read_no_follow(abs: &Path, max: usize) -> std::io::Result<(Vec<u8>, bool)> {
+    let mut opts = std::fs::OpenOptions::new();
+    opts.read(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::custom_flags(&mut opts, libc::O_NOFOLLOW);
+    let f = opts.open(abs)?;
+    let meta = f.metadata()?;
+    if !meta.is_file() { return Err(std::io::Error::other("not a file")); }
+    let mut buf = Vec::with_capacity((meta.len() as usize).min(max));
+    f.take(max as u64).read_to_end(&mut buf)?;
+    Ok((buf, meta.len() > max as u64))
+}
+
+/// A new file's text, read without leaving the checkout: symlinks, here or in a folder above, are not followed.
+fn new_file(root: &Path, abs: &Path) -> Result<(String, bool), &'static str> {
+    let meta = std::fs::symlink_metadata(abs).map_err(|_| "That file is gone")?;
+    if meta.file_type().is_symlink() { return Ok(("Symbolic link".into(), false)); }
+    if !std::fs::canonicalize(abs).map_err(|_| "That file is gone")?.starts_with(root) { return Err("Not a file in this checkout"); }
+    let (buf, more) = read_no_follow(abs, MAX_READ).map_err(|_| "That file is gone")?;
+    if buf.contains(&0) { return Ok(("Binary file".into(), false)); }
+    let body = String::from_utf8_lossy(&buf);
+    Ok((format!("@@ new file @@\n{}", body.strip_suffix('\n').unwrap_or(&body).split('\n').map(|l| format!("+{l}")).collect::<Vec<_>>().join("\n")), more))
+}
+
+/// Only a file the card lists can be shown: nothing ignored, unchanged, or outside the checkout.
 pub fn file_diff(cwd: &str, rel: &str) -> Value {
     let c = changes(cwd);
     if c["ok"] != true { return c; }
     let root = PathBuf::from(c["root"].as_str().unwrap_or(""));
-    let Some(abs) = inside_root(&root, rel) else { return json!({ "ok": false, "error": "Not a file in this checkout" }) };
-    let mut text = git(&root, &["diff", "--no-renames", c["baseSha"].as_str().unwrap_or("HEAD"), "--", rel]).unwrap_or_default();
-    if text.is_empty() {
-        // untracked: the whole file is new
-        let Ok(buf) = std::fs::read(&abs) else { return json!({ "ok": false, "error": "That file is gone" }) };
-        text = if buf.contains(&0) { "Binary file".into() } else {
-            let body = String::from_utf8_lossy(&buf);
-            format!("@@ new file @@\n{}", body.strip_suffix('\n').unwrap_or(&body).split('\n').map(|l| format!("+{l}")).collect::<Vec<_>>().join("\n"))
-        };
-    }
-    let truncated = text.chars().count() > MAX_DIFF;
-    json!({ "ok": true, "path": rel, "text": if truncated { text.chars().take(MAX_DIFF).collect::<String>() } else { text }, "truncated": truncated })
+    let listed = c["files"].as_array().and_then(|files| files.iter().find(|f| f["path"].as_str() == Some(rel)));
+    let (Some(f), Some(abs)) = (listed, inside_root(&root, rel)) else { return json!({ "ok": false, "error": "Not a changed file in this checkout" }) };
+    let (text, more) = if f["status"] == "untracked" {
+        match new_file(&root, &abs) { Ok(t) => t, Err(e) => return json!({ "ok": false, "error": e }) }
+    } else {
+        match git_upto(&root, &["diff", "--no-renames", c["baseSha"].as_str().unwrap_or("HEAD"), "--", rel], MAX_READ) {
+            Ok((t, more)) if t.is_empty() => ("No line changes".into(), more),
+            Ok(t) => t,
+            Err(_) => return json!({ "ok": false, "error": "Git could not read this file" }),
+        }
+    };
+    let truncated = more || text.chars().count() > MAX_DIFF;
+    json!({ "ok": true, "path": rel, "text": text.chars().take(MAX_DIFF).collect::<String>(), "truncated": truncated })
 }
 
 #[cfg(test)]

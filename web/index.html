@@ -624,9 +624,27 @@ body.live .speed-top, body.live .demo-only{display:none}
 </div>
 
 <script>
+// The office's key. It arrives once in the address, #k=… (the app's window, or the link the bridge prints) or a
+// one-time #code=… (the app's "Open in browser"), is kept in this browser only, and leaves the address at once.
+const officeAuth = (() => {
+  const KEY = 'agent-office:key', hash = new URLSearchParams(location.hash.slice(1)), given = hash.get('k'), code = hash.get('code');
+  let key = ''; try { key = localStorage.getItem(KEY) || ''; } catch (_) {}
+  const keep = k => { key = k; try { localStorage.setItem(KEY, k); } catch (_) {} };
+  if (given || code) history.replaceState(null, '', location.pathname + location.search);
+  // A link pasted into an office tab that is already open changes only the fragment; start over to use it.
+  addEventListener('hashchange', () => { if (/(^|&)(k|code)=/.test(location.hash.slice(1))) location.reload(); });
+  if (given) keep(given);
+  const ready = !code ? Promise.resolve() : fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) })
+    .then(r => r.ok ? r.json() : null).then(d => { if (d && typeof d.token === 'string') keep(d.token); }).catch(() => {});
+  return {
+    ready,
+    fetch: (url, o = {}) => ready.then(() => fetch(url, { ...o, headers: key ? { ...o.headers, Authorization: 'Bearer ' + key } : o.headers })),
+    protocols: () => key ? ['agent-office', 'agent-office.token.' + key] : ['agent-office'],
+  };
+})();
 // Report page errors and the frame rate to the local server so they show up in its log (no-op on claude.ai).
 (() => {
-  const report = data => { try { if (/^https?:$/.test(location.protocol) && !location.host.endsWith('claude.ai')) navigator.sendBeacon('/api/log', JSON.stringify(data)); } catch (_) {} };
+  const report = data => { try { if (/^https?:$/.test(location.protocol) && !location.host.endsWith('claude.ai')) officeAuth.fetch('/api/log', { method: 'POST', body: JSON.stringify(data), keepalive: true }).catch(() => {}); } catch (_) {} };
   addEventListener('error', e => report({ kind: 'error', message: e.message, at: `${e.filename}:${e.lineno}:${e.colno}` }));
   addEventListener('unhandledrejection', e => report({ kind: 'rejection', message: String(e.reason && e.reason.stack || e.reason) }));
   addEventListener('load', () => { let frames = 0; const t0 = performance.now(); const count = () => { frames++; if (performance.now() - t0 < 3000) requestAnimationFrame(count); else report({ kind: 'fps', fps: Math.round(frames / 3), webgl: !!document.createElement('canvas').getContext('webgl'), ua: navigator.userAgent }); }; requestAnimationFrame(count); });
@@ -1721,7 +1739,7 @@ async function setCity(id) {
     setCityAtmosphere(id); cityKey = id; uiPrefs.city = id; saveUi(); $('#city-credit').hidden = id === 'generic';
     $('#city-picker').close(); $('#city-status').hidden = true; buildCityChoices(); return true;
   } catch (err) {
-    try { if (/^https?:$/.test(location.protocol)) navigator.sendBeacon('/api/log', JSON.stringify({ kind: 'city', id, message: String(err && err.stack || err) })); } catch (_) {}
+    try { if (/^https?:$/.test(location.protocol)) officeAuth.fetch('/api/log', { method: 'POST', body: JSON.stringify({ kind: 'city', id, message: String(err && err.stack || err) }), keepalive: true }).catch(() => {}); } catch (_) {}
     if (request !== cityRequest) return false;
     clearCity(); buildGenericCity(); batchGenericCity(); cityKey = 'generic'; setCityAtmosphere('generic'); $('#city-credit').hidden = true; buildCityChoices();
     const message = location.protocol === 'file:' ? 'Open the office through its local server to load real cities.' : 'Couldn’t load that city. Showing Generic city.'; toast(message);
@@ -2875,7 +2893,7 @@ function sendFaces(a) {
     const url = faceShot(a, mood), k = `${a.sessionId}|${mood}`;
     if (!url || sentFaces.get(k) === url) continue;
     sentFaces.set(k, url);
-    fetch(url).then(r => r.blob()).then(png => fetch(`/api/face/${encodeURIComponent(a.sessionId)}/${mood}`, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: png })).catch(() => {});
+    fetch(url).then(r => r.blob()).then(png => officeAuth.fetch(`/api/face/${encodeURIComponent(a.sessionId)}/${mood}`, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: png })).catch(() => {});
   }
 }
 
@@ -3835,7 +3853,7 @@ function renderPacks() {
   $('#pack-empty').hidden = packList.length > 0;
 }
 async function loadPacks() {
-  try { const r = await fetch('/api/packs'); if (!r.ok) throw 0; packList = await r.json(); } catch (_) { $('#pack-setting').hidden = true; return; }
+  try { const r = await officeAuth.fetch('/api/packs'); if (!r.ok) throw 0; packList = await r.json(); } catch (_) { $('#pack-setting').hidden = true; return; }
   renderPacks();
   if (uiPrefs.pack && packList.some(p => p.id === uiPrefs.pack)) applyPack(uiPrefs.pack);
 }
@@ -4497,7 +4515,7 @@ async function loadChanges(m, force) {
   const st = chg.get(m.sessionId) || {}; chg.set(m.sessionId, st);
   if (st.busy || (!force && Date.now() - (st.at || 0) < CHG_POLL_MS)) return;
   st.busy = true; if (reviewing === m) renderReview();
-  try { st.data = await (await fetch('/api/changes?session=' + encodeURIComponent(m.sessionId))).json(); } catch (_) { st.data = { ok: false, error: 'The office server did not answer' }; }
+  try { st.data = await (await officeAuth.fetch('/api/changes?session=' + encodeURIComponent(m.sessionId))).json(); } catch (_) { st.data = { ok: false, error: 'The office server did not answer' }; }
   st.busy = false; st.at = Date.now(); m.chgStale = false;
   if (selected && mainOf(selected) === m) detailDirty = true;
   if (reviewing === m) renderReview();
@@ -4584,7 +4602,7 @@ async function showDiff(path) {
   rvDiff = { path, sig: f.sig, loading: true }; renderReview();
   let d;
   if (!m.live) { const e = DEMO_EDITS[hashStr(path) % DEMO_EDITS.length]; d = { ok: true, text: `@@ -${10 + hashStr(path) % 80},6 +${10 + hashStr(path) % 80},7 @@\n   // demo: invented lines\n${e.del.map(l => '-' + l).join('\n')}${e.del.length ? '\n' : ''}${e.add.map(l => '+' + l).join('\n')}` }; }
-  else try { d = await (await fetch(`/api/changes/diff?session=${encodeURIComponent(m.sessionId)}&path=${encodeURIComponent(path)}`)).json(); } catch (_) { d = { ok: false, error: 'The office server did not answer' }; }
+  else try { d = await (await officeAuth.fetch(`/api/changes/diff?session=${encodeURIComponent(m.sessionId)}&path=${encodeURIComponent(path)}`)).json(); } catch (_) { d = { ok: false, error: 'The office server did not answer' }; }
   if (reviewing !== m || !rvDiff || rvDiff.path !== path) return;
   rvDiff = d.ok ? { path, sig: f.sig, text: d.text, truncated: d.truncated } : { path, sig: f.sig, error: d.error };
   renderReview(); $('#rv-diff').scrollTop = 0;
@@ -4765,8 +4783,23 @@ function onLiveEvent(e, replay) {
   setModeLine();
 }
 
+// Hooks from before the office had keys are refused, so their sessions can't appear; say what to update, once per kind.
+function onOutdatedHooks(hooks) {
+  if (!Array.isArray(hooks)) return;
+  const said = live.hookNotes || (live.hookNotes = new Set());
+  for (const h of hooks) {
+    const agent = String(h && h.agent || 'unknown'), k = agent + '|' + (h && h.reason);
+    if (said.has(k)) continue; said.add(k);
+    if (h.reason === 'wrong-key') { toast(`${agent} hooks sent a key this office doesn’t know, so their sessions can’t appear. If you set AGENT_OFFICE_DATA, set it for your agents too.`); continue; }
+    if (agent === 'claude-code') {
+      const fix = 'claude plugin marketplace update agent-office && claude plugin update agent-office@agent-office';
+      toast('Claude Code is reporting with an old Agent Office plugin, so its sessions can’t appear. Update the plugin, then start a new session.', 'Copy command', () => navigator.clipboard?.writeText(fix).then(() => toast('Copied. Run it in a terminal.'), () => toast(fix)));
+    } else toast(`${agent} hooks predate the office’s key, so their sessions can’t appear. Reconnect ${agent} from Connect agents, or git pull if they run this repo’s adapters/hook.sh.`);
+  }
+}
 function onSnapshot(msg) {
   if (!live.gotSnapshot) { live.gotSnapshot = true; rosterEl._html = null; uiDirty = true; setTimeout(setModeLine); }
+  onOutdatedHooks(msg.outdatedHooks);
   setCodeOn(msg.showCode !== false);
   musicSupported = !!msg.musicSupported; music = musicOn && msg.music || null; updateMusicBtn();
   const ids = new Set(msg.sessions.map(s => s.id));
@@ -4858,12 +4891,12 @@ function onApprovalResolved(msg) {
 const setup = { tools: null, busy: null };
 async function loadSetup() {
   if (setup.missing) return;
-  try { const r = await fetch('/api/setup'); if (r.status === 404) setup.missing = true; setup.tools = r.ok ? (await r.json()).tools : null; } catch (_) { setup.tools = null; }
+  try { const r = await officeAuth.fetch('/api/setup'); if (r.status === 404) setup.missing = true; setup.tools = r.ok ? (await r.json()).tools : null; } catch (_) { setup.tools = null; }
   renderSetup();
 }
 async function connectTool(id) {
   if (setup.busy) return; setup.busy = id; renderSetup();
-  try { const r = await fetch('/api/setup/' + encodeURIComponent(id), { method: 'POST' }); toast((await r.json()).message); }
+  try { const r = await officeAuth.fetch('/api/setup/' + encodeURIComponent(id), { method: 'POST' }); toast((await r.json()).message); }
   catch (_) { toast('Couldn’t reach the office server'); }
   setup.busy = null; loadSetup();
 }
@@ -4974,9 +5007,9 @@ $('#office-guide').addEventListener('keydown', e => { if (e.key === 'Escape') { 
 function connectLive() {
   document.body.classList.add('live'); setSpeed(1); setModeLine();
   let ws;
-  try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'); }
+  try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws', officeAuth.protocols()); }
   catch (_) { startDemo(); return; }
-  const fallback = setTimeout(() => { if (!live.everConnected) { try { ws.close(); } catch (_) {} startDemo(); } }, 2500);
+  const fallback = setTimeout(() => { if (!live.everConnected) { try { ws.close(); } catch (_) {} explainLocked(); startDemo(); } }, 2500);
   live.ws = ws;
   ws.onopen = () => { live.connected = live.everConnected = true; clearTimeout(fallback); setModeLine(); sendPresence(); loadSetup();
     if (musicOn) ws.send(JSON.stringify({ type: 'music', on: true }));
@@ -4987,12 +5020,18 @@ function connectLive() {
     else if (msg.type === 'code') setCodeOn(!!msg.show);
     else if (msg.type === 'music') music = musicOn && msg.music || null;
     else if (msg.type === 'setup') loadSetup();
-    else if (msg.type === 'approval') onApproval(msg.approval, true); else if (msg.type === 'approval-resolved') onApprovalResolved(msg); };
+    else if (msg.type === 'approval') onApproval(msg.approval, true); else if (msg.type === 'approval-resolved') onApprovalResolved(msg); else if (msg.type === 'hooks-outdated') onOutdatedHooks(msg.hooks); };
   ws.onclose = () => {
     clearTimeout(fallback);
-    if (!live.everConnected) { startDemo(); return; }
+    if (!live.everConnected) { explainLocked(); startDemo(); return; }
     live.connected = false; setModeLine(); updateMusicBtn(); setTimeout(connectLive, 2000);
   };
+}
+
+// A server that answers but refuses this browser's key: say how to open the office with it.
+function explainLocked() {
+  if (live.lockedSaid) return; live.lockedSaid = true;
+  officeAuth.fetch('/api/auth').then(r => { if (r.status === 401) toast('This office needs its key. Open it from the Agent Office menu (Open in browser), or with the link the office server printed. Showing the demo meanwhile.'); }).catch(() => {});
 }
 
 /* ---------- demo mode: simulated agents ---------- */
@@ -5047,7 +5086,7 @@ showDetailTab(uiPrefs.detailTab === 'activity' ? 'activity' : 'chat');
 applyScene(uiPrefs.theme in SCENES ? uiPrefs.theme : 'auto'); buildCustomize(); renderJSON(); layout(); loadPacks();
 if (Object.hasOwn(CITIES, uiPrefs.city)) setCity(uiPrefs.city);
 setView('3d'); Object.assign(cam, { theta: goal.theta, phi: goal.phi, radius: goal.radius }); cam.target.copy(goal.target); applyCam();
-if (MODE === 'demo' || !/^https?:$/.test(location.protocol)) startDemo(); else connectLive();
+if (MODE === 'demo' || !/^https?:$/.test(location.protocol)) startDemo(); else officeAuth.ready.then(connectLive);
 syncCrewButtons();
 if (!uiPrefs.guideDone && !uiPrefs.crew) openWelcome();
 else if (!Object.hasOwn(CITIES, uiPrefs.city)) { tourAfterCity = !uiPrefs.guideDone || params.has('tour'); $('#city-picker').showModal(); $('#city-choices [aria-pressed="true"]')?.focus(); }

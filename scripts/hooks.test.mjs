@@ -6,12 +6,14 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
-function runHook(relative, overrides = {}, args = []) {
+const KEY = 'ab'.repeat(32);
+function runHook(relative, overrides = {}, args = [], { key = true } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), 'office-hooks-'));
   try {
+    if (key) writeFileSync(path.join(dir, 'hook-token'), `X-Agent-Office-Token: ${KEY}\n`, { mode: 0o600 });
     const capture = path.join(dir, 'curl-args'), input = path.join(dir, 'payload');
     writeFileSync(path.join(dir, 'curl'), '#!/bin/sh\nprintf "%s\\n" "$@" > "$HOOK_CAPTURE"\ncat > "$HOOK_INPUT"\nprintf \'%s\' \'{"decision":"test"}\'\n', { mode: 0o755 });
-    const env = { ...process.env, PATH: `${dir}:/usr/bin:/bin`, HOOK_CAPTURE: capture, HOOK_INPUT: input };
+    const env = { ...process.env, PATH: `${dir}:/usr/bin:/bin`, HOOK_CAPTURE: capture, HOOK_INPUT: input, AGENT_OFFICE_DATA: dir };
     for (const name of ['CODEX_THREAD_ID', 'CODEX_SESSION_ID', 'CODEX_APP_TOOLS_PIPE_PATH', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDECODE']) delete env[name];
     Object.assign(env, overrides);
     const payload = JSON.stringify({ session_id: 'test-session', hook_event_name: 'UserPromptSubmit' });
@@ -51,4 +53,20 @@ test('the dedicated Codex adapter still reports once with the Codex identity', (
   assert.match(result.args, /X-Agent-Office-Agent: codex/);
   assert.equal(result.payload, result.original);
   assert.equal(result.stdout, '');
+});
+
+test('every hook sends the hook key from its file, never on the command line', () => {
+  for (const [hook, args] of [['../plugin/hooks/send.sh', []], ['../plugin/hooks/permission.sh', []], ['../adapters/hook.sh', ['codex']]]) {
+    const result = runHook(hook, {}, args);
+    assert.match(result.args, /^@.*\/hook-token$/m);
+    assert.ok(!result.args.includes(KEY));
+  }
+});
+
+test('with no hook key (the office never ran) hooks stay silent and Claude Code asks as usual', () => {
+  for (const [hook, args, stdout] of [['../plugin/hooks/send.sh', [], ''], ['../plugin/hooks/permission.sh', [], ''], ['../adapters/hook.sh', ['cursor'], '{}\n']]) {
+    const result = runHook(hook, {}, args, { key: false });
+    assert.equal(result.args, null);
+    assert.equal(result.stdout, stdout);
+  }
 });
