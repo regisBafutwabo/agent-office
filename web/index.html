@@ -4522,7 +4522,7 @@ function refreshBoard(all) {                     // you may have committed, stas
 }
 addEventListener('focus', () => refreshBoard(true));
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshBoard(true); });
-const codeLines = (del, add) => del.map(l => `<span class="ln del">- ${esc(l)}</span>`).join('') + add.map(l => `<span class="ln add">+ ${esc(l)}</span>`).join('');
+const codeLines = (del, add) => del.map(l => `<span class="ln del">${esc(l) || ' '}</span>`).join('') + add.map(l => `<span class="ln add">${esc(l) || ' '}</span>`).join('');
 function renderGlance(a) {
   const m = mainOf(a), el = $('#d-chg'), c = changesOf(m), le = m.lastEdit, has = c && c.ok && c.files.length > 0;
   if (m.live && !c) loadChanges(m);
@@ -4571,7 +4571,7 @@ function renderReview() {
   else if (rvDiff.loading) pane.innerHTML = '<p>Reading…</p>';
   else if (rvDiff.error) pane.innerHTML = `<p>${esc(rvDiff.error)}</p>`;
   else pane.innerHTML = (cur && cur.sig !== rvDiff.sig ? '<div class="stale">This file changed since you opened it.<button class="btn sm" id="rv-reload">Show the new version</button></div>' : '')
-    + `<div class="code">${rvDiff.text.split('\n').filter(l => !/^(diff --git |index |--- |\+\+\+ |new file mode|deleted file mode)/.test(l)).map(l => `<span class="ln ${l.startsWith('@@') ? 'hunk' : l[0] === '+' ? 'add' : l[0] === '-' ? 'del' : ''}">${esc(l) || ' '}</span>`).join('')}</div>`
+    + `<div class="code">${rvDiff.text.split('\n').filter(l => !/^(diff --git |index |--- |\+\+\+ |new file mode|deleted file mode)/.test(l)).map(l => `<span class="ln ${l.startsWith('@@') ? 'hunk' : l[0] === '+' ? 'add' : l[0] === '-' ? 'del' : ''}">${esc(/^[+ -]/.test(l) ? l.slice(1) : l) || ' '}</span>`).join('')}</div>`
     + (rvDiff.truncated ? '<p>This diff is long. The rest is in your editor.</p>' : '');
   const run = m.lastRun, runEl = $('#rv-run');
   runEl.innerHTML = run ? `<span class="${run.failed ? 'bad' : 'ok'}">${run.failed ? '✗ Last command failed' : '✓ Last command passed'}</span> · ${hm(run.at)} · one command, not a verdict on the checkout<b title="${esc(run.cmd)}">${esc(run.cmd)}</b>` : '';
