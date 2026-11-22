@@ -1,4 +1,5 @@
 function onLiveEvent(e, replay) {
+  if (!replay) logEvents([e]);
   if (e.replacesSessionId) {
     const duplicate = live.byId.get(e.replacesSessionId);
     if (duplicate) {
@@ -103,6 +104,8 @@ function onOutdatedHooks(hooks) {
   }
 }
 function onSnapshot(msg) {
+  const first = !live.gotSnapshot;
+  logEvents(msg.recent || [], true);
   if (!live.gotSnapshot) { live.gotSnapshot = true; rosterEl._html = null; uiDirty = true; setTimeout(setModeLine); }
   onOutdatedHooks(msg.outdatedHooks);
   setCodeOn(msg.showCode !== false);
@@ -130,9 +133,12 @@ function onSnapshot(msg) {
     const detail = e.prompt ? `"${e.prompt}"` : e.message || `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}` || e.type;
     emit(who, e.type, detail, e.at);
     if (e.type === 'PostToolUse') noteWork(who, e);              // so a reopened office still knows each agent's last edit
+    if (e.type === 'PreToolUse' && EDIT_TOOLS.has(e.tool)) noteEdit(who, e.summary, true, e.at);   // and which files two agents share
   }
+  restoreClashes();
   for (const ap of msg.approvals || []) onApproval(ap, false);   // requests still waiting for an answer
   setModeLine();
+  if (first) recapOnOpen();
 }
 
 function liveTick(dt) {

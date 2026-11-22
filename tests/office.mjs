@@ -40,4 +40,4 @@ export const open = async (page, office) => {
   await page.goto(`${office.url}/#k=${office.key}`);
   await expect(page.locator('body')).toHaveClass(/live/);
 };
-export const row = (page, name) => page.locator('#roster .agent-row', { hasText: name });
+export const row = (page, name) => page.locator('#roster .agent-row').filter({ has: page.locator(`.nm-t[title="${name}"]`) });

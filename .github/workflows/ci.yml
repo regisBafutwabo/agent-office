@@ -34,6 +34,22 @@ jobs:
       - run: npm audit --audit-level=high
       - run: npm test
 
+  browser:
+    name: Office page in a browser (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+
   desktop:
     name: Desktop app server tests (Rust)
     # macOS has the system libraries Tauri links against, so no extra setup is needed.

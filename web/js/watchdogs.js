@@ -10,19 +10,20 @@ const clashGeo = new THREE.CylinderGeometry(.03, .03, 1, 6).rotateX(Math.PI / 2)
 const fileKey = (a, file) => file.startsWith('/') ? file : `${(a.parent || a).cwd || ''}/${file}`;
 const clashesOf = a => clashes.filter(c => c.a === a || c.b === a);
 const gone = a => a.gone || a.leaving || a.exiting;
-function noteEdit(who, file, replay) {
+function noteEdit(who, file, replay, now = Date.now()) {
   if (!file) return;
-  const key = fileKey(who, file), now = Date.now(), m = edits.get(key) || new Map();
+  const key = fileKey(who, file), m = edits.get(key) || new Map();
   edits.set(key, m);
   for (const [o, t] of m) if (gone(o) || now - t > CLASH_MS) m.delete(o);
-  m.set(who, now);
+  m.set(who, Math.max(m.get(who) || 0, now));
   for (const o of m.keys()) if (o !== who) addClash(who, o, file, now, replay);
 }
-function addClash(a, b, file, now, replay) {
+function addClash(a, b, file, now, replay, since = now) {
+  if (Date.now() - now > CLASH_MS) return;
   const c = clashes.find(c => c.file === file && (c.a === a && c.b === b || c.a === b && c.b === a));
-  if (c) { c.at = now; return; }
+  if (c) { c.at = Math.max(c.at, now); c.since = Math.min(c.since, since); saveClashes(); return; }
   const mesh = new THREE.Mesh(clashGeo, clashMat); mesh.visible = false; scene.add(mesh);
-  clashes.push({ a, b, file, at: now, mesh }); uiDirty = true; detailDirty = true;
+  clashes.push({ a, b, file, at: now, since, mesh }); uiDirty = true; detailDirty = true; saveClashes();
   for (const x of [a, b]) emit(x, 'SameFile', `${file} · also edited by ${(x === a ? b : a).name}`);
   if (replay) return;
   toast(`${a.name} and ${b.name} are both editing ${file}. They may overwrite each other.`, 'Show me', () => select(a, true), a, 'waiting');
@@ -103,7 +104,7 @@ function liveMain(s, instant) {
 function liveSub(a, id, type, instant, task) {
   let sub = a.subs.get(id); if (sub && !(sub.gone && sub.leaving)) return sub;
   const fl = a.floor, home = subSeat(a, type);
-  sub = createAgent({ name: task || type || 'Subagent', kind: 'sub', subType: type || 'subagent', color: mix(a.color, '#ffffff', .35), home, parent: a, project: a.project, live: true, streak: 0, floor: fl });
+  sub = createAgent({ name: task || type || 'Subagent', kind: 'sub', agentId: id, subType: type || 'subagent', color: mix(a.color, '#ffffff', .35), home, parent: a, project: a.project, live: true, streak: 0, floor: fl });
   home.by = sub.id; sub.ws = home;
   if (instant) { sub.spot = home; sub.where = PLACE[home.type]; sub.g.position.set(home.x, 0, home.z); sub.yaw = sub.yawT = yawOf(home.face); }
   else { sub.spot = DOOR; sub.g.position.set(DOOR.x, 0, DOOR.z); sub.yaw = sub.yawT = -Math.PI / 2; sub.appear = 0; walkTo(sub, home).then(() => { sub.pose = poseFor(sub); }); }

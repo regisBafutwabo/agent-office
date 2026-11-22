@@ -158,10 +158,15 @@ function renderNeeds() {
       <span class="need-age" title="Waiting this long">${a.waitingSince ? ago(a.waitingSince) : ''}</span>
       <span class="need-acts">${acts}<button class="btn sm ghost" data-act="show" data-id="${a.id}">Show</button></span></div>`;
   }).join('');
-  needsEl.hidden = !list.length; appEl.classList.toggle('has-needs', !!list.length);
+  needsEl.hidden = !list.length;
   $('#needs-title').textContent = list.length === 1 ? '1 agent needs you' : `${list.length} agents need you`;
   if (html !== needsList._html) { needsList.innerHTML = html; needsList._html = html; }
-  document.documentElement.style.setProperty('--needs-h', needsEl.hidden ? '0px' : needsEl.offsetHeight + 'px');
+  fitTops();
+}
+function fitTops() {
+  const shown = !needsEl.hidden || !$('#recap').hidden;
+  appEl.classList.toggle('has-needs', shown);
+  document.documentElement.style.setProperty('--needs-h', shown ? $('#tops').offsetHeight + 'px' : '0px');
 }
 needsList.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return; const a = agents.find(x => x.id === b.dataset.id); if (!a) return;

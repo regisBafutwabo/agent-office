@@ -43,10 +43,17 @@
     </button>
   </header>
 
-  <section class="needs glass" id="needs" hidden aria-label="Agents that need you" aria-live="polite">
-    <div class="needs-head"><span class="dot" aria-hidden="true"></span><span id="needs-title">Needs you</span></div>
-    <div id="needs-list"></div>
-  </section>
+  <div class="tops" id="tops">
+    <section class="needs recap glass" id="recap" hidden aria-label="While you were away">
+      <div class="needs-head"><span id="recap-title">While you were away</span><button class="btn sm ghost" id="recap-close">Dismiss</button></div>
+      <div id="recap-list"></div>
+      <p class="recap-note" id="recap-note" hidden>Only the bridge's last 80 events are kept, so earlier activity isn't shown.</p>
+    </section>
+    <section class="needs glass" id="needs" hidden aria-label="Agents that need you" aria-live="polite">
+      <div class="needs-head"><span class="dot" aria-hidden="true"></span><span id="needs-title">Needs you</span></div>
+      <div id="needs-list"></div>
+    </section>
+  </div>
   <div class="wall-bar" id="wall-bar" aria-label="Every agent"></div>
   <button class="btn glass wall-exit" id="wall-exit" hidden>Exit wall mode</button>
 
@@ -234,6 +241,7 @@
 <script src="/js/outcomes.js"></script>
 <script src="/js/changes.js"></script>
 <script src="/js/events.js"></script>
+<script src="/js/recap.js"></script>
 <script src="/js/tour.js"></script>
 <script src="/js/connection.js"></script>
 <script src="/js/boot.js"></script>
