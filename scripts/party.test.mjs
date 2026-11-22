@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
-import { officeSource } from './office-source.mjs';
+import { between } from './office-source.mjs';
 import vm from 'node:vm';
 import test from 'node:test';
 
-const html=officeSource;
-const source=(start,end)=>html.slice(html.indexOf(start),html.indexOf(end));
+const source = between;
 function setup() {
   const context=vm.createContext({nightT:1,performance:{now:()=>1000}});
   vm.runInContext(source('const isParty =','const BPM ='),context);

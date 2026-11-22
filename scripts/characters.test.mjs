@@ -1,11 +1,10 @@
 import assert from 'node:assert/strict';
-import { officeSource } from './office-source.mjs';
+import { between } from './office-source.mjs';
 import vm from 'node:vm';
 import test from 'node:test';
 import THREE from 'three';
 
-const html = officeSource;
-const source = (start, end) => html.slice(html.indexOf(start), html.indexOf(end));
+const source = between;
 function setup() {
   const context = vm.createContext({ THREE, M: color => new THREE.MeshStandardMaterial({ color }) });
   vm.runInContext(source('const ANIMALS =', '// A look that stays'), context);
