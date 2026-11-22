@@ -1,8 +1,10 @@
 #!/usr/bin/env node
-// Records the README trailer (docs/images/trailer.mp4 and trailer.gif) from the demo office, in headless Chromium.
+// Records the README trailer (dist/trailer.mp4, 720p) from the demo office, in headless Chromium.
 //
 //   npm i --no-save playwright-core && npx playwright install chromium-headless-shell
-//   node scripts/record-trailer.mjs     # needs ffmpeg on PATH (or FFMPEG=…); gifsicle (or GIFSICLE=…) shrinks the GIF
+//   node scripts/record-trailer.mjs     # needs ffmpeg on PATH (or FFMPEG=…)
+//
+// The video stays out of git: drag it into a GitHub comment and put the user-attachments link in the README.
 //
 // It starts its own office server on a spare port with a throwaway data folder, opens ?demo, and steps the
 // office's clock one frame at a time, so the result doesn't depend on how fast this machine renders.
@@ -16,7 +18,7 @@ import { createServer } from 'node:net';
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../..');
 const FPS = 30, FFMPEG = process.env.FFMPEG || 'ffmpeg';
-const OUT = join(ROOT, 'docs/images');
+const OUT = join(ROOT, 'dist');
 let chromium;
 try { ({ chromium } = await import('playwright-core')); }
 catch { console.error('Needs playwright-core: npm i --no-save playwright-core && npx playwright install chromium-headless-shell'); process.exit(1); }
@@ -227,13 +229,10 @@ try {
   await browser?.close(); server.kill();
 }
 
+mkdirSync(OUT, { recursive: true });
 const ff = (...a) => execFileSync(FFMPEG, ['-loglevel', 'error', '-y', ...a], { stdio: 'inherit' });
 const seq = ['-framerate', String(FPS), '-i', join(frames, 'f%05d.png')];
-ff(...seq, '-c:v', 'libx264', '-preset', 'slow', '-crf', '24', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', join(OUT, 'trailer.mp4'));
-// GitHub plays GIFs inline but they get big fast: 8 fps, 96 colours, then gifsicle's lossy pass when it's around.
-const gif = 'fps=8,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle';
-ff(...seq, '-vf', gif, join(OUT, 'trailer.gif'));
-try { execFileSync(process.env.GIFSICLE || 'gifsicle', ['-O3', '--lossy=160', '-b', join(OUT, 'trailer.gif')], { stdio: 'inherit' }); }
-catch { console.warn('gifsicle not found (or set GIFSICLE): the GIF stays unoptimised'); }
-for (const f of ['trailer.mp4', 'trailer.gif']) console.log(f, (statSync(join(OUT, f)).size / 1048576).toFixed(1), 'MB');
+// 720p: the README shows it under 900 px wide, and the city's lit windows make 1080p twice the size.
+ff(...seq, '-vf', 'scale=1280:-2:flags=lanczos', '-c:v', 'libx264', '-preset', 'slow', '-crf', '24', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', join(OUT, 'trailer.mp4'));
+console.log('trailer.mp4', (statSync(join(OUT, 'trailer.mp4')).size / 1048576).toFixed(1), 'MB');
 rmSync(data, { recursive: true, force: true });
