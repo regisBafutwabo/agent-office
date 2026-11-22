@@ -1,6 +1,6 @@
 {
   "name": "agent-office",
-  "version": "0.1.0",
+  "version": "0.5.8",
   "license": "MIT",
   "description": "A customizable 3D office where your Claude Code agents work, for desktop, mobile and VR.",
   "type": "module",
