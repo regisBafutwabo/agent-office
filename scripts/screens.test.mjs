@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { officeSource } from './office-source.mjs';
 import vm from 'node:vm';
 import test from 'node:test';
 
-const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
+const html = officeSource;
 const context = vm.createContext({ localStorage: { getItem: () => null } });
 vm.runInContext(html.slice(html.indexOf('const CHG_POLL_MS'), html.indexOf('function noteWork')), context);
 const row = (m, c, seen = {}, now = 1_000_000, subs) => vm.runInContext('reviewRow', context)({ name: 'Ada', color: '#fff', state: 'working', ...m }, c, seen, now, subs);

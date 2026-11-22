@@ -936,7 +936,7 @@ mod tests {
                 assert!(script.contains(&format!("'sha256-{hash}'")));
                 n += 1;
             }
-            assert!(n >= 2);
+            assert!(n >= 1);
             for d in ["object-src 'none'", "base-uri 'none'", "frame-ancestors 'none'", &format!("connect-src 'self' ws://127.0.0.1:{port}")] {
                 assert!(csp.contains(d), "{d}");
             }

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { officeSource } from './office-source.mjs';
 import vm from 'node:vm';
 import test from 'node:test';
 
-const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
+const html = officeSource;
 const context = vm.createContext({ STUCK_AFTER: 3 });
 vm.runInContext(html.slice(html.indexOf('const RUN_LONG_MS'), html.indexOf('const deskKey')), context);
 const run = code => vm.runInContext(code, context);

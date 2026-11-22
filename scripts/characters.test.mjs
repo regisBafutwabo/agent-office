@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { officeSource } from './office-source.mjs';
 import vm from 'node:vm';
 import test from 'node:test';
 import THREE from 'three';
 
-const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
+const html = officeSource;
 const source = (start, end) => html.slice(html.indexOf(start), html.indexOf(end));
 function setup() {
   const context = vm.createContext({ THREE, M: color => new THREE.MeshStandardMaterial({ color }) });

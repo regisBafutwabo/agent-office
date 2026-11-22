@@ -7,11 +7,15 @@
   "bin": { "agent-office": "bridge/server.js" },
   "scripts": {
     "start": "node bridge/server.js",
-    "test": "node --test bridge/*.test.js scripts/*.test.mjs"
+    "test": "node --test bridge/*.test.js scripts/*.test.mjs",
+    "test:e2e": "playwright test"
   },
   "engines": { "node": ">=18" },
   "dependencies": {
     "three": "0.128.0",
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1"
   }
 }
