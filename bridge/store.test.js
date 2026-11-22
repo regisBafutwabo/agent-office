@@ -319,3 +319,12 @@ test('a subagent already at work when the office opens walks in, and leaves when
   st.ingest({ session_id: 's1', cwd: '/Users/me/code/shop', hook_event_name: 'SubagentStop', agent_id: 'a1' });
   assert.deepEqual(st.adoptSubs({ id: 's1', subs: [sub] }), []);         // its log still reads mid-turn for a moment: it stays gone
 });
+
+test('a snapshot carries every event the store keeps, how many it keeps, and its clock', () => {
+  const st = new Store();
+  for (let i = 0; i < 250; i++) st.ingest({ ...base, hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: { file_path: `/Users/me/code/shop/f${i}.js` } });
+  const snap = st.snapshot();
+  assert.equal(snap.recentMax, 200);
+  assert.equal(snap.recent.length, 200);
+  assert.ok(Math.abs(snap.now - Date.now()) < 1000);
+});

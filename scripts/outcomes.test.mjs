@@ -1,11 +1,10 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { between } from './office-source.mjs';
 import vm from 'node:vm';
 import test from 'node:test';
 
-const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
 const context = vm.createContext({ STUCK_AFTER: 3 });
-vm.runInContext(html.slice(html.indexOf('const RUN_LONG_MS'), html.indexOf('const deskKey')), context);
+vm.runInContext(between('const RUN_LONG_MS', 'const deskKey'), context);
 const run = code => vm.runInContext(code, context);
 const at = (day, hour = 12) => new Date(2026, 10, day, hour).getTime();
 

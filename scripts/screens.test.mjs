@@ -1,11 +1,10 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { between } from './office-source.mjs';
 import vm from 'node:vm';
 import test from 'node:test';
 
-const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
 const context = vm.createContext({ localStorage: { getItem: () => null } });
-vm.runInContext(html.slice(html.indexOf('const CHG_POLL_MS'), html.indexOf('function noteWork')), context);
+vm.runInContext(between('const CHG_POLL_MS', 'function noteWork'), context);
 const row = (m, c, seen = {}, now = 1_000_000, subs) => vm.runInContext('reviewRow', context)({ name: 'Ada', color: '#fff', state: 'working', ...m }, c, seen, now, subs);
 const file = (path, sig = 'v1', add = 2, del = 1) => ({ path, sig, add, del, status: 'modified' });
 const checkout = files => ({ ok: true, root: '/repo', prefix: 'web/', files });

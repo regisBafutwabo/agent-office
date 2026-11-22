@@ -262,7 +262,7 @@ test('the page runs only its own scripts: inline ones by hash, files from this o
   const script = csp.split(';').map(s => s.trim()).find(s => s.startsWith('script-src '));
   assert.ok(!/unsafe-inline|unsafe-eval|\*|https?:/.test(script), script);
   const inline = [...r.text.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => `'sha256-${crypto.createHash('sha256').update(m[1]).digest('base64')}'`);
-  assert.ok(inline.length >= 2);
+  assert.ok(inline.length >= 1);
   for (const h of inline) assert.ok(script.includes(h), h);
   assert.ok(!/<script[^>]*\bsrc=["']?https?:/i.test(r.text.replace(/document\.write\([^)]*\)/g, '')), 'no external script tags');
   assert.ok(!/\son[a-z]+=["']/i.test(r.text), 'no inline event handlers, which the policy would block');

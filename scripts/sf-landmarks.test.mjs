@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { between } from './office-source.mjs';
 import vm from 'node:vm';
 import test from 'node:test';
 import * as THREE from 'three';
 
-const html = readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
-const source = (start, end) => html.slice(html.indexOf(start), html.indexOf(end));
+const source = between;
 function setup() {
   const skyline = new THREE.Group();
   const context = vm.createContext({ THREE, Float32Array, GROUND_Y: -150, skyline,

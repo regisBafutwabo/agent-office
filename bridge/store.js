@@ -117,7 +117,8 @@ export class Store {
 
   snapshot() {
     this.prune();
-    return { sessions: [...this.sessions.values()].map(s => ({ ...s, subagents: Object.values(s.subagents) })), recent: this.recent.slice(-80) };
+    // recentMax and now let a page tell how far back `recent` reaches, on its own clock.
+    return { sessions: [...this.sessions.values()].map(s => ({ ...s, subagents: Object.values(s.subagents) })), recent: this.recent.slice(), recentMax: RECENT_MAX, now: Date.now() };
   }
 
   prune() {
