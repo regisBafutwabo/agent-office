@@ -52,7 +52,7 @@ function onLiveEvent(e, replay) {
       applyStatus(who, 'working', label);
       place(who, who === a ? spotForTool(a, e.tool, s) : (READ_TOOLS.has(e.tool) && Math.random() < .6 ? spotOfType(who, ['library']) : null) || who.ws);
       if (e.tool === 'Bash') who.run = { at: e.at };
-      if (EDIT_TOOLS.has(e.tool)) noteEdit(who, e.summary, replay);
+      if (EDIT_TOOLS.has(e.tool)) noteEdit(who, e.summary, replay, e.at);
       break;
     case 'PostToolUse': case 'PostToolUseFailure':
       if (e.failed) emit(who, 'PostToolUseFailure', label, e.at);
@@ -104,8 +104,7 @@ function onOutdatedHooks(hooks) {
   }
 }
 function onSnapshot(msg) {
-  const first = !live.gotSnapshot;
-  logEvents(msg.recent || [], true);
+  onSnapshotHistory(msg);
   if (!live.gotSnapshot) { live.gotSnapshot = true; rosterEl._html = null; uiDirty = true; setTimeout(setModeLine); }
   onOutdatedHooks(msg.outdatedHooks);
   setCodeOn(msg.showCode !== false);
@@ -133,12 +132,13 @@ function onSnapshot(msg) {
     const detail = e.prompt ? `"${e.prompt}"` : e.message || `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}` || e.type;
     emit(who, e.type, detail, e.at);
     if (e.type === 'PostToolUse') noteWork(who, e);              // so a reopened office still knows each agent's last edit
-    if (e.type === 'PreToolUse' && EDIT_TOOLS.has(e.tool)) noteEdit(who, e.summary, true, e.at);   // and which files two agents share
+    // and which files two agents share; a subagent that has left can't be told from its parent, so its edits are skipped
+    if (e.type === 'PreToolUse' && EDIT_TOOLS.has(e.tool) && (!e.agentId || a.subs.has(e.agentId))) noteEdit(who, e.summary, true, e.at);
   }
   restoreClashes();
   for (const ap of msg.approvals || []) onApproval(ap, false);   // requests still waiting for an answer
   setModeLine();
-  if (first) recapOnOpen();
+  recapOnSnapshot();
 }
 
 function liveTick(dt) {

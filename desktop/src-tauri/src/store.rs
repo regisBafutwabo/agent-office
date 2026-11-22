@@ -280,8 +280,8 @@ impl Store {
 
     pub fn snapshot(&mut self) -> Value {
         self.prune();
-        let skip = self.recent.len().saturating_sub(80);
-        json!({ "sessions": self.sessions, "recent": self.recent.iter().skip(skip).collect::<Vec<_>>() })
+        // recentMax and now let a page tell how far back `recent` reaches, on its own clock.
+        json!({ "sessions": self.sessions, "recent": self.recent, "recentMax": RECENT_MAX, "now": now_ms() })
     }
 
     pub fn prune(&mut self) {
@@ -668,6 +668,18 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn snapshot_carries_every_kept_event_the_limit_and_the_clock() {
+        let mut st = Store::default();
+        for i in 0..250 {
+            st.ingest(&json!({ "session_id": "t1", "cwd": "/repo", "hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": { "file_path": format!("/repo/f{i}.rs") } }), None, None);
+        }
+        let snap = st.snapshot();
+        assert_eq!(snap["recentMax"], json!(RECENT_MAX));
+        assert_eq!(snap["recent"].as_array().unwrap().len(), RECENT_MAX);
+        assert!(now_ms().abs_diff(snap["now"].as_u64().unwrap()) < 1000);
+    }
 
     #[test]
     fn codex_replaces_imported_claude_ghost_in_either_order() {

@@ -42,3 +42,46 @@ test('coming back after a while shows what happened meanwhile', async ({ page, o
   await page.locator('#recap-close').click();
   await expect(recap).toBeHidden();
 });
+
+test('a session that ended while you were away is still in the recap', async ({ page, office }) => {
+  await page.addInitScript(t => localStorage.setItem('agent-office:seen', String(t)), Date.now() - 30 * 60 * 1000);
+  await start(office, 'e1', 'Tidy the README');
+  await office.hook({ hook_event_name: 'Stop', session_id: 'e1', cwd });
+  await office.hook({ hook_event_name: 'SessionEnd', session_id: 'e1', cwd, reason: 'exit' });
+  await open(page, office);
+  await expect(page.locator('#recap .recap-row', { hasText: 'Tidy the README' })).toContainText('finished · closed the session');
+});
+
+test('missing events while the connection was down brings a recap when it comes back', async ({ page, office }) => {
+  await start(office, 'd1', 'Migrate the database');
+  await open(page, office);
+  await expect(row(page, 'Migrate the database')).toBeVisible();
+  // Last looked five minutes ago, then the connection dropped (the Mac slept, the Wi-Fi went).
+  await page.evaluate(() => { seenAt -= 5 * 60 * 1000; live.ws.close(); });
+  await office.hook({ hook_event_name: 'Stop', session_id: 'd1', cwd });
+  await expect(page.locator('#recap .recap-row', { hasText: 'Migrate the database' })).toContainText('finished', { timeout: 10_000 });
+});
+
+test("a subagent that has left doesn't make its parent look like it shares a file after a reload", async ({ page, office }) => {
+  await start(office, 'p1', 'Restyle the cart');
+  await start(office, 'p2', 'Fix the cart total');
+  await open(page, office);
+  await office.hook({ hook_event_name: 'PreToolUse', session_id: 'p1', agent_id: 'x1', agent_type: 'general-purpose', cwd, tool_name: 'Edit', tool_input: { file_path: `${cwd}/cart.js` } });
+  await office.hook({ hook_event_name: 'SubagentStop', session_id: 'p1', agent_id: 'x1', agent_type: 'general-purpose', cwd });
+  await edit(office, 'p2', 'cart.js');
+  await page.reload();
+  await expect(row(page, 'Fix the cart total')).toBeVisible();
+  await expect(row(page, 'Restyle the cart')).not.toContainText('Same file');
+  await expect(row(page, 'Fix the cart total')).not.toContainText('Same file');
+});
+
+test("a browser whose clock is off from the bridge's still sees clashes", async ({ page, office }) => {
+  await page.clock.install({ time: Date.now() + 60 * 60 * 1000 });   // a phone an hour ahead
+  await page.clock.resume();
+  await start(office, 'k1', 'Restyle the cart');
+  await start(office, 'k2', 'Fix the cart total');
+  await open(page, office);
+  await edit(office, 'k1', 'cart.js');
+  await edit(office, 'k2', 'cart.js');
+  await expect(row(page, 'Restyle the cart')).toContainText('Same file as Fix the cart total');
+});

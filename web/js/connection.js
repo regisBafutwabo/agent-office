@@ -18,7 +18,7 @@ function connectLive() {
   ws.onclose = () => {
     clearTimeout(fallback);
     if (!live.everConnected) { explainLocked(); startDemo(); return; }
-    live.connected = false; setModeLine(); updateMusicBtn(); setTimeout(connectLive, 2000);
+    live.connected = false; onDisconnect(); setModeLine(); updateMusicBtn(); setTimeout(connectLive, 2000);
   };
 }
 

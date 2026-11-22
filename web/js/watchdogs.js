@@ -10,7 +10,7 @@ const clashGeo = new THREE.CylinderGeometry(.03, .03, 1, 6).rotateX(Math.PI / 2)
 const fileKey = (a, file) => file.startsWith('/') ? file : `${(a.parent || a).cwd || ''}/${file}`;
 const clashesOf = a => clashes.filter(c => c.a === a || c.b === a);
 const gone = a => a.gone || a.leaving || a.exiting;
-function noteEdit(who, file, replay, now = Date.now()) {
+function noteEdit(who, file, replay, now = serverNow()) {
   if (!file) return;
   const key = fileKey(who, file), m = edits.get(key) || new Map();
   edits.set(key, m);
@@ -19,7 +19,7 @@ function noteEdit(who, file, replay, now = Date.now()) {
   for (const o of m.keys()) if (o !== who) addClash(who, o, file, now, replay);
 }
 function addClash(a, b, file, now, replay, since = now) {
-  if (Date.now() - now > CLASH_MS) return;
+  if (serverNow() - now > CLASH_MS) return;
   const c = clashes.find(c => c.file === file && (c.a === a && c.b === b || c.a === b && c.b === a));
   if (c) { c.at = Math.max(c.at, now); c.since = Math.min(c.since, since); saveClashes(); return; }
   const mesh = new THREE.Mesh(clashGeo, clashMat); mesh.visible = false; scene.add(mesh);
@@ -31,7 +31,7 @@ function addClash(a, b, file, now, replay, since = now) {
 }
 // A red bar between the two agents while they share a file; it goes once the overlap is CLASH_MS old or one leaves.
 function updateClashes() {
-  const now = Date.now();
+  const now = serverNow();
   for (let i = clashes.length - 1; i >= 0; i--) {
     const c = clashes[i];
     if (gone(c.a) || gone(c.b) || now - c.at > CLASH_MS) { scene.remove(c.mesh); clashes.splice(i, 1); uiDirty = true; detailDirty = true; continue; }
