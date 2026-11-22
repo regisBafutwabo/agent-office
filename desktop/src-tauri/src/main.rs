@@ -4,6 +4,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod adapters;
+mod auth;
+mod changes;
 mod discover;
 mod focus;
 mod music;
@@ -38,6 +40,34 @@ fn port() -> u16 {
     std::env::var("AGENT_OFFICE_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(PORT)
 }
 
+/// The office's keys (auth.rs), loaded once: shared with the bridge through the data folder when it can be written.
+fn credentials() -> &'static auth::Credentials {
+    static CREDS: std::sync::OnceLock<auth::Credentials> = std::sync::OnceLock::new();
+    CREDS.get_or_init(|| auth::credentials(&auth::data_dir()).unwrap_or_else(|err| {
+        eprintln!("Could not keep the office's keys in {} ({err}); hooks can't report until it can.", auth::data_dir().display());
+        auth::ephemeral()
+    }))
+}
+
+/// The window opens with the page's key in the fragment, which never leaves this process: the page keeps it and
+/// drops it from the address. It works with the bridge too, since both read the same key file.
+fn window_url() -> String {
+    format!("{}#k={}", office_url(), credentials().ui)
+}
+
+/// A browser is opened through `open`, whose command line other users can read, so its link carries only a one-time
+/// code the page trades for the key. The code is a file in the data folder, so `npm start`'s bridge redeems it too
+/// when it holds the port. If the folder can't be written, the page opens without a key and says how to sign in.
+fn browser_url() -> String {
+    match auth::launch_code(&credentials().dir) {
+        Ok(code) => format!("{}#code={code}", office_url()),
+        Err(err) => {
+            eprintln!("Could not make a sign-in code ({err}); the browser opens without the office's key.");
+            office_url()
+        }
+    }
+}
+
 /// Show the office window, creating it if it was closed.
 fn open_office(app: &AppHandle) {
     if let Some(w) = app.get_webview_window(WINDOW_ID) {
@@ -48,7 +78,7 @@ fn open_office(app: &AppHandle) {
     }
     #[cfg(target_os = "macos")]
     let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
-    let url = office_url().parse().expect("office URL is valid");
+    let url = window_url().parse().expect("office URL is valid");
     match WebviewWindowBuilder::new(app, WINDOW_ID, WebviewUrl::External(url))
         .title("Agent Office")
         .inner_size(1440.0, 900.0)
@@ -108,6 +138,17 @@ fn refresh_connect_menu(items: &[MenuItem<Wry>]) {
 /// The banner shows the agent's face when the office has sent a picture of it.
 fn maybe_notify(app: &AppHandle, recent: &Mutex<HashMap<String, u64>>, e: &Value) {
     let kind = e["type"].as_str().unwrap_or("");
+    if kind == "HooksOutdated" {
+        // The server reports each kind once per run; say what to do, since those sessions can't appear until then.
+        let agent = e["agent"].as_str().unwrap_or("An agent");
+        let body = match (agent, e["reason"].as_str()) {
+            (_, Some("wrong-key")) => format!("{agent} hooks sent a key this office doesn't know. If you set AGENT_OFFICE_DATA, set it for your agents too."),
+            ("claude-code", _) => "Claude Code reported with an old Agent Office plugin, so its sessions can't appear. Update the plugin (Connect agents, or claude plugin update agent-office@agent-office) and start a new session.".into(),
+            _ => format!("{agent} hooks predate the office's key, so their sessions can't appear. Reconnect {agent} from Connect agents."),
+        };
+        let _ = app.notification().builder().title("Agent Office: update your hooks").body(body).show();
+        return;
+    }
     let needs_you = kind == "PermissionRequest" || (kind == "Notification" && e["notificationType"].as_str() == Some("permission_prompt"));
     let done = kind == "Stop";
     if !needs_you && !done {
@@ -189,8 +230,11 @@ fn main() {
             // Checking Claude Code can ask the login shell where it lives, so do it off the main thread.
             let (items, app_handle) = (connect_items.clone(), app.handle().clone());
             std::thread::spawn(move || {
-                if let Some(message) = setup::update_plugin_if_newer() {
+                if let Some(message) = setup::update_plugin_if_newer().or_else(setup::outdated_plugin_notice) {
                     let _ = app_handle.notification().builder().title("Agent Office").body(message).show();
+                }
+                if let Some(message) = setup::refresh_hook_script() {
+                    eprintln!("{message}");
                 }
                 refresh_connect_menu(&items);
             });
@@ -223,7 +267,7 @@ fn main() {
                         });
                     }
                     "browser" => {
-                        let _ = app.opener().open_url(office_url(), None::<&str>);
+                        let _ = app.opener().open_url(browser_url(), None::<&str>);
                     }
                     "quit" => app.exit(0),
                     _ => {}
@@ -246,7 +290,7 @@ fn main() {
                 update_tray(&handle, &status, store);
                 maybe_notify(&handle, &notified, event);
             });
-            tauri::async_runtime::spawn(server::run(port(), on_change));
+            tauri::async_runtime::spawn(server::run(port(), credentials().clone(), on_change));
             open_office(app.handle());
             Ok(())
         })

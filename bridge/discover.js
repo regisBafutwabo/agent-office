@@ -90,6 +90,20 @@ export function archivedChats(home = os.homedir()) {
   return ids;
 }
 
+// Subagents a session's logs show still at work. Hooks report a subagent's start once, so an office opened later
+// (or restarted) finds it here. One that was cut off mid-tool looks the same until its log leaves the window.
+function runningSubs(proj, id, now) {
+  const subs = [];
+  for (const { file, at } of recentLogs(path.join(proj, id, 'subagents'), now)) {
+    const last = tail(file).reverse().find(o => o.type === 'user' || o.type === 'assistant');
+    const midTurn = last && (last.type === 'user' || (Array.isArray(last.message?.content) && last.message.content.some(x => x?.type === 'tool_use')));
+    if (!midTurn) continue;
+    let meta = {}; try { meta = JSON.parse(fs.readFileSync(file.replace(/\.jsonl$/, '.meta.json'), 'utf8')); } catch {}
+    subs.push({ id: path.basename(file, '.jsonl').replace(/^agent-/, ''), type: clip(meta.agentType, 60) || 'subagent', task: clip(meta.description, 120) || null, at });
+  }
+  return subs;
+}
+
 function claude(home, now, out, archived) {
   for (const proj of dirs(path.join(home, '.claude', 'projects'))) {
     const folder = path.basename(proj);
@@ -103,9 +117,10 @@ function claude(home, now, out, archived) {
       const last = [...lines].reverse().find(o => (o.type === 'user' || o.type === 'assistant') && !o.isSidechain && !o.isMeta);
       let [status, activity] = !last ? ['idle', 'Session started'] : last.type === 'user' ? ['thinking', 'Thinking']
         : Array.isArray(last.message?.content) && last.message.content.some(x => x?.type === 'tool_use') ? ['working', 'Working'] : ['done', 'Finished'];
-      [status, activity] = settle(status, activity, at, now);
+      const id = path.basename(file, '.jsonl'), subs = runningSubs(proj, id, now), seen = Math.max(at, ...subs.map(x => x.at));
+      [status, activity] = subs.length ? ['working', 'Waiting on a subagent'] : settle(status, activity, at, now);
       const t = readTail(file) || { title: null, messages: [] };
-      out.push({ agent: 'claude-code', id: path.basename(file, '.jsonl'), cwd: root, entrypoint: info.entrypoint || null, at, status, activity, title: t.title, messages: t.messages });
+      out.push({ agent: 'claude-code', id, subs, cwd: root, entrypoint: info.entrypoint || null, at: seen, status, activity, title: t.title, messages: t.messages });
     }
   }
 }

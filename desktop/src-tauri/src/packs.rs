@@ -33,8 +33,14 @@ pub fn list(dir: &Path) -> Vec<Value> {
     packs
 }
 
-/// <id>/<file> (already percent-decoded) → the file on disk, or None when it would leave the packs folder.
-pub fn file(dir: &Path, rel: &str) -> Option<PathBuf> {
+/// Packs come from anywhere, so only model and texture files are served, never documents or scripts.
+const TYPES: [(&str, &str); 8] = [("glb", "model/gltf-binary"), ("gltf", "model/gltf+json"), ("bin", "application/octet-stream"),
+    ("png", "image/png"), ("jpg", "image/jpeg"), ("jpeg", "image/jpeg"), ("webp", "image/webp"), ("ktx2", "image/ktx2")];
+pub const MAX_FILE: u64 = 64 * 1024 * 1024;
+
+/// <id>/<file> (already percent-decoded) → the file on disk and its type, or None when it isn't a model or texture
+/// really inside the packs folder (a symlink out of it included).
+pub fn file(dir: &Path, rel: &str) -> Option<(PathBuf, &'static str)> {
     let rel = Path::new(rel);
     let mut parts = 0;
     for c in rel.components() {
@@ -43,7 +49,13 @@ pub fn file(dir: &Path, rel: &str) -> Option<PathBuf> {
             _ => return None,
         }
     }
-    (parts >= 2).then(|| dir.join(rel))
+    let ext = rel.extension()?.to_str()?.to_ascii_lowercase();
+    let (_, mime) = TYPES.iter().find(|(e, _)| *e == ext)?;
+    if parts < 2 { return None; }
+    let root = std::fs::canonicalize(dir).ok()?;
+    let real = std::fs::canonicalize(dir.join(rel)).ok()?;
+    let meta = std::fs::metadata(&real).ok()?;
+    (real.starts_with(&root) && real != root && meta.is_file() && meta.len() <= MAX_FILE).then_some((real, *mime))
 }
 
 #[cfg(test)]
@@ -73,13 +85,22 @@ mod tests {
     }
 
     #[test]
-    fn pack_files_stay_inside_the_packs_folder() {
-        let dir = Path::new("/data/packs");
-        assert_eq!(file(dir, "kenney/chair.glb"), Some(dir.join("kenney/chair.glb")));
-        assert_eq!(file(dir, "kenney/Textures/colormap.png"), Some(dir.join("kenney/Textures/colormap.png")));
-        assert_eq!(file(dir, "../secret.txt"), None);
-        assert_eq!(file(dir, "kenney/../../etc/passwd"), None);
-        assert_eq!(file(dir, "/etc/passwd"), None);
-        assert_eq!(file(dir, "pack.json"), None);
+    fn pack_files_are_models_or_textures_inside_the_packs_folder_and_never_a_symlink_out() {
+        let base = std::env::temp_dir().join(format!("agent-office-packfiles-{}-{}", std::process::id(), crate::store::now_ms()));
+        let dir = base.join("packs");
+        std::fs::create_dir_all(dir.join("kenney/Textures")).unwrap();
+        for f in ["chair.glb", "Textures/colormap.png", "page.html", "icon.svg", "run.js", "pack.json"] {
+            std::fs::write(dir.join("kenney").join(f), "x").unwrap();
+        }
+        std::fs::write(base.join("outside.png"), "AUDIT_FIXTURE_ONLY").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(base.join("outside.png"), dir.join("kenney/escape.png")).unwrap();
+        let real = std::fs::canonicalize(&dir).unwrap();
+        assert_eq!(file(&dir, "kenney/chair.glb"), Some((real.join("kenney/chair.glb"), "model/gltf-binary")));
+        assert_eq!(file(&dir, "kenney/Textures/colormap.png").map(|f| f.1), Some("image/png"));
+        for bad in ["../outside.png", "kenney/../../outside.png", "/etc/passwd", "pack.json", "kenney/page.html", "kenney/icon.svg", "kenney/run.js", "kenney/pack.json", "kenney/escape.png", "kenney/missing.glb"] {
+            assert_eq!(file(&dir, bad), None, "{bad}");
+        }
+        std::fs::remove_dir_all(&base).unwrap();
     }
 }

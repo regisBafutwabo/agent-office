@@ -1,8 +1,9 @@
 // Turns raw Claude Code hook payloads into a small, UI-friendly model of sessions and subagents.
 import path from 'node:path';
-import { validTty, validChat } from './focus.js';
+import { validTty, validChat, validUuid } from './focus.js';
 import { readTranscript, MESSAGE_CHARS } from './transcript.js';
 import { FOUND_WINDOW_MS } from './discover.js';
+import { editOf } from './changes.js';
 
 const STALE_MS = 6 * 60 * 60 * 1000;   // forget sessions that went silent (crashed without SessionEnd)
 const RECENT_MAX = 200;
@@ -62,7 +63,8 @@ export function isMerge(tool, input = {}) {
 
 export class Store {
   constructor(read = readTranscript) { this.sessions = new Map(); this.recent = []; this.read = read; this.transcriptChecks = new Map(); this.pendingTasks = new Map();
-    this.ended = new Set(); this.codexIds = new Set(); this.stoppedSubs = new Map(); }   // ended logs and imported hooks mustn't bring sessions back
+    this.ended = new Set(); this.codexIds = new Set(); this.stoppedSubs = new Map();
+    this.showCode = true; }   // off: edited lines are never kept or sent, only file names   // ended logs and imported hooks mustn't bring sessions back
 
   // Imported Claude hooks can report a Codex thread without the tool header. Only an exact
   // thread-id match proves it's the same session; sharing a project or terminal doesn't.
@@ -178,11 +180,25 @@ export class Store {
       if (!changed) return null;
     }
     const e = { type: 'SessionFound', sessionId: s.id, at: Date.now(), agentId: null, agentType: null, message: isNew ? 'Already running' : null,
-      session: { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, cwd: s.cwd, project: s.project, title: s.title, merged: !!s.merged,
+      session: { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, t3Thread: s.t3Thread || null, cwd: s.cwd, project: s.project, title: s.title, merged: !!s.merged,
                  entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity, messages: s.messages } };
     if (replacesSessionId) e.replacesSessionId = replacesSessionId;
     if (isNew) { this.recent.push(e); if (this.recent.length > RECENT_MAX) this.recent.shift(); }   // only the arrival goes in the feed
     return e;
+  }
+
+  // Subagents a found chat's logs show at work (discover.js runningSubs) that no hook told us about walk in, and leave
+  // once the logs say they finished. Returns the events to pass on.
+  adoptSubs(f) {
+    const s = this.sessions.get(f.id), now = Date.now(), subs = f.subs || [], events = []; if (!s) return events;
+    const ev = (type, sub) => ({ type, sessionId: s.id, at: now, agentId: sub.id, agentType: sub.type, agentTask: sub.task, message: null });
+    for (const x of subs) {
+      if (s.subagents[x.id] || now - (this.stoppedSubs.get(`${s.id}\n${x.id}`) ?? -Infinity) < LATE_HOOK_MS) continue;
+      s.subagents[x.id] = { id: x.id, type: x.type, task: x.task, status: 'working', activity: 'Working', startedAt: x.at, fromLog: true };
+      events.push(ev('SubagentStart', x));
+    }
+    for (const sub of Object.values(s.subagents)) if (sub.fromLog && !subs.some(x => x.id === sub.id)) { delete s.subagents[sub.id]; events.push(ev('SubagentStop', sub)); }
+    return events;
   }
 
   // Found agents a poll no longer reports (Ollama unloaded the model) leave now, not after the usual quiet spell.
@@ -195,7 +211,7 @@ export class Store {
 
   // Returns the normalized event (or null if the payload is unusable).
   // projectDir is CLAUDE_PROJECT_DIR from the hook; it stays put when the session cds into a subfolder.
-  // origin: { app, term, tty, chat } from the hook scripts, used for "Open in …" and "Open chat".
+  // origin: { app, term, tty, chat, t3Thread } from the hook scripts, used for "Open in …" and "Open chat".
   ingest(p, entrypoint, projectDir, agent = 'claude-code', origin = {}) {
     const type = p.hook_event_name, sid = p.session_id;
     if (!type || !sid) return null;
@@ -218,6 +234,7 @@ export class Store {
     if (origin.term) s.term = origin.term;
     if (validTty(origin.tty)) s.tty = origin.tty;
     if (validChat(origin.chat)) s.chat = origin.chat;
+    if (validUuid(origin.t3Thread)) s.t3Thread = origin.t3Thread;
     const chatChanged = this.refreshTranscript(s, p, type);
 
     const e = { type, sessionId: sid, at: now, agentId: p.agent_id || null, agentType: p.agent_type || null };
@@ -228,7 +245,7 @@ export class Store {
     if (e.agentId && type !== 'SubagentStart' && now - (this.stoppedSubs.get(`${sid}\n${e.agentId}`) ?? -Infinity) < LATE_HOOK_MS) return null;
     const sub = e.agentId ? (s.subagents[e.agentId] ||= { id: e.agentId, type: e.agentType || 'subagent', task: this.claimTask(sid, e.agentType, now),
                                                           status: 'thinking', activity: 'Starting', startedAt: now }) : null;
-    if (sub) e.agentTask = sub.task;
+    if (sub) { e.agentTask = sub.task; delete sub.fromLog; }             // a hook reports on it: hooks decide when it leaves
     const target = sub || s;
 
     switch (type) {
@@ -243,13 +260,15 @@ export class Store {
         e.tool = p.tool_name; e.summary = summarizeTool(p.tool_name, p.tool_input, s.cwd); e.failed = type === 'PostToolUseFailure';
         target.status = 'thinking'; target.activity = e.failed ? `${e.tool} failed` : 'Thinking'; target.tool = null;
         if (!e.failed && isMerge(e.tool, p.tool_input)) { e.merged = true; s.merged = true; }
+        if (!e.failed && this.showCode) { const edit = editOf(e.tool, p.tool_input); if (edit) e.edit = edit; }
         break;
       case 'PermissionRequest':
         e.tool = p.tool_name; e.summary = summarizeTool(p.tool_name, p.tool_input, s.cwd);
         target.status = 'waiting'; target.activity = `Needs permission: ${e.tool}${e.summary ? ' ' + e.summary : ''}`; break;
       case 'Notification':
         e.message = clip(p.message, 160); e.notificationType = p.notification_type || null;
-        if (e.notificationType === 'permission_prompt') { s.status = 'waiting'; s.activity = e.message || 'Needs your permission'; }
+        // The prompt names no agent. When a subagent has just asked, it's that subagent's, and the session itself isn't blocked.
+        if (e.notificationType === 'permission_prompt') { if (!Object.values(s.subagents).some(x => x.status === 'waiting')) { s.status = 'waiting'; s.activity = e.message || 'Needs your permission'; } }
         else if (e.notificationType === 'idle_prompt') { s.status = 'idle'; s.activity = 'Waiting for your input'; }
         break;
       case 'Stop': s.status = 'done'; s.activity = s.merged ? 'Finished · merged' : 'Finished'; s.tool = null; break;
@@ -259,7 +278,7 @@ export class Store {
       case 'SessionEnd': e.reason = p.reason; this.ended.add(sid); this.sessions.delete(sid); this.transcriptChecks.delete(sid); this.pendingTasks.delete(sid); break;
       default: break;
     }
-    e.session = { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, cwd: s.cwd, project: s.project, title: s.title || null, merged: !!s.merged, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity, context: s.context || null };
+    e.session = { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, t3Thread: s.t3Thread || null, cwd: s.cwd, project: s.project, title: s.title || null, merged: !!s.merged, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity, context: s.context || null };
     if (chatChanged) e.session.messages = s.messages;
     this.recent.push(e); if (this.recent.length > RECENT_MAX) this.recent.shift();
     return e;

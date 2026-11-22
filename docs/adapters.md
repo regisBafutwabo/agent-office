@@ -27,6 +27,8 @@ Roo Code shut down in May 2026 and isn't supported.
 
 Replace `/path/to/agent-office` with where you cloned this repo. Every snippet only adds a hook that reports activity. None of them change what the agent does.
 
+`hook.sh` sends the office's hook key with each event, reading it from `hook-token` in the data folder (`~/Library/Application Support/Agent Office`, or `~/.config/agent-office` on Linux, or `$AGENT_OFFICE_DATA`). The office creates that file the first time it runs, so start it once before connecting an agent. curl reads the key from the file, so it never appears in the process list. The OpenCode and Amp plugins read the same file.
+
 ### Codex CLI: `~/.codex/hooks.json`
 Same event names as Claude Code. `apply_patch` is shown as an Edit of the patched file, and `Interrupt` as Stop. Codex asks you to trust new hooks once.
 ```json
@@ -88,7 +90,7 @@ Copilot's payload doesn't name the event, so each hook passes it as the second a
 VS Code agent mode can also read Claude-format hooks (`chat.useClaudeHooks`, preview). The Copilot cloud agent runs remotely and can't reach `127.0.0.1`.
 
 ### Qwen Code and Factory Droid
-Both use Claude Code's format and event names. Use the Codex snippet with `hook.sh qwen` in `~/.qwen/settings.json`, or `hook.sh factory` in `~/.factory/hooks.json` (Droid puts event names at the top level of the file). Qwen can also POST directly with an `http` hook type, with no script. Point it at `http://127.0.0.1:4747/hook?agent=qwen`.
+Both use Claude Code's format and event names. Use the Codex snippet with `hook.sh qwen` in `~/.qwen/settings.json`, or `hook.sh factory` in `~/.factory/hooks.json` (Droid puts event names at the top level of the file). Qwen can also POST directly with an `http` hook type, with no script. Point it at `http://127.0.0.1:4747/hook?agent=qwen` and send the header line stored in the office's `hook-token` file (`X-Agent-Office-Token: …`); without it the office answers 401.
 
 ### Goose: `~/.agents/plugins/agent-office/hooks/hooks.json`
 Claude-style events. The project comes from `working_dir` and prompts from `message`. Goose has no subagent events yet. Use the Codex snippet with `hook.sh goose`.

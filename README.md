@@ -22,7 +22,7 @@ Full setup, including building from source and troubleshooting, is in **[INSTALL
 git clone https://github.com/regisBafutwabo/agent-office.git
 cd agent-office
 npm install
-npm start                # starts the office at http://localhost:4747
+npm start                # starts the office and prints its link, http://localhost:4747/#k=…
 ```
 
 Then install the hooks once, so Claude Code reports what it's doing:
@@ -50,7 +50,7 @@ A 4 MB menu-bar app with the office server built in, so you don't need `npm star
 - **Connect agents** installs the Claude Code plugin and adds Codex or Cursor hooks in one click, so you don't need this repo. Newer app versions update the plugin by themselves.
 - **Open Agent Office** shows the 3D office in a window. Closing the window frees its memory; the server keeps running in the menu bar until you quit.
 - The app updates itself. To get a new version right away, choose **Check for Updates…** from the menu-bar icon or the Agent Office menu.
-- Phones and browsers can still open <http://localhost:4747>.
+- **Open in browser** opens the office in your browser too, signed in with a one-time link.
 
 Build it (needs Rust: `brew install rustup && rustup default stable`):
 
@@ -78,6 +78,8 @@ web/index.html    ── the 3D office (Three.js)
 
 - The plugin's hook script posts each event to `http://127.0.0.1:4747/hook`. It gives up after one second and never blocks or changes what Claude Code does.
 - The bridge only listens on `127.0.0.1`, so nothing leaves your machine. Prompts and file names are shown in the office, so treat it like your terminal.
+- Two keys guard the office, each in a file only you can read in the data folder (`~/Library/Application Support/Agent Office`, or `~/.config/agent-office` on Linux). Hooks send `hook-token`, which can only report events and ask for permission. Office pages hold `ui-token`, which reads sessions and code and answers permission requests. Other accounts on the same computer, and web pages, get neither. The office also refuses requests whose `Host` isn't `localhost`, an IP address, or a name you allow, which stops DNS-rebinding pages.
+- Model packs can only serve model and texture files (`.glb`, `.gltf`, `.bin`, `.png`, `.jpg`, `.webp`, `.ktx2`), never pages or scripts, and never a file a symlink points to outside the pack. The review window only shows files the card lists.
 - Where agents go is decided by placement rules in `web/index.html` (search for "Placement rules"): three or more file reads in a row send an agent to the library, web research goes to the lounge, plan mode goes to the war room, and finished agents take a break after 45 seconds and then drift between the lounge, coffee bar, basketball machines, the arcade and the rooftop. Agents look around, stretch and sip coffee while they work.
 
 ## Characters
@@ -110,6 +112,7 @@ Every live agent has an **↗** button in the agent list, and an **Open chat** /
 
 - **Claude desktop app:** opens that exact chat (the plugin passes the app's session id; needs plugin 0.4.0).
 - **Codex app:** opens that exact thread.
+- **T3 Code:** opens that session's own conversation (needs plugin 0.4.2).
 - **Terminal and iTerm:** selects the tab running that session.
 - **Cursor, VS Code, Windsurf, Zed:** opens that project's window, where its agent chat lives.
 - **Anything else on the list:** brings the app forward.
@@ -129,6 +132,30 @@ The office points out three things you'd want to know about before they bite:
 - **Memory:** a cup on each Claude Code agent's name tag drains as its chat fills the context window, and the card shows the token count. At 80% you get a heads-up that Claude Code will compact it soon. Transcripts don't say how big the window is, so the office assumes 200k until a chat holds more, then 1M.
 
 The first two live in the open office page: reloading it forgets them, and they don't count toward the menu-bar badge.
+
+## Reactions and desk memories
+
+Agents react to how a command went, not to finishing a reply:
+
+- **Still running:** a gear turns beside an agent whose command has run for more than 6 seconds.
+- **Passed after a long run:** a command that took 20 seconds or more drops a parcel on the desk.
+- **Failed:** a puff of soot.
+- **Comeback:** a command that failed and then passes gets a short cheer and confetti. If it had failed 3 times or more, the cheer is bigger and the desk remembers it.
+
+Each project's desk keeps what happened there. A plant grows after 1, 3, 7, 14 and 30 days of work, every merge adds a gold cup (the first becomes a big one at five), and a steel knot marks the times an agent got itself unstuck. The agent's card lists the dated moments under **Desk memories**. Memories hold counts and dates only, never prompts, commands or file names, and they are saved in this browser.
+
+## Reviewing what changed
+
+An agent's card shows what its checkout holds that you haven't reviewed, so you don't have to open a diff to find out:
+
+- **Files to review:** the count of changed files, including committed, uncommitted and untracked ones, since the checkout's base branch (`origin/HEAD`, else `main`, `master` or `develop`).
+- **Latest reported edit:** the file an agent last changed, with the lines it took out and put in. Hooks report an edit once it is made, so the lines appear whole.
+- **Review:** opens the file list beside one file's diff. The diff stays still while you read; if the file changes meanwhile, the window says so and lets you load the new version. A dot shows which agent reported an edit to a file. **Refresh** reads the checkout again; the office also re-reads every checkout on the war room's board when you zoom onto a screen or come back to the window, so a commit or stash you made by hand shows up.
+- **Mark reviewed:** remembers the versions you saw, in this browser. A file comes back when it changes again.
+
+Git reads the checkout, so agents working in one folder share one list, and the card says when that is the case. Claude Code reports the changed lines; other tools show the file name only. To keep code out of the office altogether, turn off **Customize → Show code in agent cards and reviews**: the office then keeps and shows file names only.
+
+The two screens in the war room show the same thing for the whole floor. The large one is a review board: one row per session with its files to review, its last command and the files it reported editing. The small one shows the floor's latest reported edit. Click a screen to bring the camera up close, click a row on the board to open that session's review, and press Escape or click away to go back. The screens are 3D only; the plan view doesn't show them.
 
 ## Everything that needs you, in one place
 
@@ -153,7 +180,9 @@ This works with Claude Code today. Codex, Copilot CLI, Gemini CLI, Cursor and Fa
 | Setting | Default | What it does |
 |---|---|---|
 | `AGENT_OFFICE_PORT` | `4747` | Port for the bridge. Set it for Claude Code too if you change it, since the hook script reads it. |
-| `AGENT_OFFICE_HOST` | `127.0.0.1` | Interface the bridge listens on. |
+| `AGENT_OFFICE_HOST` | `127.0.0.1` | Interface the bridge listens on: `127.0.0.1`, `::1` or `localhost`. The bridge refuses any other address, since its keys would cross the network unencrypted. To use the office from another device, forward the port over SSH (`ssh -L 4747:127.0.0.1:4747 your-mac`). |
+| `AGENT_OFFICE_ALLOWED_HOSTS` | | Comma-separated host names, besides `localhost` and IP addresses, that may address the office (say `my-mac.local`). |
+| `AGENT_OFFICE_DATA` | see above | Folder for the keys (`ui-token`, `hook-token`). Set it for your agents too, since the hooks read it. |
 | `?demo` | | Simulated agents instead of live sessions. |
 | `?fast` | | Shorter idle timers, useful when testing. |
 | `?time=18:45` | | Preview the **Auto** theme at another hour. |

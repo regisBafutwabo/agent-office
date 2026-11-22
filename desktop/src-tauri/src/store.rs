@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::discover::{Found, FOUND_WINDOW_MS};
+use crate::discover::{Found, FoundSub, FOUND_WINDOW_MS};
 use crate::transcript::{read_transcript, Context, Message, Transcript, MESSAGE_CHARS};
 
 const STALE_MS: u64 = 6 * 60 * 60 * 1000; // forget sessions that went silent (crashed without SessionEnd)
@@ -160,6 +160,9 @@ pub struct Subagent {
     pub status: String,
     pub activity: String,
     pub started_at: u64,
+    /// Found in its log, with no hook heard from it yet: its log decides when it leaves (see Store::adopt_subs).
+    #[serde(skip)]
+    pub from_log: bool,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -184,6 +187,8 @@ pub struct Session {
     pub tty: Option<String>,
     /// The Claude desktop app's chat id, so "Open chat" lands on this exact conversation.
     pub chat: Option<String>,
+    /// The T3 Code thread (T3CODE_THREAD_ID), so "Open chat" lands on that thread in T3 Code.
+    pub t3_thread: Option<String>,
     /// The chat's title (from its transcript), or its first prompt until it has one.
     pub title: Option<String>,
     /// A merge ran since the last prompt (see is_merge).
@@ -230,6 +235,7 @@ pub struct Origin<'a> {
     pub term: Option<&'a str>,
     pub tty: Option<&'a str>,
     pub chat: Option<&'a str>,
+    pub t3_thread: Option<&'a str>,
 }
 
 #[derive(Default)]
@@ -244,6 +250,8 @@ pub struct Store {
     codex_ids: HashSet<String>,
     /// (session id, agent id) → when that subagent reported SubagentStop.
     stopped_subs: HashMap<(String, String), u64>,
+    /// "Show code" turned off in Customize: edited lines are never kept or sent, only file names.
+    hide_code: bool,
 }
 
 fn set_status(s: &mut Session, sub: Option<usize>, status: &str, activity: String) {
@@ -331,6 +339,25 @@ impl Store {
     }
 
     /// A chat found in its log (discover.rs): add it, or refresh it while no hook has reported on it.
+    /// Subagents a found chat's logs show at work (discover::running_subs) that no hook told us about walk in, and
+    /// leave once the logs say they finished. Returns the events to pass on.
+    pub fn adopt_subs(&mut self, id: &str, subs: &[FoundSub]) -> Vec<Value> {
+        let now = now_ms();
+        let Some(s) = self.sessions.iter_mut().find(|s| s.id == id) else { return vec![] };
+        let event = |kind: &str, a: &Subagent| json!({ "type": kind, "sessionId": id, "at": now, "agentId": a.id, "agentType": a.kind, "agentTask": a.task, "message": null });
+        let mut events = vec![];
+        for x in subs {
+            let stopped = self.stopped_subs.get(&(id.to_string(), x.id.clone())).is_some_and(|at| now.saturating_sub(*at) < LATE_HOOK_MS);
+            if stopped || s.subagents.iter().any(|a| a.id == x.id) { continue; }
+            s.subagents.push(Subagent { id: x.id.clone(), kind: x.kind.clone(), task: x.task.clone(), status: "working".into(), activity: "Working".into(), started_at: x.at, from_log: true });
+            events.push(event("SubagentStart", s.subagents.last().unwrap()));
+        }
+        let (stay, gone): (Vec<_>, Vec<_>) = std::mem::take(&mut s.subagents).into_iter().partition(|a| !a.from_log || subs.iter().any(|x| x.id == a.id));
+        s.subagents = stay;
+        events.extend(gone.iter().map(|a| event("SubagentStop", a)));
+        events
+    }
+
     /// Returns a SessionFound event when something on screen changes; hooks always win over logs.
     pub fn adopt(&mut self, f: Found) -> Option<Value> {
         if f.agent == "claude-code" && self.codex_ids.contains(&f.id) { return None; }
@@ -361,7 +388,7 @@ impl Store {
                 self.sessions.push(Session {
                     id: f.id, agent: f.agent, cwd: f.cwd, project, entrypoint: entrypoint_label(f.entrypoint.as_deref()), started_at: f.at, last_event_at: f.at,
                     status: f.status, activity: f.activity, permission_mode: "default".into(), subagents: vec![], tool: None,
-                    app: None, term: None, tty: None, chat: None, title: f.title.clone(), merged: false, messages: f.messages, context: None,
+                    app: None, term: None, tty: None, chat: None, t3_thread: None, title: f.title.clone(), merged: false, messages: f.messages, context: None,
                     transcript_title: f.title, first_prompt: None, transcript_checked_at: 0, pending_tasks: vec![], from_log: true,
                 });
                 (self.sessions.len() - 1, true)
@@ -372,7 +399,7 @@ impl Store {
             "type": "SessionFound", "sessionId": s.id, "at": now_ms(), "agentId": null, "agentType": null,
             "message": if new { Value::from("Already running") } else { Value::Null },
             "session": { "id": s.id, "agent": s.agent, "cwd": s.cwd, "project": s.project, "title": s.title, "merged": s.merged, "entrypoint": s.entrypoint,
-                         "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": s.app, "term": s.term, "chat": s.chat, "messages": s.messages },
+                         "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": s.app, "term": s.term, "chat": s.chat, "t3Thread": s.t3_thread, "messages": s.messages },
         });
         if let Some(id) = replaces { event["replacesSessionId"] = id.into(); }
         if new {                                   // only the arrival goes in the feed, not every refresh
@@ -392,7 +419,22 @@ impl Store {
     }
 
     /// Same as `ingest`, for a payload already translated from another tool by adapters.rs.
+    pub fn show_code(&self) -> bool {
+        !self.hide_code
+    }
+
+    /// Turning it off drops the lines already kept, too.
+    pub fn set_show_code(&mut self, show: bool) {
+        self.hide_code = !show;
+        if !show {
+            for e in self.recent.iter_mut() {
+                if let Some(o) = e.as_object_mut() { o.remove("edit"); }
+            }
+        }
+    }
+
     pub fn ingest_from(&mut self, p: &Value, entrypoint: Option<&str>, project_dir: Option<&str>, agent: &str, origin: Origin) -> Option<Value> {
+        let hide_code = self.hide_code;
         let kind = str_of(p, "hook_event_name");
         let sid = str_of(p, "session_id");
         if kind.is_empty() || sid.is_empty() {
@@ -415,7 +457,7 @@ impl Store {
                     id: sid.into(), agent: agent.into(), cwd, project, entrypoint: entrypoint_label(entrypoint), started_at: now, last_event_at: now,
                     status: "idle".into(), activity: "Session started".into(),
                     permission_mode: if pm.is_empty() { "default".into() } else { pm.into() }, subagents: vec![], tool: None,
-                    app: None, term: None, tty: None, chat: None,
+                    app: None, term: None, tty: None, chat: None, t3_thread: None,
                     title: None, merged: false, messages: vec![], context: None, transcript_title: None, first_prompt: None, transcript_checked_at: 0, pending_tasks: vec![],
                     from_log: false,
                 });
@@ -441,6 +483,7 @@ impl Store {
             if let Some(t) = origin.term.filter(|t| !t.is_empty()) { s.term = Some(t.into()); }
             if let Some(t) = origin.tty.filter(|t| crate::focus::valid_tty(t)) { s.tty = Some(t.into()); }
             if let Some(c) = origin.chat.filter(|c| crate::focus::valid_chat(c)) { s.chat = Some(c.into()); }
+            if let Some(t) = origin.t3_thread.filter(|t| crate::focus::valid_uuid(t)) { s.t3_thread = Some(t.into()); }
             // The chat's title and last messages from its transcript; until it has a title, its first prompt stands in.
             let before = s.messages.clone();
             let prompt = str_of(p, "prompt");
@@ -494,13 +537,14 @@ impl Store {
                     let task = claim_task(s, agent_type, now);
                     s.subagents.push(Subagent {
                         id: agent_id.into(), kind: if agent_type.is_empty() { "subagent".into() } else { agent_type.into() }, task,
-                        status: "thinking".into(), activity: "Starting".into(), started_at: now,
+                        status: "thinking".into(), activity: "Starting".into(), started_at: now, from_log: false,
                     });
                     s.subagents.len() - 1
                 }
             })
         };
         if let Some(i) = sub {
+            s.subagents[i].from_log = false;       // a hook reports on it: hooks decide when it leaves
             e.insert("agentTask".into(), s.subagents[i].task.clone().map_or(Value::Null, Value::from));
         }
         let tool = str_of(p, "tool_name");
@@ -540,6 +584,9 @@ impl Store {
                 e.insert("tool".into(), tool.into());
                 e.insert("summary".into(), summary.clone().into());
                 e.insert("failed".into(), failed.into());
+                if !failed && !hide_code {
+                    if let Some(edit) = crate::changes::edit_of(tool, p.get("tool_input").unwrap_or(&Value::Null)) { e.insert("edit".into(), edit); }
+                }
                 set_status(s, sub, "thinking", if failed { format!("{tool} failed") } else { "Thinking".into() });
                 if !failed && is_merge(tool, p.get("tool_input").unwrap_or(&Value::Null)) {
                     e.insert("merged".into(), true.into());
@@ -560,8 +607,11 @@ impl Store {
                 e.insert("message".into(), message.clone().into());
                 e.insert("notificationType".into(), if nt.is_empty() { Value::Null } else { nt.into() });
                 if nt == "permission_prompt" {
-                    s.status = "waiting".into();
-                    s.activity = if message.is_empty() { "Needs your permission".into() } else { message };
+                    // The prompt names no agent. When a subagent has just asked, it's that subagent's, and the session itself isn't blocked.
+                    if !s.subagents.iter().any(|a| a.status == "waiting") {
+                        s.status = "waiting".into();
+                        s.activity = if message.is_empty() { "Needs your permission".into() } else { message };
+                    }
                 } else if nt == "idle_prompt" {
                     s.status = "idle".into();
                     s.activity = "Waiting for your input".into();
@@ -597,7 +647,7 @@ impl Store {
         }
         e.insert("session".into(), json!({
             "id": s.id, "agent": s.agent, "cwd": s.cwd, "project": s.project, "title": s.title, "merged": s.merged, "entrypoint": s.entrypoint,
-            "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": s.app, "term": s.term, "chat": s.chat,
+            "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": s.app, "term": s.term, "chat": s.chat, "t3Thread": s.t3_thread,
             "context": s.context,
         }));
         if chat_changed {
@@ -645,7 +695,7 @@ mod tests {
         st.ingest(&json!({ "session_id": "t1", "cwd": "/repo", "hook_event_name": "SessionStart" }), None, None);
         st.ingest(&json!({ "session_id": "real-claude", "cwd": "/repo", "hook_event_name": "SessionStart" }), Some("cli"), None);
         let f = Found { id: "codex:t1".into(), agent: "codex".into(), cwd: "/repo".into(), project: None, entrypoint: None,
-            at: now_ms(), status: "working".into(), activity: "Working".into(), title: None, messages: vec![], ended: false };
+            at: now_ms(), status: "working".into(), activity: "Working".into(), title: None, messages: vec![], ended: false, subs: vec![] };
         assert_eq!(st.adopt(f).unwrap()["replacesSessionId"], "t1");
         assert_eq!(st.sessions.len(), 2);
         assert!(st.sessions.iter().any(|s| s.id == "real-claude"));
@@ -673,7 +723,7 @@ mod tests {
         st.ingest_from(&prompt, None, None, "codex", Origin::default());
         let last = st.sessions[0].last_event_at;
         let log = |at: u64, ended: bool| Found { agent: "codex".into(), id: "codex:t1".into(), cwd: "/repo".into(), project: None, entrypoint: Some("T3 Code".into()),
-            at, status: "done".into(), activity: "Finished".into(), title: None, messages: vec![], ended };
+            at, status: "done".into(), activity: "Finished".into(), title: None, messages: vec![], ended, subs: vec![] };
         // An earlier turn's end, written before this prompt, mustn't cut it short; it only fills in where the session runs.
         let e = st.adopt(log(last - 1000, true)).unwrap();
         assert_eq!((e["session"]["entrypoint"].as_str(), e["session"]["status"].as_str()), (Some("t3-code"), Some("thinking")));
@@ -753,6 +803,31 @@ mod tests {
     }
 
     #[test]
+    fn a_subagents_permission_prompt_leaves_the_main_session_working() {
+        let mut st = Store::default();
+        st.ingest(&base(json!({ "hook_event_name": "PreToolUse", "tool_name": "Agent", "tool_input": { "subagent_type": "Explore", "description": "Look around" } })), None, None);
+        st.ingest(&base(json!({ "hook_event_name": "SubagentStart", "agent_id": "x1", "agent_type": "Explore" })), None, None);
+        st.ingest(&base(json!({ "hook_event_name": "PermissionRequest", "agent_id": "x1", "tool_name": "Bash", "tool_input": { "command": "make test" } })), None, None);
+        st.ingest(&base(json!({ "hook_event_name": "Notification", "notification_type": "permission_prompt", "message": "Claude needs your permission to use Bash" })), None, None);
+        assert_eq!(st.sessions[0].status, "working");
+        assert_eq!(st.waiting_count(), 1);
+        st.ingest(&base(json!({ "hook_event_name": "PostToolUse", "agent_id": "x1", "tool_name": "Bash", "tool_input": { "command": "make test" } })), None, None);
+        assert_eq!(st.waiting_count(), 0);
+    }
+
+    #[test]
+    fn edited_lines_ride_on_a_finished_edit_and_not_at_all_once_code_is_hidden() {
+        let mut st = Store::default();
+        let post = |kind: &str| base(json!({ "hook_event_name": kind, "tool_name": "Edit", "tool_input": { "file_path": "/Users/me/code/shop/a.js", "old_string": "x = 1", "new_string": "x = 2" } }));
+        assert_eq!(st.ingest(&post("PostToolUse"), None, None).unwrap()["edit"], json!({ "del": ["x = 1"], "add": ["x = 2"], "more": 0 }));
+        assert!(st.ingest(&post("PreToolUse"), None, None).unwrap().get("edit").is_none());
+        assert!(st.ingest(&post("PostToolUseFailure"), None, None).unwrap().get("edit").is_none());
+        st.set_show_code(false);
+        assert!(st.ingest(&post("PostToolUse"), None, None).unwrap().get("edit").is_none());
+        assert!(st.snapshot()["recent"].as_array().unwrap().iter().all(|e| e.get("edit").is_none()));
+    }
+
+    #[test]
     fn files_the_session_under_the_project_folder() {
         let mut st = Store::default();
         st.ingest(&base(json!({ "hook_event_name": "SessionStart", "cwd": "/Users/me/code/shop/src/cart" })), Some("cli"), Some("/Users/me/code/shop"));
@@ -766,6 +841,17 @@ mod tests {
         assert!(st.ingest(&json!({ "hook_event_name": "Stop" }), None, None).is_none());
         assert!(st.ingest_from(&json!({ "hook_event_name": "SessionStart", "session_id": "codex:h1", "cwd": "/" }), None, None, "codex", Origin::default()).is_none());
         assert!(!st.sessions.iter().any(|s| s.id == "codex:h1"));
+    }
+
+    #[test]
+    fn keeps_a_valid_t3_code_thread_and_ignores_a_bad_one() {
+        let mut st = Store::default();
+        let thread = "fceae35e-a7d0-4d26-b667-aa2413567acf";
+        let e = st.ingest_from(&base(json!({ "hook_event_name": "SessionStart" })), Some("t3-code"), None, "claude-code", Origin { t3_thread: Some(thread), ..Origin::default() }).unwrap();
+        assert_eq!(e["session"]["t3Thread"], thread);
+        st.ingest_from(&base(json!({ "hook_event_name": "Stop" })), Some("t3-code"), None, "claude-code", Origin { t3_thread: Some("../x?y"), ..Origin::default() });
+        assert_eq!(st.sessions[0].t3_thread.as_deref(), Some(thread));
+        assert_eq!(serde_json::to_value(&st.sessions[0]).unwrap()["t3Thread"], thread);
     }
 
     #[test]
@@ -810,9 +896,26 @@ mod tests {
         assert_eq!(st.ingest(&base(json!({ "hook_event_name": "UserPromptSubmit", "prompt": "next" })), None, None).unwrap()["session"]["merged"], false);
     }
 
+    #[test]
+    fn a_subagent_already_at_work_walks_in_and_leaves_when_its_log_or_a_hook_says_so() {
+        let mut st = Store::default();
+        let sub = [FoundSub { id: "a1".into(), kind: "general-purpose".into(), task: Some("Wire the frontend".into()), at: 1 }];
+        st.adopt(found("s1", "working"));
+        let e = st.adopt_subs("s1", &sub);
+        assert_eq!((e[0]["type"].as_str(), e[0]["agentId"].as_str(), e[0]["agentTask"].as_str()), (Some("SubagentStart"), Some("a1"), Some("Wire the frontend")));
+        assert!(st.adopt_subs("s1", &sub).is_empty());                              // already here
+        assert_eq!(st.adopt_subs("s1", &[])[0]["type"], "SubagentStop");
+        st.adopt_subs("s1", &sub);
+        st.ingest(&json!({ "session_id": "s1", "cwd": "/Users/me/code/shop", "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": { "command": "ls" }, "agent_id": "a1" }), None, None);
+        assert!(st.adopt_subs("s1", &[]).is_empty());                               // a hook reported on it, so only a hook ends it
+        assert_eq!(st.sessions[0].subagents.len(), 1);
+        st.ingest(&json!({ "session_id": "s1", "cwd": "/Users/me/code/shop", "hook_event_name": "SubagentStop", "agent_id": "a1" }), None, None);
+        assert!(st.adopt_subs("s1", &sub).is_empty());                              // its log still reads mid-turn for a moment: it stays gone
+    }
+
     fn found(id: &str, status: &str) -> Found {
         Found { agent: "claude-code".into(), id: id.into(), cwd: "/Users/me/code/shop".into(), project: None, entrypoint: Some("claude-desktop".into()),
-                at: now_ms(), status: status.into(), activity: "Working".into(), title: Some("Fix cart".into()), messages: vec![], ended: false }
+                at: now_ms(), status: status.into(), activity: "Working".into(), title: Some("Fix cart".into()), messages: vec![], ended: false, subs: vec![] }
     }
 
     #[test]

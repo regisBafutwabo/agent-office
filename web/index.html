@@ -3,7 +3,7 @@
 <title>Agent Office</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Bangers&display=swap">
 <style>
 :root{
   --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
@@ -264,6 +264,55 @@ pre.json{margin:0;padding:12px;background:var(--panel-2);border:1px solid var(--
 .d-ctx .bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
 .d-ctx .bar i{display:block;height:100%;border-radius:3px;background:var(--c)}
 .d-ctx small{font-size:12px;font-variant-numeric:tabular-nums}
+.d-chg{display:grid;gap:8px;font:400 12px/16px var(--font-b);color:var(--muted)}
+.chg-top{display:flex;align-items:center;gap:10px}
+.chg-top b{font:700 30px/30px var(--font-d);color:var(--ink);font-variant-numeric:tabular-nums}
+.chg-top span{display:grid;color:var(--ink);font-size:13px;line-height:17px;min-width:0}
+.chg-top small{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chg-top .btn{margin-left:auto}
+.chg-edit{border-left:3px solid var(--c);padding-left:9px;min-width:0}
+.chg-edit header{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chg-edit header b{font:600 12px/16px var(--font-m)}
+.code{margin:5px 0 0;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel-2);font:400 11px/17px var(--font-m);color:var(--ink);overflow:hidden}
+.code .ln{display:block;padding:0 8px;white-space:pre;overflow:hidden;text-overflow:ellipsis}
+.code .add{background:color-mix(in srgb,var(--s-done) 15%,transparent)}
+.code .del{background:color-mix(in srgb,var(--s-err) 15%,transparent);color:var(--ink-2)}
+.code .hunk{color:var(--muted);background:color-mix(in srgb,var(--line) 45%,transparent)}
+.chg-warn{color:color-mix(in srgb,var(--s-wait) 70%,var(--ink))}
+.review{width:min(980px,calc(100% - 32px));height:min(720px,calc(100% - 32px));padding:0;border:1px solid var(--line);border-radius:var(--r-lg);color:var(--ink);background:var(--panel);box-shadow:var(--e-2);font:400 13px/18px var(--font-b);overflow:hidden}
+.review[open]{display:flex;flex-direction:column}
+.review::backdrop{background:rgba(11,17,20,.4);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+.review header{display:flex;align-items:flex-start;gap:12px;padding:16px 16px 12px}
+.review h2{margin:0;font:700 18px/22px var(--font-d)}
+.review header p{margin:2px 0 0;color:var(--muted);font-size:12px}
+.review header .icon-btn{margin-left:auto}
+.rv-warn{margin:0 16px 10px;font-size:12px}
+.rv-body{flex:1;display:grid;grid-template-columns:minmax(220px,320px) minmax(0,1fr);min-height:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.rv-files{list-style:none;margin:0;padding:6px;overflow:auto;border-right:1px solid var(--line)}
+.rv-files button{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;width:100%;padding:7px 8px;border:0;border-radius:var(--r-sm);background:none;color:var(--ink);text-align:left;cursor:pointer;font:inherit}
+.rv-files button:hover,.rv-files button.sel{background:var(--panel-2)}
+.rv-files button.seen{opacity:.5}
+.rv-files .path{font:500 12px/17px var(--font-m);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
+.rv-files .num{font:500 12px/17px var(--font-m);font-variant-numeric:tabular-nums;white-space:nowrap}
+.rv-files .num b{color:var(--s-done);font-weight:500} .rv-files .num i{color:var(--s-err);font-style:normal}
+.rv-files small{grid-column:1/-1;color:var(--muted);font-size:11px;line-height:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv-files .dot{display:inline-block;width:8px;height:8px;margin:0 6px 0 3px;border-radius:50%;background:var(--c)}
+.rv-files .dot.now{box-shadow:0 0 0 2px var(--panel),0 0 0 3px var(--c)}
+.rv-diff{overflow:auto;min-width:0}
+.rv-diff .code{margin:0;border:0;border-radius:0;background:none;min-width:max-content;font-size:12px;line-height:18px}
+.rv-diff .code .ln{overflow:visible;text-overflow:clip}
+.rv-diff p{margin:0;padding:16px;color:var(--muted)}
+.rv-diff .stale{position:sticky;top:0;left:0;display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel-2);border-bottom:1px solid var(--line);color:var(--ink)}
+.review footer{display:flex;align-items:center;gap:8px;padding:12px 16px}
+.rv-run{margin-right:auto;min-width:0;font-size:12px;color:var(--muted)}
+.rv-run b{display:block;color:var(--ink);font:500 12px/17px var(--font-m);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv-run .ok{color:var(--s-done)} .rv-run .bad{color:var(--s-err)}
+@media (max-width:640px){.rv-body{grid-template-columns:1fr;grid-template-rows:minmax(0,2fr) minmax(0,3fr)}.rv-files{border-right:0;border-bottom:1px solid var(--line)}.review footer{flex-wrap:wrap}}
+.d-mem{font:400 12px/16px var(--font-b);color:var(--muted)}
+.d-mem summary{cursor:pointer}
+.d-mem ol{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:3px;max-height:132px;overflow:auto}
+.d-mem li{display:grid;grid-template-columns:52px minmax(0,1fr);gap:8px;color:var(--ink)}
+.d-mem time{color:var(--muted);font-variant-numeric:tabular-nums}
 .perm{border:1px solid color-mix(in srgb,var(--s-wait) 40%,transparent);background:color-mix(in srgb,var(--s-wait) 8%,var(--panel));border-radius:var(--r-md);padding:12px;display:flex;flex-direction:column;gap:8px}
 .perm-head{font-weight:600}
 .perm code{font:500 12px/16px var(--font-m);background:var(--panel-2);border:1px solid var(--line);padding:8px 10px;border-radius:var(--r-sm);overflow-x:auto;white-space:nowrap}
@@ -503,6 +552,7 @@ body.live .speed-top, body.live .demo-only{display:none}
       <h3>Sounds</h3>
       <div class="toggles">
         <label><input type="checkbox" id="opt-sound" checked> Chime when an agent finishes or needs you</label>
+        <label title="Off: the office keeps and shows file names only, never the lines an agent changed."><input type="checkbox" id="opt-code" checked> Show code in agent cards and reviews</label>
       </div>
       <p class="note">Every agent hums its own little tune when it's done, so you can tell who finished without looking. When one needs you, it knocks.</p>
       <h3 class="demo-only">Demo speed</h3>
@@ -529,6 +579,12 @@ body.live .speed-top, body.live .demo-only{display:none}
     <p class="d-activity" id="d-activity"></p>
     <div class="d-alert" id="d-alert" hidden></div>
     <div class="d-ctx" id="d-ctx" hidden title="How much of its context window this chat fills. Near the top, Claude Code compacts it and the details get summarized."><span>Memory</span><span class="bar"><i id="d-ctx-bar"></i></span><small id="d-ctx-text"></small></div>
+    <div class="d-chg" id="d-chg" hidden>
+      <div class="chg-top"><b id="chg-n"></b><span><span id="chg-what"></span><small id="chg-since"></small></span><button class="btn sm" id="chg-open">Review</button></div>
+      <div class="chg-edit" id="chg-edit" hidden><header id="chg-edit-head"></header><div class="code" id="chg-edit-code" hidden></div></div>
+      <div class="chg-warn" id="chg-warn" hidden></div>
+    </div>
+    <details class="d-mem" id="d-mem" hidden><summary id="d-mem-sum"></summary><ol id="d-mem-list"></ol></details>
     <div class="perm" id="d-perm" hidden>
       <div class="perm-head">Wants to run <b id="d-perm-tool"></b></div>
       <code id="d-perm-cmd"></code>
@@ -589,6 +645,13 @@ body.live .speed-top, body.live .demo-only{display:none}
     <div id="guide-tools"></div>
     <div class="guide-actions"><button class="btn ghost" id="guide-skip">Skip tour</button><button class="btn" id="guide-back">Back</button><button class="btn" id="guide-action" hidden></button><button class="btn primary" id="guide-next">Next</button></div>
   </section>
+  <dialog class="review" id="review" aria-labelledby="rv-title">
+    <header><div><h2 id="rv-title"></h2><p id="rv-sub"></p></div>
+      <button class="icon-btn sm" id="rv-close" aria-label="Close review"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
+    <p class="rv-warn chg-warn" id="rv-warn" hidden></p>
+    <div class="rv-body"><ol class="rv-files" id="rv-files"></ol><div class="rv-diff" id="rv-diff"></div></div>
+    <footer><div class="rv-run" id="rv-run"></div><button class="btn" id="rv-refresh" title="Read the checkout again">Refresh</button><button class="btn" id="rv-chat" hidden></button><button class="btn primary" id="rv-mark">Mark reviewed</button></footer>
+  </dialog>
   <dialog class="city-picker" id="city-picker" aria-labelledby="city-title" aria-describedby="city-description">
     <h2 id="city-title">Pick your city</h2>
     <p id="city-description">Choose the view outside. You can change it in Customize.</p>
@@ -598,9 +661,27 @@ body.live .speed-top, body.live .demo-only{display:none}
 </div>
 
 <script>
+// The office's key. It arrives once in the address, #k=… (the app's window, or the link the bridge prints) or a
+// one-time #code=… (the app's "Open in browser"), is kept in this browser only, and leaves the address at once.
+const officeAuth = (() => {
+  const KEY = 'agent-office:key', hash = new URLSearchParams(location.hash.slice(1)), given = hash.get('k'), code = hash.get('code');
+  let key = ''; try { key = localStorage.getItem(KEY) || ''; } catch (_) {}
+  const keep = k => { key = k; try { localStorage.setItem(KEY, k); } catch (_) {} };
+  if (given || code) history.replaceState(null, '', location.pathname + location.search);
+  // A link pasted into an office tab that is already open changes only the fragment; start over to use it.
+  addEventListener('hashchange', () => { if (/(^|&)(k|code)=/.test(location.hash.slice(1))) location.reload(); });
+  if (given) keep(given);
+  const ready = !code ? Promise.resolve() : fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) })
+    .then(r => r.ok ? r.json() : null).then(d => { if (d && typeof d.token === 'string') keep(d.token); }).catch(() => {});
+  return {
+    ready,
+    fetch: (url, o = {}) => ready.then(() => fetch(url, { ...o, headers: key ? { ...o.headers, Authorization: 'Bearer ' + key } : o.headers })),
+    protocols: () => key ? ['agent-office', 'agent-office.token.' + key] : ['agent-office'],
+  };
+})();
 // Report page errors and the frame rate to the local server so they show up in its log (no-op on claude.ai).
 (() => {
-  const report = data => { try { if (/^https?:$/.test(location.protocol) && !location.host.endsWith('claude.ai')) navigator.sendBeacon('/api/log', JSON.stringify(data)); } catch (_) {} };
+  const report = data => { try { if (/^https?:$/.test(location.protocol) && !location.host.endsWith('claude.ai')) officeAuth.fetch('/api/log', { method: 'POST', body: JSON.stringify(data), keepalive: true }).catch(() => {}); } catch (_) {} };
   addEventListener('error', e => report({ kind: 'error', message: e.message, at: `${e.filename}:${e.lineno}:${e.colno}` }));
   addEventListener('unhandledrejection', e => report({ kind: 'rejection', message: String(e.reason && e.reason.stack || e.reason) }));
   addEventListener('load', () => { let frames = 0; const t0 = performance.now(); const count = () => { frames++; if (performance.now() - t0 < 3000) requestAnimationFrame(count); else report({ kind: 'fps', fps: Math.round(frames / 3), webgl: !!document.createElement('canvas').getContext('webgl'), ua: navigator.userAgent }); }; requestAnimationFrame(count); });
@@ -1695,7 +1776,7 @@ async function setCity(id) {
     setCityAtmosphere(id); cityKey = id; uiPrefs.city = id; saveUi(); $('#city-credit').hidden = id === 'generic';
     $('#city-picker').close(); $('#city-status').hidden = true; buildCityChoices(); return true;
   } catch (err) {
-    try { if (/^https?:$/.test(location.protocol)) navigator.sendBeacon('/api/log', JSON.stringify({ kind: 'city', id, message: String(err && err.stack || err) })); } catch (_) {}
+    try { if (/^https?:$/.test(location.protocol)) officeAuth.fetch('/api/log', { method: 'POST', body: JSON.stringify({ kind: 'city', id, message: String(err && err.stack || err) }), keepalive: true }).catch(() => {}); } catch (_) {}
     if (request !== cityRequest) return false;
     clearCity(); buildGenericCity(); batchGenericCity(); cityKey = 'generic'; setCityAtmosphere('generic'); $('#city-credit').hidden = true; buildCityChoices();
     const message = location.protocol === 'file:' ? 'Open the office through its local server to load real cities.' : 'Couldn’t load that city. Showing Generic city.'; toast(message);
@@ -1829,6 +1910,8 @@ function booth(cx, cz, felt) {
 /* ---------- zone: workbenches ---------- */
 const benchX = [-10.3, -8.1, -5.9, -3.7].map(x => x + 7);
 const deskSeats = [...workbench(-7, -2.6, benchX), ...workbench(-7, 2.2, benchX)];
+const deskShelves = deskSeats.map(s => grp(s.x, s.z));             // what each desk remembers (see drawDesks); the meshes are shared across floors
+let deskDirty = true;
 function linearLamp(x, z, len, light) {
   const g = grp(x, z);
   [-len / 2 + .3, len / 2 - .3].forEach(dx => cyl(.006, .006, .9, mats.black, dx, 2.95, 0, g, 4));
@@ -1855,8 +1938,9 @@ plantBig(-13.1, -0.2, 1.1); plantBig(-13.1, 4.6, .95); plantBush(-13.1, -2.4, .9
 }
 
 /* ---------- zone: war room ---------- */
-const term = canvasTex(1024, 384); term.lines = [];
-const board = canvasTex(768, 280); board.items = [];
+// Two screens, sharp enough to read once the camera is up close: the floor's review board and its latest reported edit.
+const term = canvasTex(2048, 768), board = canvasTex(1536, 560);
+let screensDirty = true;
 { const gh = 2.6;
   const glassWall = (x, z, len, alongX) => {
     const gl = new THREE.Mesh(new THREE.BoxGeometry(alongX ? len : .03, gh, alongX ? .03 : len), mats.glass); gl.position.set(x, gh / 2, z); scene.add(gl);
@@ -1874,34 +1958,11 @@ const board = canvasTex(768, 280); board.items = [];
   // freestanding displays in front of the glass
   const st = grp(.8, -8.55); [-1.75, 1.75].forEach(x => { box(.06, 2.3, .06, mats.black, x, 1.15, 0, st); box(.5, .04, .5, mats.black, x, .02, 0, st); });
   box(3.6, 1.4, .06, mats.bezel, 0, 1.6, 0, st);
-  const ts = new THREE.Mesh(new THREE.PlaneGeometry(3.46, 1.3), new THREE.MeshBasicMaterial({ map: term.t })); ts.position.set(0, 1.6, .035); st.add(ts);
+  const ts = new THREE.Mesh(new THREE.PlaneGeometry(3.46, 1.3), new THREE.MeshBasicMaterial({ map: term.t })); ts.position.set(0, 1.6, .035); st.add(ts); term.mesh = ts;
   const sb = grp(3.95, -8.55); [-.95, .95].forEach(x => { box(.05, 2.0, .05, mats.black, x, 1.0, 0, sb); box(.4, .04, .4, mats.black, x, .02, 0, sb); });
   box(1.96, .76, .05, mats.steel, 0, 1.6, 0, sb);
-  const bs = new THREE.Mesh(new THREE.PlaneGeometry(1.86, .68), new THREE.MeshBasicMaterial({ map: board.t })); bs.position.set(0, 1.6, .03); sb.add(bs);
+  const bs = new THREE.Mesh(new THREE.PlaneGeometry(1.86, .68), new THREE.MeshBasicMaterial({ map: board.t })); bs.position.set(0, 1.6, .03); sb.add(bs); board.mesh = bs;
 }
-function drawTerm() {
-  const x = term.x; x.fillStyle = '#0A1115'; x.fillRect(0, 0, 1024, 384);
-  x.fillStyle = '#131E24'; x.fillRect(0, 0, 1024, 42);
-  ['#F25F5C','#FAC05E','#59CD90'].forEach((c, i) => { x.fillStyle = c; x.beginPath(); x.arc(24 + i * 22, 21, 7, 0, 7); x.fill(); });
-  x.fillStyle = '#7D8F98'; x.font = '500 19px "IBM Plex Mono", monospace'; x.fillText('shared terminal · every Bash call from every agent', 100, 28);
-  x.font = '400 22px "IBM Plex Mono", monospace';
-  (curFloor ? curFloor.termLines : []).forEach((l, i) => { const y = 76 + i * 28.5; let cx = 18;
-    x.fillStyle = l.tagColor; x.fillText(l.tag, cx, y); cx += x.measureText(l.tag + ' ').width;
-    x.fillStyle = l.color; x.fillText(fitText(x, l.text, 1000 - cx), cx, y); });
-  term.t.needsUpdate = true;
-}
-function termPush(a, text, color = '#DDE7EB') { const L = a.floor.termLines; L.push({ tag:`[${a.name}]`, tagColor:a.color, text, color }); if (L.length > 11) L.shift(); if (a.floor === curFloor) drawTerm(); }
-function drawBoard() {
-  const x = board.x; x.fillStyle = '#F7F8F6'; x.fillRect(0, 0, 768, 280);
-  x.fillStyle = '#5B6A72'; x.font = '600 20px "IBM Plex Sans", sans-serif'; x.fillText('E D I T I N G   N O W', 26, 38);
-  x.strokeStyle = '#C9D1D4'; x.lineWidth = 2; x.beginPath(); x.moveTo(26, 52); x.lineTo(742, 52); x.stroke();
-  (curFloor ? curFloor.boardItems : []).forEach((it, i) => { const y = 88 + i * 38;
-    x.fillStyle = it.color; x.beginPath(); x.arc(38, y - 7, 9, 0, 7); x.fill();
-    x.fillStyle = '#15212A'; x.font = '500 22px "IBM Plex Mono", monospace'; x.fillText(fitText(x, it.file, 520), 58, y);
-    x.fillStyle = '#6A7A82'; x.font = '500 20px "IBM Plex Sans", sans-serif'; x.textAlign = 'right'; x.fillText(it.who, 742, y); x.textAlign = 'left'; });
-  board.t.needsUpdate = true;
-}
-function boardPush(a, file) { const B = a.floor.boardItems; B.unshift({ file, who: a.name, color: a.color }); B.length = Math.min(B.length, 5); if (a.floor === curFloor) drawBoard(); }
 
 /* ---------- zone: café ---------- */
 const neon = canvasTex(512, 128);
@@ -2232,6 +2293,7 @@ function seeAgent(a) { if (a && a.floor && unseenOf(a.floor).delete(a.id)) uiDir
 const FLOOR_H = 4.6, FLOOR_BASE = 18;
 const floors = []; let curFloor = null, floorSeq = 0;
 let yOff = 0, yOffTarget = 0, viewMode = 'floor';
+const onFloor = () => viewMode === 'floor' || viewMode === 'screen';
 const floorNum = f => FLOOR_BASE + f.i;
 const floorAgents = f => agents.filter(a => a.floor === f);
 // Each floor gets its own copy of the seats so occupancy is per floor; the meshes (screens, chairs) are shared.
@@ -2256,7 +2318,7 @@ function bayBox(w, h, d, mat) {
 }
 function makeFloor(key, name, placeholder = false) {
   const { S, desks } = cloneSpots();
-  const f = { key, name, placeholder, i: floors.length, created: floorSeq++, SPOTS: S, deskSeats: desks, termLines: [], boardItems: [], signSig: '',
+  const f = { key, name, placeholder, i: floors.length, created: floorSeq++, SPOTS: S, deskSeats: desks, signSig: '',
     mGlass: new THREE.MeshLambertMaterial({ map: bayTex.t, emissiveMap: bayLit.t, emissive: new THREE.Color('#FFD9A0'), emissiveIntensity: 0 }),
     mSlab: M('#B9BAB4', { roughness: .9 }), sign: canvasTex(512, 128) };
   f.mSign = new THREE.MeshBasicMaterial({ map: f.sign.t, transparent: true, depthWrite: false });
@@ -2297,7 +2359,8 @@ function rebuildTower() {
 function refreshFloorVisuals() {
   curFloor.deskSeats.forEach(s => { s.chairMat.color.set(s.owner ? s.owner.color : sceneT.chair); s.screen.color.set(sceneT.screenOff); });
   agents.forEach(a => { if (a.floor === curFloor) updateScreen(a); });
-  drawTerm(); drawBoard();
+  screensDirty = true; deskDirty = true;
+  for (const s of Object.values(SPOTS).flat()) if (s.chair) s.chair.rotation.y = yawOf(s.face);   // not how the last floor's sitters left them
 }
 function goToFloor(i) {
   const f = floors[i]; if (!f) return;
@@ -2328,7 +2391,7 @@ function setCamPose(from, to, e) {
 function flyToFloor(i, then, agent) {
   const f = floors[i]; if (!f) return;
   if (unseenOf(f).size) { unseenOf(f).clear(); uiDirty = true; }   // you're going to look, so it's seen
-  if (reduced || view !== '3d' || renderer.xr.isPresenting || (f === curFloor && viewMode === 'floor' && !flight)) { goToFloor(i); if (then) then(); return; }
+  if (reduced || view !== '3d' || renderer.xr.isPresenting || (f === curFloor && onFloor() && !flight)) { goToFloor(i); if (then) then(); return; }
   const same = f === curFloor, dist = Math.abs(f.i - curFloor.i);
   const F = flight = { f, then, agent, t: 0, from: camPose(), same, swapped: same, y0: yOff, y1: -f.i * FLOOR_H,
     heli: { theta: cam.theta + .35, phi: 1.16, radius: Math.max(defaultRadius() * 2.3, 62), target: HELI_TARGET },
@@ -2426,7 +2489,7 @@ function renderLift() {
   const el = $('#lift-list'); if (!el) return;
   const rows = floors.slice().reverse().map(f => {
     const ag = floorAgents(f), w = ag.some(a => a.state === 'waiting');
-    return `<button class="lift-btn${f === curFloor && viewMode === 'floor' ? ' on' : ''}" data-floor="${f.i}" aria-label="Floor ${floorNum(f)}, ${esc(f.name)}">
+    return `<button class="lift-btn${f === curFloor && onFloor() ? ' on' : ''}" data-floor="${f.i}" aria-label="Floor ${floorNum(f)}, ${esc(f.name)}">
       ${floorBadge(f, w)}<span class="fl-name">${esc(f.name)}</span>
       ${floorNews(f) || `<span class="fl-count">${ag.filter(a => a.kind === 'main').length || ''}</span>`}</button>`;
   }).join('');
@@ -2867,7 +2930,7 @@ function sendFaces(a) {
     const url = faceShot(a, mood), k = `${a.sessionId}|${mood}`;
     if (!url || sentFaces.get(k) === url) continue;
     sentFaces.set(k, url);
-    fetch(url).then(r => r.blob()).then(png => fetch(`/api/face/${encodeURIComponent(a.sessionId)}/${mood}`, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: png })).catch(() => {});
+    fetch(url).then(r => r.blob()).then(png => officeAuth.fetch(`/api/face/${encodeURIComponent(a.sessionId)}/${mood}`, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: png })).catch(() => {});
   }
 }
 
@@ -2920,7 +2983,7 @@ const stamp = e => e.at ? wallClock(e.at) : clock(e.t);
 const HOOK_WORDS = { SessionStart: 'Joined', SessionFound: 'Joined', SessionEnd: 'Left', UserPromptSubmit: 'Got a prompt', PreToolUse: 'Started',
   PostToolUse: 'Finished', PostToolUseFailure: 'Failed', PermissionRequest: 'Asked to run', PermissionResolved: 'Answered', Notification: 'Needs you',
   Stop: 'Done', SubagentStart: 'Subagent in', SubagentStop: 'Subagent out', PreCompact: 'Compacting', GoingInCircles: 'Going in circles',
-  SameFile: 'Same file', Merged: 'Merged' };
+  SameFile: 'Same file', Merged: 'Merged', Unstuck: 'Unstuck', Passed: 'Passed' };
 const hookTag = (hook, warn) => `<code class="hook${warn ? ' warn' : ''}" title="${esc(hook)}">${esc(HOOK_WORDS[hook] || hook)}</code>`;
 function emit(a, hook, detail, at) {
   const e = { t: simTime, at, hook, detail, a };
@@ -2944,7 +3007,7 @@ function walkTo(a, s) {
   if (!a.spot && a.dest && a.dest !== s && a.dest !== a.home && a.dest.by === a.id) a.dest.by = null;
   const from = a.spot;
   if (from) {
-    if (from !== a.home) from.by = null;
+    if (from !== a.home && from.by === a.id) from.by = null;
     if (from.screen && a.floor === curFloor) from.screen.color.set(sceneT.screenOff);
   }
   if (s.type && s !== a.home) s.by = a.id;
@@ -2981,13 +3044,6 @@ function makePlan(p) {
   s.push({ t:'think', label:'Writing a summary' });
   return s;
 }
-function bashResult(cmd) {
-  if (/test|pytest|e2e/.test(cmd)) return `✓ ${Math.floor(rand(18, 96))} passed (${rand(1.2, 9).toFixed(1)}s)`;
-  if (/lint|ruff|tsc|typecheck/.test(cmd)) return '✓ no problems found';
-  if (/build/.test(cmd)) return `✓ compiled in ${rand(4, 19).toFixed(1)}s`;
-  if (/push/.test(cmd)) return '→ pushed to origin';
-  return '✓ done';
-}
 function askPermission(a, tool, cmd) {
   return new Promise(res => { a.approval = { tool, cmd, deadline: simTime + 30, resolve: v => { a.approval = null; uiDirty = true; detailDirty = true; res(v); } }; uiDirty = true; detailDirty = true; });
 }
@@ -3000,11 +3056,17 @@ async function doTool(a, ws, tool, arg) {
   else if (a.spot !== ws) { setState(a, 'working', 'Back to work'); await walkTo(a, ws); }
   a.pose = a.spot && a.spot.type === 'library' ? 'read' : 'type';
   setState(a, 'working', label);
-  if (tool === 'Bash') termPush(a, '$ ' + arg, '#F3F7F8');
-  if (tool === 'Edit' || tool === 'Write') boardPush(a, arg);
-  await wait(rand(2.2, 4));
-  if (tool === 'Bash') termPush(a, bashResult(arg), '#6FD69A');
+  const bash = tool === 'Bash', long = bash && /test|build|e2e/.test(arg);
+  let fails = 0;
+  if (bash) a.run = { at: Date.now() };
+  if (bash && Math.random() < .18) for (const n = Math.random() < .3 ? 3 : 1; fails < n; fails++) {
+    await wait(rand(2, 3.5)); emit(a, 'PostToolUseFailure', label); noteWork(a, { tool, summary: arg, failed: true }); react(a, { kind: 'soot' }, Date.now(), arg);
+    a.pose = 'think'; setState(a, 'thinking', `${tool} failed, rethinking`); await wait(rand(1.5, 2.5)); a.pose = 'type'; setState(a, 'working', label);
+  }
+  await wait(long ? rand(8, 12) : rand(2.2, 4));
+  if (bash) { a.run = null; const ms = long ? rand(25000, 95000) : 0; react(a, outcomeOf({ tool }, fails, ms), Date.now(), arg, ms); }
   emit(a, 'PostToolUse', label);
+  noteWork(a, { tool, summary: arg, edit: tool === 'Edit' || tool === 'Write' ? { ...pick(DEMO_EDITS), more: 0 } : null });
 }
 async function mainLoop(a) {
   emit(a, 'SessionStart', '~/Documents/' + a.project.key);
@@ -3097,7 +3159,7 @@ const COFFEE_MS = 2 * 60 * 1000;                                   // how long a
 const sipTip = new THREE.Quaternion(), X_AXIS = new THREE.Vector3(1, 0, 0);
 function animationPose(a, moving) {
   if (moving) return 'walk';
-  if (a.cheerUntil > performance.now()) return 'cheer';
+  if (a.cheerUntil > performance.now() && a.state !== 'waiting') return 'cheer';
   return a.pose === 'dance' && !canDance(a) ? 'idle' : a.pose;
 }
 function updateAgent(a, dt, sdt) {
@@ -3111,7 +3173,8 @@ function updateAgent(a, dt, sdt) {
     else { g.position.x += dx / d * step; g.position.z += dz / d * step; a.yawT = Math.atan2(dx, dz); }
   } else if (a.spot && a.spot.face) a.yawT = yawOf(a.spot.face) + (swivel ? Math.sin(a.animT * .8) * .45 : 0);
   a.yaw = lerpAngle(a.yaw, a.yawT ?? a.yaw, 1 - Math.exp(-sdt * (swivel ? 3 : 10))); g.rotation.y = a.yaw;
-  if (!a.path.length && a.spot && a.spot.chair) a.spot.chair.rotation.y = a.yaw;   // the chair turns with whoever sits in it
+  // The chair turns with whoever sits in it. Chairs are shared by every floor, so only the floor on show may move them.
+  if (!a.path.length && a.spot && a.spot.chair && a.floor === curFloor) a.spot.chair.rotation.y = a.yaw;
   const targetAppear = a.leaving ? 0 : 1; a.appear += (targetAppear - a.appear) * (1 - Math.exp(-sdt * 6));
   g.scale.setScalar(a.scale * Math.max(.001, a.appear));
   a.animT += sdt; const t = a.animT; const moving = a.path.length > 0;
@@ -3251,7 +3314,33 @@ function setView(v) {
   if (v === 'plan') { goal.phi = .02; goal.theta = 0; goal.radius = planRadius(); goal.target.set(0, 0, 0); }
   else { goal.phi = .9; goal.theta = .36; goal.radius = defaultRadius(); goal.target.set(0, 0, -.3); }
 }
+/* Reading a war room screen: the camera flies to face it square-on. Agents and chairs sit between the two, so once
+   it has arrived the camera stops drawing anything nearer than the screen. */
+let zoom = null;                                 // { on, back, theta } while viewMode === 'screen'
+// Up close, a screen is framed in the gap the panels leave.
+function screenFrame(w, h) {
+  if (isMobile()) return { ox: vo.tx, oy: vo.ty, gw: w, gh: h * .5 };
+  const L = liftEl.classList.contains('collapsed') ? 16 : liftEl.getBoundingClientRect().right - stage.getBoundingClientRect().left + 16;
+  const R = w - (appEl.classList.contains('panel-off') ? 0 : panel.offsetWidth + 16) - 16, T = 72, B = h - 24;
+  return { ox: w / 2 - (L + R) / 2, oy: h / 2 - (T + B) / 2, gw: Math.max(200, R - L), gh: B - T };
+}
+function zoomTo(s) {
+  const p = s.mesh.getWorldPosition(new THREE.Vector3()), g = s.mesh.geometry.parameters, t = Math.tan(camera.fov * Math.PI / 360);
+  zoom = { on: s, theta: Math.round(cam.theta / (Math.PI * 2)) * Math.PI * 2, back: viewMode === 'screen' ? zoom.back : { theta: goal.theta, phi: goal.phi, radius: goal.radius, target: goal.target.clone() } };
+  viewMode = 'screen'; goal.theta = zoom.theta; goal.phi = Math.PI / 2; goal.target.copy(p);
+  const h = stage.clientHeight || 1, fr = screenFrame(stage.clientWidth, h);
+  goal.radius = Math.max(g.height * h / (2 * t * fr.gh * .94), g.width * h / (2 * t * fr.gw * .96));
+  screensDirty = true; renderLift(); refreshBoard();
+}
+function unzoom() {
+  if (viewMode !== 'screen') return;
+  viewMode = 'floor'; goal.theta = zoom.back.theta; goal.phi = zoom.back.phi; goal.radius = zoom.back.radius; goal.target.copy(zoom.back.target);
+  screensDirty = true; renderLift();
+}
 function applyCam() {
+  const facing = viewMode === 'screen' && Math.abs(cam.theta - zoom.theta) < .04 && Math.abs(cam.phi - Math.PI / 2) < .04 && cam.target.distanceTo(goal.target) < .3;
+  const near = facing ? Math.max(.1, cam.radius - .3) : .1;
+  if (camera.near !== near) { camera.near = near; camera.updateProjectionMatrix(); }
   const sp = Math.sin(cam.phi);
   camera.position.set(cam.target.x + cam.radius * sp * Math.sin(cam.theta), cam.target.y + cam.radius * Math.cos(cam.phi), cam.target.z + cam.radius * sp * Math.cos(cam.theta));
   camera.lookAt(cam.target);
@@ -3260,8 +3349,8 @@ function updateCam(dt) {
   if (flight && !flight.landing) { applyCam(); return; }            // the flight drives the camera itself
   if (viewMode === 'building') goal.target.y = yOff + (floors.length - 1) * FLOOR_H / 2 + 1.7;
   else if (viewMode === 'roof') goal.target.y = yOff + (floors.length - 1) * FLOOR_H + ROOF_Y;
-  else goal.target.y = 0;
-  if (follow && selected && !flight) { const p = worldPos(selected); goal.target.x += (p.x - goal.target.x) * (1 - Math.exp(-dt * 4)); goal.target.z += (p.z - goal.target.z) * (1 - Math.exp(-dt * 4)); }
+  else if (viewMode !== 'screen') goal.target.y = 0;
+  if (follow && selected && !flight && viewMode !== 'screen') { const p = worldPos(selected); goal.target.x += (p.x - goal.target.x) * (1 - Math.exp(-dt * 4)); goal.target.z += (p.z - goal.target.z) * (1 - Math.exp(-dt * 4)); }
   const k = reduced ? 1 : 1 - Math.exp(-dt * 8);
   cam.theta += (goal.theta - cam.theta) * k; cam.phi += (goal.phi - cam.phi) * k; cam.radius += (goal.radius - cam.radius) * k;
   cam.target.lerp(goal.target, k); applyCam();
@@ -3277,6 +3366,12 @@ function pan(dx, dy) {
 /* ---------- input ---------- */
 const ptrs = new Map(); let moved = 0, panMode = false, pinch = null;
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function screenAt(cx, cy) {
+  if (view !== '3d' || !onFloor() || flight || renderer.xr.isPresenting) return null;
+  const r = canvas.getBoundingClientRect(); ndc.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera); const h = ray.intersectObjects([term.mesh, board.mesh], false)[0];
+  return h ? { on: h.object === term.mesh ? term : board, y: (1 - h.uv.y) * (h.object === term.mesh ? term : board).c.height } : null;
+}
 function agentAt(cx, cy) {
   const r = canvas.getBoundingClientRect(); ndc.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(ndc, camera); const h = ray.intersectObjects(pickables, false);
@@ -3294,7 +3389,7 @@ canvas.addEventListener('pointerdown', e => {
 let hoverT = 0;
 canvas.addEventListener('pointermove', e => {
   const p = ptrs.get(e.pointerId);
-  if (!p) { const now = performance.now(); if (e.pointerType === 'mouse' && now - hoverT > 80) { hoverT = now; canvas.style.cursor = agentAt(e.clientX, e.clientY) ? 'pointer' : 'grab'; } return; }
+  if (!p) { const now = performance.now(); if (e.pointerType === 'mouse' && now - hoverT > 80) { hoverT = now; canvas.style.cursor = agentAt(e.clientX, e.clientY) || screenAt(e.clientX, e.clientY) ? 'pointer' : 'grab'; } return; }
   // the pointerup can be lost when focus moves to another window or monitor mid-drag
   if (e.pointerType === 'mouse' && e.buttons === 0) { dropPtrs(); return; }
   const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
@@ -3307,8 +3402,12 @@ canvas.addEventListener('pointermove', e => {
   }
 });
 function endPtr(e) {
-  if (ptrs.size === 1 && moved < 6 && e.type === 'pointerup') { const a = agentAt(e.clientX, e.clientY);
-    if (a) select(a, true); else { const f = floorAt(e.clientX, e.clientY); if (f && (f !== curFloor || viewMode === 'building')) flyToFloor(f.i); else select(null); } }
+  if (ptrs.size === 1 && moved < 6 && e.type === 'pointerup') { const s = screenAt(e.clientX, e.clientY), a = viewMode === 'screen' ? null : agentAt(e.clientX, e.clientY);
+    if (viewMode === 'screen') {                                    // up close: a row opens that agent's changes, anywhere off the screens goes back
+      const row = s && s.on === zoom.on && (s.on.rows || []).find(r => s.y >= r.y0 && s.y < r.y1);
+      if (!s) unzoom(); else if (s.on !== zoom.on) zoomTo(s.on); else if (row) openReview(row.m);
+    } else if (a) select(a, true); else if (s) zoomTo(s.on);
+    else { const f = floorAt(e.clientX, e.clientY); if (f && (f !== curFloor || viewMode === 'building')) flyToFloor(f.i); else select(null); } }
   ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null;
 }
 function dropPtrs() { ptrs.clear(); pinch = null; }
@@ -3319,7 +3418,10 @@ canvas.addEventListener('wheel', e => { e.preventDefault(); goal.radius = clamp(
 const keys = new Set();
 addEventListener('keydown', e => {
   if (e.target.closest('input,textarea,select,dialog')) return;
-  if (e.key === 'Escape') { if (appEl.classList.contains('wall')) setWall(false); select(null); }
+  if (e.key === 'Escape') {
+    if (appEl.classList.contains('wall')) setWall(false);
+    if (viewMode === 'screen') unzoom(); else select(null);
+  }
   if (e.key === '[') setLiftOpen(liftEl.classList.contains('collapsed'));
   if (e.key === ']') setPanelOpen(!panelOpen());
   if (e.key === '\\') { const show = liftEl.classList.contains('collapsed') && !panelOpen(); setLiftOpen(show); setPanelOpen(show); }
@@ -3515,6 +3617,12 @@ function renderDetail() {
   const ctx = a.kind === 'main' && a.context, cx = $('#d-ctx'); cx.hidden = !ctx;
   if (ctx) { const k = ctxShare(ctx); cx.style.setProperty('--c', ctxColor(ctx)); $('#d-ctx-bar').style.width = `${Math.round(k * 100)}%`;
     $('#d-ctx-text').textContent = `${kTok(ctx.used)} of ${kTok(ctx.max)} · ${Math.round(k * 100)}%`; }
+  renderGlance(a);
+  const mem = $('#d-mem'), desk = a.kind === 'main' ? deskOf(a) : emptyDesk(); mem.hidden = !desk.dayCount && !desk.moments.length;
+  if (!mem.hidden) {
+    $('#d-mem-sum').textContent = `Desk memories · ${desk.dayCount} day${desk.dayCount === 1 ? '' : 's'} here · ${desk.merges} merge${desk.merges === 1 ? '' : 's'}`;
+    $('#d-mem-list').innerHTML = desk.moments.map(m => `<li><time>${new Date(m.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</time><span>${esc(momentText(m))}</span></li>`).join('');
+  }
   if (a.approval) { $('#d-perm-tool').textContent = a.approval.tool; $('#d-perm-cmd').textContent = a.approval.cmd || a.approval.tool; }
   $('#d-defer').hidden = !(a.approval && a.approval.live);
   renderChat(a);
@@ -3855,7 +3963,7 @@ function renderPacks() {
   $('#pack-empty').hidden = packList.length > 0;
 }
 async function loadPacks() {
-  try { const r = await fetch('/api/packs'); if (!r.ok) throw 0; packList = await r.json(); } catch (_) { $('#pack-setting').hidden = true; return; }
+  try { const r = await officeAuth.fetch('/api/packs'); if (!r.ok) throw 0; packList = await r.json(); } catch (_) { $('#pack-setting').hidden = true; return; }
   renderPacks();
   if (uiPrefs.pack && packList.some(p => p.id === uiPrefs.pack)) applyPack(uiPrefs.pack);
 }
@@ -3919,6 +4027,7 @@ function layout() {
     else oy = h / 2 - (detail.getBoundingClientRect().bottom + pr.top) / 2 + st.top;   // centre the view in the gap between card and list
   }
   else { ox = appEl.classList.contains('panel-off') ? 0 : (panel.offsetWidth + 16) / 2; const hb = $('#panel-hide'); hb.setAttribute('aria-label', 'Hide panel'); hb.title = 'Hide panel  ]'; }
+  vo.zoomed = viewMode === 'screen'; if (vo.zoomed) ({ ox, oy } = screenFrame(w, h));
   Object.assign(vo, { tx: ox, ty: oy, w, h });
   if (!vo.init || reduced) { vo.x = ox; vo.y = oy; vo.init = true; }
   applyViewOffset();
@@ -3941,7 +4050,7 @@ const HOST_TERMS = { Apple_Terminal: 'Terminal', 'iTerm.app': 'iTerm', WarpTermi
 // Claude desktop sessions and Codex app threads open on the exact chat (chatLink in focus.rs / focus.js); the rest open their app or tab.
 // T3 Code runs Claude, Codex and Cursor for you: its agents open T3 Code (no link to one thread yet), not those tools' apps.
 const viaT3 = a => (a.parent || a).entrypoint === 't3-code';
-const opensChat = a => { const s = a.parent || a; return !viaT3(a) && (!!s.hostChat || (s.agentName === 'codex' && !s.hostTerm && (!s.hostApp || s.hostApp === 'com.openai.codex'))); };
+const opensChat = a => { const s = a.parent || a; return viaT3(a) ? !!s.hostT3Thread : (!!s.hostChat || (s.agentName === 'codex' && !s.hostTerm && (!s.hostApp || s.hostApp === 'com.openai.codex'))); };
 const hostName = a => { const s = a.parent || a; return viaT3(a) ? 'T3 Code' : HOST_APPS[s.hostApp] || HOST_TERMS[s.hostTerm] || (opensChat(a) ? (s.hostChat ? 'Claude' : 'Codex') : null); };
 const openLabel = a => opensChat(a) ? `Open chat in ${hostName(a)}` : `Open in ${hostName(a)}`;
 function openHost(a) {
@@ -3976,7 +4085,6 @@ const customName = (saved, project) => (saved.customName || (saved.customName ==
 // Work got merged: the agent jumps for joy for a few seconds and the office hears about it.
 function celebrate(a) {
   a.cheerUntil = performance.now() + 5000;
-  if (a.floor === curFloor) termPush(a, '🎉 merged', '#FFD166');
   toast(`${a.name} got merged`, 'Show me', () => select(a, true), a, 'done');
 }
 function retitle(a, title) {
@@ -4101,12 +4209,13 @@ function updateClashes() {
   clashMat.opacity = .55 + .3 * Math.sin(performance.now() / 260);
 }
 // The same tool call failing again and again (a test that keeps failing, a build that won't pass) means the agent may be stuck.
-// Counts reset when that call works, on a new prompt, and when the agent finishes.
+// Counts reset when that call works, on a new prompt, and when the agent finishes. Returns how often it had failed before this result.
 function noteResult(who, e, replay) {
-  const key = `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}`, fails = who.fails || (who.fails = new Map());
-  if (!e.failed) { fails.delete(key); if (who.stuck && who.stuck.key === key) setStuck(who, null); return; }
-  const n = (fails.get(key) || 0) + 1; fails.set(key, n);
-  if (n >= STUCK_AFTER) setStuck(who, { key, n, label: e.tool === 'Bash' && e.summary || key }, replay);
+  const key = `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}`, fails = who.fails || (who.fails = new Map()), before = fails.get(key) || 0;
+  if (!e.failed) { fails.delete(key); if (who.stuck && who.stuck.key === key) setStuck(who, null); return before; }
+  fails.set(key, before + 1);
+  if (before + 1 >= STUCK_AFTER) setStuck(who, { key, n: before + 1, label: e.tool === 'Bash' && e.summary || key }, replay);
+  return before;
 }
 function setStuck(a, v, replay) {
   const was = a.stuck; a.stuck = v; a.pose = poseFor(a); a.labelDirty = true; uiDirty = true; detailDirty = true;
@@ -4130,19 +4239,25 @@ function setContext(a, c, replay) {
   }
 }
 
+function mainSeat(floor) { return floor.deskSeats.find(d => !d.owner && !d.by) || freeSpots(['hightable', 'stool'], floor)[0] || floor.deskSeats[0]; }
+function subSeat(a, type) {
+  const fl = a.floor, home = type === 'Plan' ? freeSpots(['meeting'], fl)[0] : null;
+  return home || fl.deskSeats.filter(d => !d.by).sort((p, q) => Math.hypot(p.x - a.home.x, p.z - a.home.z) - Math.hypot(q.x - a.home.x, q.z - a.home.z))[0]
+              || freeSpots(['hightable', 'stool', 'sofa'], fl)[0] || pick(fl.SPOTS.stool);
+}
 function liveMain(s, instant) {
-  let a = live.byId.get(s.id); if (a) return a;
+  let a = live.byId.get(s.id); if (a && !(a.gone && a.leaving)) return a;   // already out the door: a fresh agent comes in
   const floor = ensureFloor(s.cwd || s.project, s.project, true), isNew = floor !== curFloor && !floorAgents(floor).length;
-  const home = floor.deskSeats.find(d => !d.owner && !d.by) || freeSpots(['hightable', 'stool'], floor)[0] || floor.deskSeats[0];
+  const home = mainSeat(floor);
   const saved = loadAgentPrefs(s.cwd);
   const same = agents.filter(x => x.kind === 'main' && x.project.key === s.project).length;
   const fallback = s.project + (same ? ` ${same + 1}` : '');
   const custom = customName(saved, s.project), name = custom || chatName(s.title) || fallback;
   const color = saved.color || PALETTE[hashStr(s.cwd || s.id) % PALETTE.length];
   a = createAgent({ name, kind: 'main', color, home, project: { key: s.project, agent: fallback }, cwd: s.cwd, sessionId: s.id, title: s.title || null, customName: !!custom,
-                    entrypoint: s.entrypoint, agentName: s.agent, hostApp: s.app, hostTerm: s.term, hostChat: s.chat, pref: saved.pref || 'anywhere', look: saved.look ? { ...saved.look, intern: false } : undefined, live: true, subs: new Map(), streak: 0, floor });
+                    entrypoint: s.entrypoint, agentName: s.agent, hostApp: s.app, hostTerm: s.term, hostChat: s.chat, hostT3Thread: s.t3Thread, pref: saved.pref || 'anywhere', look: saved.look ? { ...saved.look, intern: false } : undefined, live: true, subs: new Map(), streak: 0, floor });
   if (isNew && !instant) toast(`${s.project} moved into floor ${floorNum(floor)}`, 'Go there', () => flyToFloor(floor.i));
-  home.by = a.id; if (home.type === 'desk') { home.owner = a; if (floor === curFloor) home.chairMat.color.set(color); }
+  home.by = a.id; if (home.type === 'desk') { home.owner = a; deskDirty = true; if (floor === curFloor) home.chairMat.color.set(color); }
   a.ws = home;
   if (instant) { a.spot = home; a.where = 'Own desk'; a.g.position.set(home.x, 0, home.z); a.yaw = a.yawT = yawOf(home.face); a.arrivedAt = 0; }
   else { a.spot = DOOR; a.g.position.set(DOOR.x, 0, DOOR.z); a.yaw = a.yawT = -Math.PI / 2; a.appear = 0; walkTo(a, home).then(() => { a.pose = poseFor(a); }); }
@@ -4153,11 +4268,8 @@ function liveMain(s, instant) {
   return a;
 }
 function liveSub(a, id, type, instant, task) {
-  let sub = a.subs.get(id); if (sub) return sub;
-  const fl = a.floor;
-  let home = type === 'Plan' ? freeSpots(['meeting'], fl)[0] : null;
-  if (!home) home = fl.deskSeats.filter(d => !d.by).sort((p, q) => Math.hypot(p.x - a.home.x, p.z - a.home.z) - Math.hypot(q.x - a.home.x, q.z - a.home.z))[0]
-                 || freeSpots(['hightable', 'stool', 'sofa'], fl)[0] || pick(fl.SPOTS.stool);
+  let sub = a.subs.get(id); if (sub && !(sub.gone && sub.leaving)) return sub;
+  const fl = a.floor, home = subSeat(a, type);
   sub = createAgent({ name: task || type || 'Subagent', kind: 'sub', subType: type || 'subagent', color: mix(a.color, '#ffffff', .35), home, parent: a, project: a.project, live: true, streak: 0, floor: fl });
   home.by = sub.id; sub.ws = home;
   if (instant) { sub.spot = home; sub.where = PLACE[home.type]; sub.g.position.set(home.x, 0, home.z); sub.yaw = sub.yawT = yawOf(home.face); }
@@ -4168,17 +4280,30 @@ function liveSub(a, id, type, instant, task) {
 }
 async function leaveOffice(a, note) {
   if (a.leaving || a.exiting) return; a.exiting = true;
-  if (a.onRoof) await leaveRoof(a);
+  const t = a.leaveT = (a.leaveT || 0) + 1, off = () => a.leaveT !== t;   // comeBack() bumps leaveT: stop at the next await
+  if (a.onRoof) { await Promise.race([leaveRoof(a), wait(20)]); if (off()) return; }
   if (a.subs) for (const sub of a.subs.values()) leaveOffice(sub);
   applyStatus(a, 'done', note || (a.kind === 'sub' ? `Reported back to ${a.parent.name}` : 'Signing off'));
-  await wait(1.2);
-  a.gone = true;
+  await wait(1.2); if (off()) return;
+  a.gone = true; deskDirty = true;
   if (a.home) { if (a.home.by === a.id) a.home.by = null; if (a.home.owner === a) { a.home.owner = null; if (a.floor === curFloor) a.home.chairMat.color.set(sceneT.chair); } if (a.home.screen && a.floor === curFloor) a.home.screen.color.set(sceneT.screenOff); }
-  a.nextSpot = null; await walkTo(a, DOOR); a.leaving = true; await wait(.7);
+  a.nextSpot = null; await Promise.race([walkTo(a, DOOR), wait(30)]); if (off()) return;   // capped: another walk may take over
+  a.leaving = true; await wait(.7);
   removeAgent(a);
-  if (a.kind === 'main') { live.byId.delete(a.sessionId); buildCustomize(); renderJSON(); }
+  if (a.kind === 'main') { if (live.byId.get(a.sessionId) === a) live.byId.delete(a.sessionId); buildCustomize(); renderJSON(); }
   else if (a.parent) for (const [k, v] of a.parent.subs) if (v === a) a.parent.subs.delete(k);
   setModeLine();
+}
+// Activity after a leave began (a session that ended and resumed, a subagent let go that got more work): come back to a seat.
+// Once at the door (gone and leaving) it finishes leaving, and liveMain/liveSub bring in a fresh agent instead.
+function comeBack(a, state, activity) {
+  if (!a.exiting || a.gone && a.leaving) return;
+  a.leaveT++; a.exiting = a.gone = a.awaitingReview = false; deskDirty = true;
+  const h = a.home;
+  if (h.by && h.by !== a.id || h.type === 'desk' && h.owner && h.owner !== a) { const n = a.kind === 'main' ? mainSeat(a.floor) : subSeat(a.parent, a.subType); if (a.ws === h) a.ws = n; a.home = n; }
+  a.home.by = a.id; if (a.kind === 'main' && a.home.type === 'desk') { a.home.owner = a; if (a.floor === curFloor) a.home.chairMat.color.set(a.color); }
+  applyStatus(a, state, activity);
+  if (a.dest === DOOR || a.spot === DOOR) place(a, workSpot(a), true);
 }
 
 /* ---------- sounds: one soft tone per agent, a little different for each kind of news ---------- */
@@ -4255,6 +4380,429 @@ async function reviewSubs(a) {
   place(a, next, true);
 }
 
+/* ---------- outcomes: what a command's result looks like, and what a desk remembers ---------- */
+// "Finished responding" isn't "it worked", so reactions key off a command passing or failing, never off Stop.
+const RUN_LONG_MS = 20000;                      // a passing command that took this long delivers a parcel
+const RUN_GEAR_MS = 6000;                       // a command still running after this long gets a turning gear
+const CHEER_GAP_MS = 20000;                     // small comebacks cheer at most this often, so a retry loop doesn't become a party
+function outcomeOf(e, failsBefore, ranMs) {
+  if (e.tool !== 'Bash') return null;
+  if (e.failed) return { kind: 'soot' };
+  if (failsBefore >= STUCK_AFTER) return { kind: 'unstuck', fails: failsBefore };
+  if (failsBefore > 0) return { kind: 'comeback', fails: failsBefore };
+  return ranMs >= RUN_LONG_MS ? { kind: 'parcel' } : null;
+}
+// A command in a few words for a reaction bubble: "cd api && CI=1 uv run pytest -x" → "uv run pytest".
+const RUNNERS = /^(npx|bunx|uv|pnpm|yarn|bun|poetry|bundle|cargo|go|make|npm)$/;
+function cmdShort(s) {
+  const part = String(s || '').split(/&&|\|\||;|\|/).map(p => p.trim()).find(p => p && !/^(cd|export|source|set)\b/.test(p)) || '';
+  const w = part.replace(/^(\w+=\S*\s+)+/, '').split(/\s+/).filter(x => x && !x.startsWith('-')).map((x, i) => i ? x : x.split('/').pop());
+  const out = w.slice(0, RUNNERS.test(w[0]) ? 3 : 2).join(' ');
+  return out.length > 24 ? out.slice(0, 23) + '…' : out;
+}
+const fmtDur = ms => { const s = Math.round(ms / 1000); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`; };
+// A desk's memory holds counts and dated captions only: no prompts, commands or file names.
+const MOMENTS_MAX = 40;
+const PLANT_DAYS = [1, 3, 7, 14, 30];           // days worked here before the desk plant grows a size
+const plantStage = days => PLANT_DAYS.filter(n => days >= n).length;
+const dayOf = at => { const d = new Date(at); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const emptyDesk = () => ({ dayCount: 0, lastDay: '', merges: 0, unstuck: 0, team: false, moments: [] });
+// Both return the same object when nothing changed, so a second open page or a replayed event can't count twice.
+function remember(desk, kind, at, n) {
+  const id = `${kind}:${at}`;
+  if (desk.moments.some(m => m.id === id) || (kind === 'team' && desk.team)) return desk;
+  return { ...desk, moments: [{ id, kind, at, n }, ...desk.moments].slice(0, MOMENTS_MAX),
+    merges: desk.merges + (kind === 'merge'), unstuck: desk.unstuck + (kind === 'unstuck'), team: desk.team || kind === 'team' };
+}
+function workedOn(desk, at) {
+  const day = dayOf(at); if (desk.lastDay >= day) return desk;
+  const d = { ...desk, lastDay: day, dayCount: desk.dayCount + 1 };
+  return plantStage(d.dayCount) > plantStage(desk.dayCount) ? remember(d, 'grew', at, d.dayCount) : d;
+}
+const momentText = m => m.kind === 'merge' ? 'Work got merged' : m.kind === 'unstuck' ? `Got unstuck after ${m.n} failed tries`
+  : m.kind === 'team' ? 'First subagent team' : m.n === 1 ? 'Moved in: a sprout on the desk' : `The desk plant grew after ${m.n} days here`;
+const deskKey = cwd => 'agent-office:desk:' + cwd;
+const demoDesks = new Map();                    // demo projects keep theirs in memory only
+function deskOf(a) {
+  a = a.parent || a;
+  if (!a.live) return demoDesks.get(a.project.key) || emptyDesk();
+  try { return { ...emptyDesk(), ...(a.cwd && JSON.parse(localStorage.getItem(deskKey(a.cwd)))) }; } catch (_) { return emptyDesk(); }
+}
+function changeDesk(a, change) {
+  a = a.parent || a; const was = deskOf(a), d = change(was); if (d === was) return;
+  if (!a.live) demoDesks.set(a.project.key, d); else if (a.cwd) { try { localStorage.setItem(deskKey(a.cwd), JSON.stringify(d)); } catch (_) {} }
+  deskDirty = true; detailDirty = true;
+}
+addEventListener('storage', e => { if (e.key && e.key.startsWith('agent-office:desk:')) { deskDirty = true; detailDirty = true; } });
+const TROPHY = M('#E9B83A', { roughness: .35, metalness: .2 });
+function drawDesks() {
+  deskDirty = false; if (!curFloor) return;
+  curFloor.deskSeats.forEach((s, i) => {
+    const g = deskShelves[i], d = s.owner && !s.owner.gone ? deskOf(s.owner) : null, stage = d ? plantStage(d.dayCount) : 0;
+    const sig = d ? `${stage}|${d.merges}|${d.unstuck}` : '';
+    if (sig === g.userData.sig) return; g.userData.sig = sig;
+    g.traverse(o => { if (o.geometry) o.geometry.dispose(); }); g.clear();
+    if (!d) return;
+    // Left of the screen, between the keyboard and the monitor. Drawn larger than life so they read from across the floor.
+    const z = s.face[1] * .62, cups = Math.min(d.merges, 4);
+    const stand = x => { const h = new THREE.Group(); h.position.set(x, .77, z); h.scale.setScalar(1.7); g.add(h); return h; };
+    if (stage) {
+      const h = stand(-.96); cyl(.05, .038, .07, mats.pot2, 0, .035, 0, h, 12);
+      for (let k = 0; k < stage; k++) part(new THREE.IcosahedronGeometry(.034 + stage * .005, 0), k % 2 ? mats.leaf2 : mats.leaf, h, Math.sin(k * 2.4) * .028, .1 + k * .042, Math.cos(k * 2.4) * .028);
+    }
+    for (let i = 0; i < cups; i++) {                                // a cup per merge; from the fifth on, the first one is the big one
+      const h = stand(-.79 + i * .13); if (!i && d.merges > 4) h.scale.setScalar(2.5);
+      cyl(.03, .03, .012, TROPHY, 0, .006, 0, h, 12); cyl(.008, .008, .04, TROPHY, 0, .032, 0, h, 6); cyl(.032, .015, .05, TROPHY, 0, .077, 0, h, 12);
+    }
+    if (d.unstuck) part(new THREE.TorusKnotGeometry(.022, .007, 48, 6), mats.steel, stand(-.79 + cups * .13), 0, .04, 0);   // the knot it untangled
+  });
+}
+// Short-lived bits in the air: confetti, soot, sparks, and a parcel that lands on the desk.
+const fx = [];
+const FX_GEO = { conf: new THREE.PlaneGeometry(.1, .06), soot: new THREE.SphereGeometry(.05, 8, 6), spark: new THREE.SphereGeometry(.016, 6, 4), parcel: new THREE.BoxGeometry(.26, .2, .22), gear: new THREE.TorusGeometry(.06, .02, 5, 9) };
+const FX_MAT = { conf: ['#FFD166', '#EF476F', '#06D6A0', '#4CC9F0', '#F2F5F6'].map(c => new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide })),
+  soot: M('#34393C'), spark: new THREE.MeshBasicMaterial({ color: '#6FD69A' }), parcel: M('#C39A6B') };
+const inView = a => a.floor === curFloor && !a.onRoof && onFloor() && a.g.visible && !document.hidden;
+function burst(a, kind) {
+  if (!inView(a)) return;
+  const p = a.g.position, f = !a.path.length && a.spot && a.spot.face || [0, 0];   // over the desk it faces, or over itself mid-walk
+  const add = (geo, mat, y, v, life, o, side = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(p.x + f[0] * .6 + Math.abs(f[1]) * side, y, p.z + f[1] * .6 + Math.abs(f[0]) * side); scene.add(m); fx.push(Object.assign({ m, v: new THREE.Vector3(...v), life, age: 0 }, o)); };
+  if (kind === 'soot') for (let k = 0; k < 7; k++) add(FX_GEO.soot, FX_MAT.soot, 1.2, [rand(-.12, .12), rand(.25, .5), rand(-.12, .12)], rand(1.1, 1.7), { grow: 1.6 });
+  else if (kind === 'parcel') {
+    add(FX_GEO.parcel, FX_MAT.parcel, .9, [0, 1.9, 0], 7, { g: 6, rest: .9 }, .62);   // beside the keyboard, where you can see it past the agent
+    for (let k = 0; k < 8; k++) add(FX_GEO.spark, FX_MAT.spark, 1, [rand(-.5, .5), rand(.6, 1.3), rand(-.5, .5)], .9, { g: 2.5 });
+  } else for (let k = 0, n = kind === 'big' ? 48 : 22; k < n; k++) add(FX_GEO.conf, pick(FX_MAT.conf), 1.6, [rand(-1.3, 1.3), rand(2.2, 3.8), rand(-1.3, 1.3)], rand(1.8, 2.8), { g: 4.5, spin: rand(4, 10), drag: 1.2 });
+}
+function updateFx(dt) {
+  for (let i = fx.length - 1; i >= 0; i--) {
+    const p = fx[i]; p.age += dt;
+    if (p.age >= p.life) { scene.remove(p.m); fx.splice(i, 1); continue; }
+    if (p.g) p.v.y -= p.g * dt;
+    if (p.drag) p.v.multiplyScalar(1 - dt * p.drag);
+    p.m.position.addScaledVector(p.v, dt);
+    if (p.rest != null && p.m.position.y < p.rest) { p.m.position.y = p.rest; p.v.y = p.v.y < -.6 ? -p.v.y * .35 : 0; }
+    if (p.spin) { p.m.rotation.x += p.spin * dt; p.m.rotation.z += p.spin * .7 * dt; }
+    const k = p.age / p.life;
+    p.m.scale.setScalar((p.grow ? 1 + k * p.grow : 1) * Math.min(1, (1 - k) / .2));   // shrinks away over its last fifth
+  }
+  const now = Date.now();
+  for (const a of agents) {
+    const on = !!a.run && now - a.run.at > RUN_GEAR_MS && a.state !== 'waiting';
+    if (on && !a.gear) a.gear = part(FX_GEO.gear, mats.brass, a.g, .36, 1.02, .1, false);
+    if (a.gear) { a.gear.visible = on; if (on) { a.gear.rotation.z += dt * 3; a.gear.position.y = 1.02 + Math.sin(now / 45) * .006; } }
+    if (on && (!a.bubKind || a.bubKind === 'run')) {          // still running: a thought bubble counts the seconds, with a sweat drop after 30 s
+      const secs = Math.floor((now - a.run.at) / 1000);
+      if (a.bubKind !== 'run' || secs !== a.bubSecs) { a.bubSecs = secs; say(a, 'run', '', `…  ${fmtDur(secs * 1000)}`, secs >= 30 ? secs % 2 : -1); }
+    } else if (!on && a.bubKind === 'run') a.bubKind = null;
+    updateBubble(a, dt);
+  }
+}
+function react(who, o, at, command, ms) {
+  if (!o) return;
+  const now = performance.now(), cmd = cmdShort(command), tries = n => `${n} failed ${n > 1 ? 'tries' : 'try'}`;
+  if (o.kind === 'soot') { if (now - (who.sootAt || -1e9) > 3000) { who.sootAt = now; burst(who, 'soot'); say(who, 'fail', cmd ? `${cmd} failed` : 'command failed'); } return; }
+  if (o.kind === 'parcel') { emit(who, 'Passed', `${cmd || 'Command'} passed after ${fmtDur(ms)}`, at); burst(who, 'parcel'); say(who, 'pass', `${cmd ? cmd + ' · ' : ''}${fmtDur(ms)}`); return; }
+  const big = o.kind === 'unstuck';
+  if (big) { emit(who, 'Unstuck', `Worked after ${o.fails} failed tries`, at); changeDesk(who, d => remember(d, 'unstuck', at, o.fails)); }
+  else { emit(who, 'Passed', `${cmd || 'Command'} passed after ${tries(o.fails)}`, at); if (now - (who.cheeredAt || -1e9) < CHEER_GAP_MS) return; }
+  who.cheeredAt = now; who.cheerUntil = now + (big ? 4500 : 2200); burst(who, big ? 'big' : 'small');
+  say(who, big ? 'finally' : 'yes', big ? `worked after ${tries(o.fails)}` : cmd ? `${cmd} passed` : '');
+}
+
+/* ---------- manga bubbles: each reaction says in words what just happened ---------- */
+// One sprite per agent, made on first use, above its name tag. A reaction replaces the "still running" thought bubble.
+const BUB = {
+  pass:    { text: 'PASSED!',   ink: '#FFB400', shape: 'burst',  life: 3,   sparkle: true },
+  fail:    { text: 'FAIL…',     ink: '#E5534B', shape: 'jag',    life: 2.6, vein: true },
+  yes:     { text: 'YES!',      ink: '#06D6A0', shape: 'oval',   life: 2.4, speed: true },
+  finally: { text: 'FINALLY!!', ink: '#EF476F', shape: 'burst2', life: 4.5 },
+  run:     { ink: '#4CC9F0', shape: 'cloud', life: Infinity },
+};
+const BUB_FONT = n => `${n}px Bangers, Impact, "Arial Black", sans-serif`;
+function starPath(x, cx, cy, rx, ry, n, inner, jitter = 0) {
+  x.beginPath();
+  for (let i = 0; i < n * 2; i++) { const a = Math.PI * i / n - Math.PI / 2, k = i % 2 ? inner * (1 - jitter * ((i * 37) % 7) / 7) : 1; x.lineTo(cx + Math.cos(a) * rx * k, cy + Math.sin(a) * ry * k); }
+  x.closePath();
+}
+function sparkle(x, cx, cy, r) { x.beginPath(); x.moveTo(cx, cy - r); x.quadraticCurveTo(cx, cy, cx + r, cy); x.quadraticCurveTo(cx, cy, cx, cy + r); x.quadraticCurveTo(cx, cy, cx - r, cy); x.quadraticCurveTo(cx, cy, cx, cy - r); x.fillStyle = '#FFD166'; x.fill(); x.lineWidth = 3; x.strokeStyle = '#111'; x.stroke(); }
+function drawBubble(a, kind, tag, text, drop = -1) {
+  const B = BUB[kind], x = a.B.x, ink = '#111';
+  x.clearRect(0, 0, 512, 256); x.lineJoin = 'round'; x.lineCap = 'round';
+  if (B.speed) { x.strokeStyle = sceneT.dark ? 'rgba(240,244,246,.55)' : 'rgba(20,26,30,.45)'; for (let i = 0; i < 30; i++) { const t = Math.PI * 2 * i / 30; x.lineWidth = i % 2 ? 2 : 4; x.beginPath(); x.moveTo(256 + Math.cos(t) * 180, 92 + Math.sin(t) * 76); x.lineTo(256 + Math.cos(t) * 260, 92 + Math.sin(t) * 110); x.stroke(); } }
+  x.lineWidth = 6; x.strokeStyle = ink;
+  if (B.shape === 'burst') { starPath(x, 256, 92, 232, 84, 14, .78); x.fillStyle = '#FFF7D6'; x.fill(); x.stroke(); }
+  else if (B.shape === 'jag') { starPath(x, 256, 92, 220, 80, 20, .84, .6); x.fillStyle = '#FFFFFF'; x.fill(); x.stroke(); }
+  else if (B.shape === 'burst2') { starPath(x, 256, 92, 246, 90, 20, .72); x.fillStyle = '#EF476F'; x.fill(); x.stroke(); starPath(x, 256, 92, 206, 72, 20, .8); x.fillStyle = '#FFF7D6'; x.fill(); }
+  else if (B.shape === 'oval') {
+    x.beginPath(); x.ellipse(256, 88, 168, 70, 0, 0, 7); x.fillStyle = '#FFFFFF'; x.fill(); x.stroke();
+    x.beginPath(); x.moveTo(222, 150); x.lineTo(200, 190); x.lineTo(262, 154); x.fill(); x.stroke(); x.beginPath(); x.ellipse(256, 88, 165, 67, 0, 0, 7); x.fill();
+  } else {                                                    // a thought cloud: outline every puff first, then fill them all, so only the outer edge shows
+    const puffs = [[170, 96, 58], [240, 70, 64], [320, 80, 60], [370, 106, 48], [290, 122, 52], [210, 124, 50], [126, 166, 14], [100, 192, 9]];
+    x.lineWidth = 12; puffs.forEach(([cx, cy, r]) => { x.beginPath(); x.arc(cx, cy, r, 0, 7); x.stroke(); });
+    x.fillStyle = '#FFFFFF'; puffs.forEach(([cx, cy, r]) => { x.beginPath(); x.arc(cx, cy, r, 0, 7); x.fill(); });
+  }
+  const words = text || B.text, size = kind === 'run' ? 62 : 84;
+  x.font = BUB_FONT(size); x.textAlign = 'center'; x.textBaseline = 'middle';
+  const w = fitText(x, words, B.shape === 'oval' ? 300 : 360), ty = kind === 'run' ? 96 : 94;
+  x.lineWidth = 12; x.strokeStyle = ink; x.strokeText(w, 256, ty); x.fillStyle = B.ink; x.fillText(w, 256, ty);
+  if (B.sparkle) { sparkle(x, 30, 40, 18); sparkle(x, 486, 30, 15); sparkle(x, 494, 150, 12); }
+  if (B.vein) { x.strokeStyle = '#E5534B'; x.lineWidth = 8; for (const [dx, dy, ex, ey, cx2, cy2] of [[-22, -6, -8, -22, -12, -6], [6, -22, 22, -8, 6, -6], [22, 6, 8, 22, 12, 6], [-6, 22, -22, 8, -6, 6]]) { x.beginPath(); x.moveTo(450 + dx, 176 + dy); x.quadraticCurveTo(450 + cx2, 176 + cy2, 450 + ex, 176 + ey); x.stroke(); } }
+  if (drop >= 0) { const dy = 150 + drop * 14; x.beginPath(); x.moveTo(430, dy); x.quadraticCurveTo(446, dy + 22, 430, dy + 30); x.quadraticCurveTo(414, dy + 22, 430, dy); x.fillStyle = '#7CC7FF'; x.fill(); x.lineWidth = 3; x.strokeStyle = ink; x.stroke(); }
+  if (tag) {
+    x.font = '700 34px "IBM Plex Sans", sans-serif'; const t = fitText(x, tag, 440), tw = x.measureText(t).width + 40;
+    x.fillStyle = '#111'; rrect(x, 256 - tw / 2, 196, tw, 54, 27); x.fill(); x.fillStyle = '#FFFFFF'; x.fillText(t, 256, 224);
+  }
+  a.B.t.needsUpdate = true;
+}
+function say(a, kind, tag, text, drop) {
+  if (!inView(a)) return;
+  if (!a.bub || a.bub.parent !== a.g) {
+    a.B = a.B || canvasTex(512, 256);
+    a.bub = new THREE.Sprite(new THREE.SpriteMaterial({ map: a.B.t, depthTest: false, transparent: true })); a.bub.renderOrder = 11; a.g.add(a.bub);
+  }
+  if (a.bubKind !== kind) a.bubAge = 0;
+  a.bubKind = kind; drawBubble(a, kind, tag, text, drop);
+}
+function updateBubble(a, dt) {
+  if (!a.bub) return;
+  const B = a.bubKind && BUB[a.bubKind];
+  if (B && (a.bubAge += dt) >= B.life) a.bubKind = null;
+  a.bub.visible = !!a.bubKind && inView(a);
+  if (!a.bub.visible) return;
+  const t = Math.min(1, a.bubAge / .22), pop = 1 + 2.7 * (t - 1) ** 3 + 1.7 * (t - 1) ** 2;   // ease-out-back: a little overshoot
+  a.bub.scale.set(2.9 * pop, 1.45 * pop, 1);
+  a.bub.position.y = a.topY + 1.6 + Math.min(a.bubAge, B.life) * (B.life < Infinity ? .05 : 0);
+  a.bub.material.opacity = B.life < Infinity ? Math.min(1, (B.life - a.bubAge) / .5) : 1;
+  a.bub.material.rotation = a.bubKind === 'fail' ? Math.sin(a.bubAge * 14) * .05 : 0;
+}
+
+/* ---------- changes: what a checkout holds that you haven't reviewed, and the last edit each agent reported ---------- */
+// The file list is git's, per checkout, so agents sharing one folder share one list. Which agent touched a file comes from its hooks.
+const CHG_POLL_MS = 20000;                      // how stale the open card's file list may get with no news from the agent
+const EDIT_FRESH_MS = 60000;                    // an edit reported this recently gets a ring in the review list
+const chg = new Map();                          // session → { data, at, busy }
+const mainOf = a => a.parent || a;
+const hm = t => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const fileName = p => p.slice(p.lastIndexOf('/') + 1);
+let codeOn = true;                              // the office server's "Show code" setting; off means no changed lines anywhere
+const reviewedOf = root => { try { return JSON.parse(localStorage.getItem('agent-office:reviewed:' + root)) || { sigs: {} }; } catch (_) { return { sigs: {} }; } };
+const unreviewed = c => { const seen = reviewedOf(c.root).sigs; return c.files.filter(f => seen[f.path] !== f.sig); };
+// Hooks name files relative to the session's folder; git names them relative to the checkout.
+const inCheckout = (c, file) => file.startsWith('/') ? (file.startsWith(c.root + '/') ? file.slice(c.root.length + 1) : file) : (c.prefix || '') + file;
+// One row of the war room's review board: what a session's checkout holds that you haven't reviewed, files with a reported edit first.
+function reviewRow(m, c, seen, now, subs = []) {
+  const row = { m, name: m.name, color: m.color, state: m.state, subs: subs.map(s => ({ name: s.name, color: s.color, state: s.state })), run: m.lastRun || null, tone: 'wait', note: 'Reading the checkout…', count: 0, total: 0, add: 0, del: 0, files: [] };
+  if (!c) return row;
+  if (!c.ok) return { ...row, tone: 'none', note: c.error };
+  const by = new Map(); for (const [file, t] of m.touched || []) by.set(inCheckout(c, file), t);
+  const files = c.files.filter(f => seen[f.path] !== f.sig).map(f => { const t = by.get(f.path), at = t ? t.at : 0; return { path: f.path, add: f.add, del: f.del, at, fresh: now - at < EDIT_FRESH_MS, color: t?.who?.color || null, by: t?.who?.name || null }; }).sort((a, b) => b.at - a.at);
+  const sum = k => c.files.reduce((n, f) => n + (f[k] || 0), 0);
+  return { ...row, tone: files.length ? 'todo' : c.files.length ? 'clear' : 'none', note: c.files.length ? '' : 'No changes', count: files.length, total: c.files.length, add: sum('add'), del: sum('del'), files };
+}
+function noteWork(who, e) {
+  const m = mainOf(who), at = e.at || Date.now();
+  m.chgStale = true;
+  if (e.tool === 'Bash') m.lastRun = { cmd: e.summary, failed: !!e.failed, at };
+  if (!EDIT_TOOLS.has(e.tool) || e.failed || !e.summary) return;
+  (m.touched || (m.touched = new Map())).set(e.summary, { at, who });
+  m.lastEdit = { file: e.summary, at, who, edit: e.edit || null };
+  if (selected && mainOf(selected) === m) detailDirty = true;
+  changesSoon(m);
+}
+const DEMO_EDITS = [
+  { del: ['  return items;'], add: ['  if (!items.length) return [];', '  return items.sort(byDueDate);'] },
+  { del: ['const TIMEOUT = 3000;'], add: ['const TIMEOUT = Number(process.env.TIMEOUT_MS) || 3000;'] },
+  { del: [], add: ['export function isOverdue(task, now = Date.now()) {', '  return !task.done && task.due < now;', '}'] },
+  { del: ['    throw new Error("failed");'], add: ['    throw new HttpError(404, `No such list: ${id}`);'] },
+];
+function demoChanges(m) {
+  const files = [...(m.touched || [])].map(([file, t]) => { const h = hashStr(file); return { path: file, status: h % 5 ? 'modified' : 'added', add: 3 + h % 40, del: h % 5 ? h % 9 : 0, sig: String(t.at) }; });
+  return { ok: true, root: 'demo:' + m.project.key, branch: 'feat/' + m.project.key, base: 'main', prefix: '', files, shared: [], at: Date.now() };
+}
+const changesOf = m => !m.live ? demoChanges(m) : (chg.get(m.sessionId) || {}).data || null;
+async function loadChanges(m, force) {
+  if (!m.live || !m.sessionId || !m.cwd) return;
+  const st = chg.get(m.sessionId) || {}; chg.set(m.sessionId, st);
+  if (st.busy || (!force && Date.now() - (st.at || 0) < CHG_POLL_MS)) return;
+  st.busy = true; if (reviewing === m) renderReview();
+  try { st.data = await (await officeAuth.fetch('/api/changes?session=' + encodeURIComponent(m.sessionId))).json(); } catch (_) { st.data = { ok: false, error: 'The office server did not answer' }; }
+  st.busy = false; st.at = Date.now(); m.chgStale = false;
+  if (selected && mainOf(selected) === m) detailDirty = true;
+  if (reviewing === m) renderReview();
+}
+let chgTimer = 0;
+function changesSoon(m) {                        // an edit or a command just finished: read the checkout again, once things settle
+  if (reviewing === m && !m.live) renderReview();
+  if (!m.live || !(reviewing === m || (selected && mainOf(selected) === m))) return;
+  clearTimeout(chgTimer); chgTimer = setTimeout(() => loadChanges(m, true), 1200);
+}
+const boardMains = () => floorAgents(curFloor).filter(a => a.kind === 'main' && !a.gone);
+setInterval(() => {                              // the open card or review, and any agent on this floor's board that has worked since its last reading
+  if (document.hidden) return;
+  const m = reviewing || (selected && mainOf(selected)); if (m) loadChanges(m);
+  for (const b of boardMains()) if (b !== m && b.chgStale !== false) loadChanges(b);
+}, 5000);
+let boardReadAt = 0;
+function refreshBoard(all) {                     // you may have committed, stashed or edited by hand while no agent was reporting
+  if (Date.now() - boardReadAt < 2000) return; boardReadAt = Date.now();
+  const ms = new Set(boardMains()); if (all) { if (selected) ms.add(mainOf(selected)); if (reviewing) ms.add(reviewing); }
+  for (const m of ms) loadChanges(m, true);
+}
+addEventListener('focus', () => refreshBoard(true));
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshBoard(true); });
+const codeLines = (del, add) => del.map(l => `<span class="ln del">${esc(l) || ' '}</span>`).join('') + add.map(l => `<span class="ln add">${esc(l) || ' '}</span>`).join('');
+function renderGlance(a) {
+  const m = mainOf(a), el = $('#d-chg'), c = changesOf(m), le = m.lastEdit, has = c && c.ok && c.files.length > 0;
+  if (m.live && !c) loadChanges(m);
+  el.hidden = !le && !has; if (el.hidden) return;
+  el.style.setProperty('--c', le ? le.who.color : m.color);
+  const todo = has ? unreviewed(c) : [], seenAt = has && reviewedOf(c.root).at;
+  $('#chg-n').textContent = has ? todo.length : '';
+  $('#chg-what').textContent = has ? (todo.length ? `file${todo.length === 1 ? '' : 's'} to review` : 'files to review: all caught up') : !c ? 'Reading the checkout…' : c.ok ? 'Nothing changed in this checkout' : c.error;
+  $('#chg-since').textContent = !has ? '' : (seenAt ? `Since your review at ${hm(seenAt)}` : c.base ? `Since ${c.base}` : 'Not committed yet') + ` · ${c.files.length} changed in all`;
+  $('#chg-open').hidden = !has;
+  $('#chg-edit').hidden = !le;
+  if (le) {
+    const ed = codeOn && le.edit, by = le.who !== a ? ` · ${le.who.name}` : '';
+    $('#chg-edit-head').innerHTML = `Latest reported edit · ${hm(le.at)}${esc(by)} · <b title="${esc(le.file)}">${esc(fileName(le.file))}</b>`;
+    const code = $('#chg-edit-code'); code.hidden = !ed || !(ed.del.length + ed.add.length);
+    code.innerHTML = code.hidden ? '' : codeLines(ed.del, ed.add) + (ed.more ? `<span class="ln hunk">${ed.more} more line${ed.more === 1 ? '' : 's'}</span>` : '');
+  }
+  const warn = $('#chg-warn'), n = has ? c.shared.length : 0; warn.hidden = !n;
+  if (n) warn.textContent = `⚠ ${n} other agent${n === 1 ? ' shares' : 's share'} this checkout, so the list may include their work.`;
+}
+// The review window: the checkout's files on the left, one file's changes on the right. Nothing in the right pane moves while you read.
+const review = $('#review');
+let reviewing = null, rvDiff = null;             // rvDiff: { path, sig, text, truncated, error }
+function openReview(a) { reviewing = mainOf(a); rvDiff = null; renderReview(); if (!review.open) review.showModal(); loadChanges(reviewing, true); }
+review.addEventListener('close', () => { reviewing = null; rvDiff = null; });
+$('#rv-close').onclick = () => review.close();
+$('#chg-open').onclick = () => selected && openReview(selected);
+function renderReview() {
+  const m = reviewing; if (!m) return;
+  const c = changesOf(m), ok = c && c.ok;
+  $('#rv-title').textContent = `Changes in ${m.project.key}`;
+  $('#rv-sub').textContent = !c ? 'Reading the checkout…' : !ok ? c.error : `${c.branch || 'detached'} · ${c.base ? `since ${c.base}` : 'not committed yet'} · read at ${hm(c.at)}`;
+  const warn = $('#rv-warn'), n = ok ? c.shared.length : 0; warn.hidden = !n;
+  if (n) warn.textContent = `⚠ ${n} other agent${n === 1 ? ' shares' : 's share'} this checkout. Git can't tell whose change is whose; the dots show which agent reported an edit to a file.`;
+  const seen = ok ? reviewedOf(c.root).sigs : {}, now = Date.now(), by = new Map();
+  if (ok) for (const [file, t] of m.touched || []) by.set(inCheckout(c, file), t);
+  const top = ok ? Math.max(1, ...c.files.map(f => (f.add || 0) + (f.del || 0))) : 1;
+  $('#rv-files').innerHTML = !ok ? '' : c.files.map(f => { const t = by.get(f.path), fresh = t && now - t.at < EDIT_FRESH_MS;
+    const note = f.status === 'modified' ? '' : f.status[0].toUpperCase() + f.status.slice(1);
+    const who = t ? `<i class="dot${fresh ? ' now' : ''}" style="--c:${t.who.color}"></i>${esc(t.who.name)} · ${fresh ? 'edit just reported' : `edit reported ${hm(t.at)}`}` : '';
+    return `<li><button class="${seen[f.path] === f.sig ? 'seen' : ''}${rvDiff && rvDiff.path === f.path ? ' sel' : ''}" data-path="${esc(f.path)}"><span class="path" title="${esc(f.path)}">&lrm;${esc(f.path)}</span>`
+      + `<span class="num">${f.add == null ? 'binary' : `<b>+${f.add}</b> <i>−${f.del}</i>`}</span>${note || who ? `<small>${[note, who].filter(Boolean).join(' · ')}</small>` : ''}</button></li>`; }).join('')
+    || '<li><p style="margin:10px;color:var(--muted)">Nothing has changed in this checkout.</p></li>';
+  const pane = $('#rv-diff'), cur = rvDiff && ok && c.files.find(f => f.path === rvDiff.path);
+  if (!rvDiff) pane.innerHTML = `<p>${codeOn ? 'Select a file to see its changes. They stay still while you read.' : 'Code is hidden. Turn on “Show code” in Customize to read changes here.'}</p>`;
+  else if (rvDiff.loading) pane.innerHTML = '<p>Reading…</p>';
+  else if (rvDiff.error) pane.innerHTML = `<p>${esc(rvDiff.error)}</p>`;
+  else pane.innerHTML = (cur && cur.sig !== rvDiff.sig ? '<div class="stale">This file changed since you opened it.<button class="btn sm" id="rv-reload">Show the new version</button></div>' : '')
+    + `<div class="code">${rvDiff.text.split('\n').filter(l => !/^(diff --git |index |--- |\+\+\+ |new file mode|deleted file mode)/.test(l)).map(l => `<span class="ln ${l.startsWith('@@') ? 'hunk' : l[0] === '+' ? 'add' : l[0] === '-' ? 'del' : ''}">${esc(/^[+ -]/.test(l) ? l.slice(1) : l) || ' '}</span>`).join('')}</div>`
+    + (rvDiff.truncated ? '<p>This diff is long. The rest is in your editor.</p>' : '');
+  const run = m.lastRun, runEl = $('#rv-run');
+  runEl.innerHTML = run ? `<span class="${run.failed ? 'bad' : 'ok'}">${run.failed ? '✗ Last command failed' : '✓ Last command passed'}</span> · ${hm(run.at)} · one command, not a verdict on the checkout<b title="${esc(run.cmd)}">${esc(run.cmd)}</b>` : '';
+  const chat = $('#rv-chat'); chat.hidden = !(m.live && hostName(m)); if (!chat.hidden) chat.textContent = openLabel(m);
+  $('#rv-mark').disabled = !ok || !unreviewed(c).length;
+  const rf = $('#rv-refresh'); rf.hidden = !m.live; rf.disabled = !!(chg.get(m.sessionId) || {}).busy;
+}
+async function showDiff(path) {
+  const m = reviewing, c = m && changesOf(m), f = c && c.ok && c.files.find(x => x.path === path); if (!f || !codeOn) return;
+  rvDiff = { path, sig: f.sig, loading: true }; renderReview();
+  let d;
+  if (!m.live) { const e = DEMO_EDITS[hashStr(path) % DEMO_EDITS.length]; d = { ok: true, text: `@@ -${10 + hashStr(path) % 80},6 +${10 + hashStr(path) % 80},7 @@\n   // demo: invented lines\n${e.del.map(l => '-' + l).join('\n')}${e.del.length ? '\n' : ''}${e.add.map(l => '+' + l).join('\n')}` }; }
+  else try { d = await (await officeAuth.fetch(`/api/changes/diff?session=${encodeURIComponent(m.sessionId)}&path=${encodeURIComponent(path)}`)).json(); } catch (_) { d = { ok: false, error: 'The office server did not answer' }; }
+  if (reviewing !== m || !rvDiff || rvDiff.path !== path) return;
+  rvDiff = d.ok ? { path, sig: f.sig, text: d.text, truncated: d.truncated } : { path, sig: f.sig, error: d.error };
+  renderReview(); $('#rv-diff').scrollTop = 0;
+}
+$('#rv-files').addEventListener('click', e => { const b = e.target.closest('[data-path]'); if (b) showDiff(b.dataset.path); });
+$('#rv-diff').addEventListener('click', e => { if (e.target.id === 'rv-reload' && rvDiff) showDiff(rvDiff.path); });
+$('#rv-chat').onclick = () => reviewing && openHost(reviewing);
+$('#rv-refresh').onclick = () => reviewing && loadChanges(reviewing, true);
+$('#rv-mark').onclick = () => {                 // these versions are seen; a later edit to any of them brings it back
+  const c = reviewing && changesOf(reviewing); if (!c || !c.ok) return;
+  try { localStorage.setItem('agent-office:reviewed:' + c.root, JSON.stringify({ at: Date.now(), sigs: Object.fromEntries(c.files.map(f => [f.path, f.sig])) })); } catch (_) {}
+  renderReview(); detailDirty = true; toast(`Marked ${c.files.length} file${c.files.length === 1 ? '' : 's'} as reviewed`);
+};
+function setCodeOn(v) { codeOn = v; $('#opt-code').checked = v; detailDirty = true; if (!v) { rvDiff = null; for (const a of agents) if (a.lastEdit) a.lastEdit.edit = null; } if (reviewing) renderReview(); }
+$('#opt-code').onchange = e => { uiPrefs.code = e.target.checked; saveUi(); setCodeOn(e.target.checked); if (live.ws && live.ws.readyState === 1) live.ws.send(JSON.stringify({ type: 'code', show: e.target.checked })); };
+
+/* ---------- war room screens: the floor's review board and its latest reported edit ---------- */
+const BOARD_ROWS = 5, EDIT_ROWS = 8;
+const TONE = { todo: '#F2A22C', clear: '#52C96F', none: '#7D8F98', wait: '#7D8F98' };
+const MONO = '"IBM Plex Mono", monospace', SANS = '"IBM Plex Sans", sans-serif';
+// Long paths lose their start, not the file name.
+function fitTail(x, s, max) { if (x.measureText(s).width <= max) return s; while (s.length > 1 && x.measureText('…' + s).width > max) s = s.slice(1); return '…' + s; }
+function drawReviewBoard(rows, zoomed) {
+  const x = term.x, W = 2048, H = 768, HEAD = 84, more = rows.length - BOARD_ROWS; rows = rows.slice(0, BOARD_ROWS);
+  x.textAlign = 'left'; x.fillStyle = '#0A1115'; x.fillRect(0, 0, W, H); x.fillStyle = '#131E24'; x.fillRect(0, 0, W, HEAD);
+  x.fillStyle = '#DDE7EB'; x.font = `600 34px ${SANS}`; x.fillText('R E V I E W   B O A R D', 40, 54);
+  x.fillStyle = '#7D8F98'; x.font = `500 28px ${SANS}`; x.fillText(fitText(x, curFloor.name, 560), 480, 54);
+  x.textAlign = 'right'; x.fillText((more > 0 ? `${more} more not shown · ` : '') + (zoomed ? 'Click a row to open its changes · Esc to go back' : 'Click to read'), W - 40, 54); x.textAlign = 'left';
+  term.rows = [];
+  if (!rows.length) { x.font = `500 38px ${SANS}`; x.textAlign = 'center'; x.fillText('No agents on this floor', W / 2, H / 2 + 40); x.textAlign = 'left'; }
+  const rowH = Math.min(342, (H - HEAD) / Math.max(1, rows.length));
+  rows.forEach((r, i) => {
+    const y = HEAD + i * rowH; term.rows.push({ y0: y, y1: y + rowH, m: r.m });
+    if (i) { x.fillStyle = '#1D2A31'; x.fillRect(40, y, W - 80, 2); }
+    x.fillStyle = r.color; x.beginPath(); x.arc(58, y + 46, 16, 0, 7); x.fill();
+    x.fillStyle = '#F2F5F6'; x.font = '700 40px "Bricolage Grotesque", sans-serif'; const name = fitText(x, r.name, 640); x.fillText(name, 90, y + 60);
+    const nx = 90 + x.measureText(name).width + 24; x.fillStyle = STATUS[r.state].hex; x.font = `600 28px ${SANS}`; x.fillText(STATUS[r.state].label, nx, y + 58);
+    x.font = `700 40px ${SANS}`; const right = r.tone === 'todo' ? `${r.count} to review` : r.tone === 'clear' ? 'All reviewed ✓' : fitText(x, r.note, 700), lim = W - 72 - x.measureText(right).width;
+    x.font = `600 28px ${SANS}`; let sx = nx + x.measureText(STATUS[r.state].label).width + 36;
+    for (let k = 0; k < r.subs.length; k++) { const s = r.subs[k], nm = fitText(x, s.name, 280), st = STATUS[s.state], w = 26 + x.measureText(nm).width + 12 + x.measureText(st.label).width, rest = r.subs.length - k;
+      if (sx + w > lim - (rest > 1 ? 70 : 0)) { x.fillStyle = '#7D8F98'; x.fillText(`+${rest}`, sx, y + 58); break; }   // never run into the review count
+      x.fillStyle = s.color; x.beginPath(); x.arc(sx + 8, y + 48, 8, 0, 7); x.fill();
+      x.fillStyle = '#DDE7EB'; x.fillText(nm, sx + 26, y + 58); x.fillStyle = st.hex; x.fillText(st.label, sx + 26 + x.measureText(nm).width + 12, y + 58); sx += w + 32; }
+    x.textAlign = 'right'; x.fillStyle = TONE[r.tone]; x.font = `700 40px ${SANS}`; x.fillText(right, W - 40, y + 60);
+    x.fillStyle = '#7D8F98'; x.font = `500 26px ${SANS}`; if (r.total) x.fillText(`+${r.add} −${r.del} · ${r.total} changed`, W - 40, y + 104);
+    x.textAlign = 'left'; x.font = `500 26px ${MONO}`;
+    if (r.run) { x.fillStyle = r.run.failed ? '#FF7B72' : '#6FD69A'; x.fillText(fitText(x, `${r.run.failed ? '✗' : '✓'} ${r.run.cmd}`, 1280) + ` · ${hm(r.run.at)}`, 90, y + 104); }
+    const lines = Math.floor((rowH - 124) / 38), slots = lines * 2, over = r.files.length > slots ? r.files.length - slots + 1 : 0;
+    r.files.slice(0, over ? slots - 1 : slots).forEach((f, k) => { const fx = 90 + (k % 2) * 964, fy = y + 150 + Math.floor(k / 2) * 38;
+      if (f.fresh) { x.fillStyle = f.color || r.color; x.beginPath(); x.arc(fx - 20, fy - 9, 7, 0, 7); x.fill(); }
+      x.fillStyle = '#DDE7EB'; x.fillText(fitTail(x, f.path, 700), fx, fy);
+      x.textAlign = 'right'; x.fillStyle = '#7D8F98'; x.fillText(f.add == null ? 'binary' : `+${f.add} −${f.del}`, fx + 900, fy); x.textAlign = 'left'; });
+    if (over && slots) { x.fillStyle = '#7D8F98'; x.fillText(`and ${over} more`, 90 + ((slots - 1) % 2) * 964, y + 150 + Math.floor((slots - 1) / 2) * 38); }
+  });
+  term.t.needsUpdate = true;
+}
+function drawLatestEdit(le) {
+  const x = board.x, W = 1536, H = 560;
+  x.textAlign = 'left'; x.fillStyle = '#F7F8F6'; x.fillRect(0, 0, W, H);
+  x.fillStyle = '#5B6A72'; x.font = `600 30px ${SANS}`; x.fillText('L A T E S T   E D I T', 44, 62);
+  x.fillStyle = '#C9D1D4'; x.fillRect(44, 84, W - 88, 3);
+  if (!le) { x.fillStyle = '#6A7A82'; x.font = `500 34px ${SANS}`; x.fillText('No edits reported on this floor yet', 44, 150); board.t.needsUpdate = true; return; }
+  x.textAlign = 'right'; x.fillText(hm(le.at), W - 44, 62); x.textAlign = 'left';
+  x.fillStyle = le.who.color; x.beginPath(); x.arc(60, 134, 14, 0, 7); x.fill();
+  x.fillStyle = '#15212A'; x.font = `600 34px ${SANS}`; const who = fitText(x, le.who.name, 420); x.fillText(who, 88, 146);
+  const fx = 88 + x.measureText(who).width + 24; x.font = `500 32px ${MONO}`; x.fillText(fitTail(x, le.file, W - 44 - fx), fx, 146);
+  x.fillStyle = '#101A20'; rrect(x, 36, 178, W - 72, 346, 16); x.fill();
+  const ed = codeOn && le.edit, all = ed ? [...ed.del.map(l => ['-', l]), ...ed.add.map(l => ['+', l])] : [];
+  const cut = all.length > EDIT_ROWS || (ed && ed.more) ? EDIT_ROWS - 1 : EDIT_ROWS;
+  x.font = `500 28px ${MONO}`;
+  all.slice(0, cut).forEach(([sign, l], k) => { const y = 196 + k * 39;
+    x.fillStyle = sign === '+' ? 'rgba(82,201,111,.16)' : 'rgba(255,123,114,.16)'; x.fillRect(36, y, W - 72, 39);
+    x.fillStyle = sign === '+' ? '#8FE3AE' : '#FF9B93'; x.fillText(fitText(x, `${sign} ${l}`, W - 120), 60, y + 28); });
+  const rest = all.length - Math.min(all.length, cut) + (ed ? ed.more : 0);
+  x.fillStyle = '#7D8F98';
+  if (!all.length) x.fillText(codeOn ? 'No changed lines were reported for this edit' : 'Code is hidden. Turn on “Show code” in Customize.', 60, 230);
+  else if (rest) x.fillText(`${rest} more line${rest === 1 ? '' : 's'}`, 60, 196 + cut * 39 + 28);
+  board.t.needsUpdate = true;
+}
+// Redrawn only when what they show has changed.
+let screenSig = '';
+function drawScreens(force) {
+  const mains = boardMains(), now = Date.now(), zoomed = viewMode === 'screen';
+  const rows = mains.map(m => { const c = changesOf(m); if (m.live && !c) loadChanges(m); return reviewRow(m, c, c && c.ok ? reviewedOf(c.root).sigs : {}, now, agents.filter(a => a.parent === m && !a.gone)); });
+  const le = mains.map(m => m.lastEdit).filter(Boolean).sort((a, b) => b.at - a.at)[0] || null;
+  const sig = JSON.stringify([curFloor.name, zoomed, codeOn, rows.map(r => ({ ...r, m: r.m.id })), le && [le.at, le.file, le.who.id, le.edit]]);
+  if (!force && sig === screenSig) return; screenSig = sig;
+  drawReviewBoard(rows, zoomed); drawLatestEdit(le);
+}
+
 function onLiveEvent(e, replay) {
   if (e.replacesSessionId) {
     const duplicate = live.byId.get(e.replacesSessionId);
@@ -4272,12 +4820,13 @@ function onLiveEvent(e, replay) {
   }
   const s = e.session;
   if (e.type === 'SessionEnd') { const a = live.byId.get(e.sessionId); if (a) { emit(a, 'SessionEnd', e.reason || 'Session ended', e.at); leaveOffice(a); } return; }
-  const a = liveMain(s, replay);
+  const a = liveMain(s, replay); comeBack(a, s.status || 'idle', s.activity || 'Session resumed');
   if (e.type === 'SubagentStop' && e.agentId && !a.subs.has(e.agentId)) return;   // never saw it work: nothing to show
   if (s.entrypoint && s.entrypoint !== 'unknown') a.entrypoint = s.entrypoint;
   if (s.app) a.hostApp = s.app;
   if (s.term) a.hostTerm = s.term;
   if (s.chat) a.hostChat = s.chat;
+  if (s.t3Thread) a.hostT3Thread = s.t3Thread;
   retitle(a, s.title);
   if (s.messages) { a.messages = s.messages; if (a === selected) detailDirty = true; }
   setContext(a, s.context, replay);
@@ -4287,6 +4836,7 @@ function onLiveEvent(e, replay) {
   const label = `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}`;
   const agentResult = e.type.startsWith('PostToolUse') && (e.tool === 'Task' || e.tool === 'Agent');
   if (who === a && a.review && !agentResult) a.reviewDone = true;                       // the main agent moved on: let the subagent go
+  if (who !== a && e.type !== 'SubagentStop' && !a.exiting) comeBack(who, 'thinking', 'Back to work');
   if (who !== a && who.awaitingReview && e.type !== 'SubagentStop') who.awaitingReview = false;   // resumed: back to work
   switch (e.type) {
     case 'SessionStart': emit(a, 'SessionStart', `${whereFrom(a)} · ${a.cwd}`, e.at); break;
@@ -4294,42 +4844,47 @@ function onLiveEvent(e, replay) {
       if (e.message) emit(a, 'SessionFound', `${e.message} · ${whereFrom(a)} · ${a.cwd}`, e.at);
       applyStatus(a, s.status, s.activity); break;
     case 'UserPromptSubmit':
-      emit(a, 'UserPromptSubmit', `"${e.prompt || ''}"`, e.at); seeAgent(a); unstick(a);
+      emit(a, 'UserPromptSubmit', `"${e.prompt || ''}"`, e.at); seeAgent(a); unstick(a); a.run = null;
+      if (!replay) changeDesk(a, d => workedOn(d, e.at));
       a.ws = chooseWorkspot(a); a.streak = 0;
       applyStatus(a, 'thinking', e.prompt || 'New prompt');
       place(a, s.permissionMode === 'plan' ? (spotOfType(a, ['meeting']) || a.ws) : a.ws, true);
       break;
     case 'PreToolUse':
-      emit(who, 'PreToolUse', label, e.at); toolCalls++;
+      emit(who, 'PreToolUse', label, e.at); toolCalls++; who.asked = null;
       if (who === a && (e.tool === 'Task' || e.tool === 'Agent')) { applyStatus(a, 'working', `Waiting on ${e.summary.split(':')[0] || 'a'} subagent`); break; }
       applyStatus(who, 'working', label);
       place(who, who === a ? spotForTool(a, e.tool, s) : (READ_TOOLS.has(e.tool) && Math.random() < .6 ? spotOfType(who, ['library']) : null) || who.ws);
-      if (e.tool === 'Bash' && !replay) termPush(who, '$ ' + e.summary, '#F3F7F8');
-      if (EDIT_TOOLS.has(e.tool) && !replay) boardPush(who, e.summary);
+      if (e.tool === 'Bash') who.run = { at: e.at };
       if (EDIT_TOOLS.has(e.tool)) noteEdit(who, e.summary, replay);
       break;
     case 'PostToolUse': case 'PostToolUseFailure':
       if (e.failed) emit(who, 'PostToolUseFailure', label, e.at);
-      if (e.tool === 'Bash' && !replay) termPush(who, e.failed ? '✗ failed' : '✓ done', e.failed ? '#FF7B72' : '#6FD69A');
-      noteResult(who, e, replay);
-      if (who.state !== 'waiting') applyStatus(who, 'thinking', e.failed ? `${e.tool} failed, rethinking` : who.review && !who.reviewDone ? reviewLabel(who.review) : 'Thinking');
-      if (e.merged) { emit(who, 'Merged', label, e.at); if (!replay) { celebrate(who); chime('merged', a); } }
+      noteWork(who, e);
+      { const before = noteResult(who, e, replay), ran = e.tool === 'Bash' && who.run; if (ran) who.run = null;
+        if (!replay) { const ms = ran ? e.at - ran.at : 0; react(who, outcomeOf(e, before, ms), e.at, e.summary, ms); } }
+      // The call it asked about has run, so you answered. Another call finishing meanwhile says nothing about the one it asked for.
+      { const answered = who.state === 'waiting' && (!who.asked || who.asked === label); if (answered) who.asked = null;
+        if (who.state !== 'waiting' || answered) applyStatus(who, 'thinking', e.failed ? `${e.tool} failed, rethinking` : who.review && !who.reviewDone ? reviewLabel(who.review) : 'Thinking'); }
+      if (e.merged) { emit(who, 'Merged', label, e.at); if (!replay) { celebrate(who); chime('merged', a); changeDesk(a, d => remember(d, 'merge', e.at)); } }
       break;
     case 'PermissionRequest': case 'Notification': {
       const perm = e.type === 'PermissionRequest' || e.notificationType === 'permission_prompt';
       if (e.type === 'Notification') emit(a, 'Notification', e.message || e.notificationType || 'Notification', e.at);
-      else emit(who, 'PermissionRequest', label, e.at);
+      else { emit(who, 'PermissionRequest', label, e.at); who.asked = label; }
+      // The prompt names no agent. When a subagent has just asked, it's that subagent's: the main agent isn't the one blocked.
+      if (e.type === 'Notification' && perm && [...a.subs.values()].some(x => x.state === 'waiting')) break;
       if (perm) {
         applyStatus(who, 'waiting', e.type === 'PermissionRequest' ? `Needs permission: ${label}` : (e.message || 'Needs your permission'));
         if (!replay) { toast(`${a.name} needs your permission in the ${whereFrom(a).toLowerCase()}`, 'Show me', () => select(who, true), who, 'waiting'); chime('needs', a); nudgeTitle(`✋ ${a.name} needs you`); }
       } else if (e.notificationType === 'idle_prompt') applyStatus(a, 'idle', 'Waiting for your input');
       break; }
-    case 'Stop': emit(a, 'Stop', 'Finished responding', e.at); unstick(a); applyStatus(a, 'done', a.merged ? 'Finished · merged' : 'Finished');
+    case 'Stop': emit(a, 'Stop', 'Finished responding', e.at); unstick(a); a.run = null; applyStatus(a, 'done', a.merged ? 'Finished · merged' : 'Finished');
       if (!replay) { chime('done', a); nudgeTitle(`✓ ${a.name} is done`); if (a.floor !== curFloor || viewMode !== 'floor') { unseenOf(a.floor).add(a.id); uiDirty = true; } }
       if (!replay) toast(`${a.name} finished in ~/${a.project.key}`, hostName(a) ? [[opensChat(a) ? 'Open chat' : `Open in ${hostName(a)}`, () => openHost(a), true], ['Show me', () => select(a, true)]] : 'Show me', () => select(a, true), a, 'done');
       break;
-    case 'SubagentStart': emit(who, 'SubagentStart', `${e.agentType || 'Subagent'} started`, e.at); break;
-    case 'SubagentStop': emit(who, 'SubagentStop', e.message || 'Returned its result', e.at);
+    case 'SubagentStart': emit(who, 'SubagentStart', `${e.agentType || 'Subagent'} started`, e.at); if (!replay) changeDesk(a, d => remember(d, 'team', e.at)); break;
+    case 'SubagentStop': emit(who, 'SubagentStop', e.message || 'Returned its result', e.at); who.run = null;
       if (replay) { removeAgent(who); a.subs.delete(e.agentId); } else if (!who.awaitingReview && !who.exiting) queueReview(a, who); break;
     case 'PermissionResolved': emit(who, 'PermissionResolved', e.message, e.at); applyStatus(who, 'thinking', e.message);
       if (!replay) toast(`${e.message.startsWith('Allowed') ? 'Allowed' : 'Denied'}: ${who.name} ${e.message.startsWith('Allowed') ? 'can go ahead' : 'will find another way'}`); break;
@@ -4338,22 +4893,38 @@ function onLiveEvent(e, replay) {
   setModeLine();
 }
 
+// Hooks from before the office had keys are refused, so their sessions can't appear; say what to update, once per kind.
+function onOutdatedHooks(hooks) {
+  if (!Array.isArray(hooks)) return;
+  const said = live.hookNotes || (live.hookNotes = new Set());
+  for (const h of hooks) {
+    const agent = String(h && h.agent || 'unknown'), k = agent + '|' + (h && h.reason);
+    if (said.has(k)) continue; said.add(k);
+    if (h.reason === 'wrong-key') { toast(`${agent} hooks sent a key this office doesn’t know, so their sessions can’t appear. If you set AGENT_OFFICE_DATA, set it for your agents too.`); continue; }
+    if (agent === 'claude-code') {
+      const fix = 'claude plugin marketplace update agent-office && claude plugin update agent-office@agent-office';
+      toast('Claude Code is reporting with an old Agent Office plugin, so its sessions can’t appear. Update the plugin, then start a new session.', 'Copy command', () => navigator.clipboard?.writeText(fix).then(() => toast('Copied. Run it in a terminal.'), () => toast(fix)));
+    } else toast(`${agent} hooks predate the office’s key, so their sessions can’t appear. Reconnect ${agent} from Connect agents, or git pull if they run this repo’s adapters/hook.sh.`);
+  }
+}
 function onSnapshot(msg) {
   if (!live.gotSnapshot) { live.gotSnapshot = true; rosterEl._html = null; uiDirty = true; setTimeout(setModeLine); }
+  onOutdatedHooks(msg.outdatedHooks);
+  setCodeOn(msg.showCode !== false);
   musicSupported = !!msg.musicSupported; music = musicOn && msg.music || null; updateMusicBtn();
   const ids = new Set(msg.sessions.map(s => s.id));
   for (const [id, a] of live.byId) if (!ids.has(id)) leaveOffice(a);
   feedEl.innerHTML = '';
   agents.forEach(a => { if (a.approval && a.approval.live) a.approval = null; });
   for (const s of msg.sessions) {
-    const a = liveMain(s, true);
-    if (s.app) a.hostApp = s.app; if (s.term) a.hostTerm = s.term; if (s.chat) a.hostChat = s.chat;
+    const a = liveMain(s, true); comeBack(a, s.status, s.activity);
+    if (s.app) a.hostApp = s.app; if (s.term) a.hostTerm = s.term; if (s.chat) a.hostChat = s.chat; if (s.t3Thread) a.hostT3Thread = s.t3Thread;
     retitle(a, s.title);
     a.merged = !!s.merged;
     if (s.messages) a.messages = s.messages;
     setContext(a, s.context, true);
     applyStatus(a, s.status, s.activity); a.reported = [s.status, s.activity];
-    for (const sub of s.subagents || []) { const x = liveSub(a, sub.id, sub.type, true, sub.task); applyStatus(x, sub.status, sub.activity); }
+    for (const sub of s.subagents || []) { const x = liveSub(a, sub.id, sub.type, true, sub.task); if (!a.exiting) comeBack(x, sub.status, sub.activity); applyStatus(x, sub.status, sub.activity); }
     // Finished while the page was disconnected (the Mac slept, the app restarted): its SubagentStop never reached us.
     const still = new Set((s.subagents || []).map(x => x.id));
     for (const [id, sub] of a.subs) if (!still.has(id) && !sub.awaitingReview) leaveOffice(sub, `Reported back to ${a.name}`);
@@ -4363,6 +4934,7 @@ function onSnapshot(msg) {
     const who = e.agentId && a.subs.get(e.agentId) || a;
     const detail = e.prompt ? `"${e.prompt}"` : e.message || `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}` || e.type;
     emit(who, e.type, detail, e.at);
+    if (e.type === 'PostToolUse') noteWork(who, e);              // so a reopened office still knows each agent's last edit
   }
   for (const ap of msg.approvals || []) onApproval(ap, false);   // requests still waiting for an answer
   setModeLine();
@@ -4429,12 +5001,12 @@ function onApprovalResolved(msg) {
 const setup = { tools: null, busy: null };
 async function loadSetup() {
   if (setup.missing) return;
-  try { const r = await fetch('/api/setup'); if (r.status === 404) setup.missing = true; setup.tools = r.ok ? (await r.json()).tools : null; } catch (_) { setup.tools = null; }
+  try { const r = await officeAuth.fetch('/api/setup'); if (r.status === 404) setup.missing = true; setup.tools = r.ok ? (await r.json()).tools : null; } catch (_) { setup.tools = null; }
   renderSetup();
 }
 async function connectTool(id) {
   if (setup.busy) return; setup.busy = id; renderSetup();
-  try { const r = await fetch('/api/setup/' + encodeURIComponent(id), { method: 'POST' }); toast((await r.json()).message); }
+  try { const r = await officeAuth.fetch('/api/setup/' + encodeURIComponent(id), { method: 'POST' }); toast((await r.json()).message); }
   catch (_) { toast('Couldn’t reach the office server'); }
   setup.busy = null; loadSetup();
 }
@@ -4545,23 +5117,31 @@ $('#office-guide').addEventListener('keydown', e => { if (e.key === 'Escape') { 
 function connectLive() {
   document.body.classList.add('live'); setSpeed(1); setModeLine();
   let ws;
-  try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'); }
+  try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws', officeAuth.protocols()); }
   catch (_) { startDemo(); return; }
-  const fallback = setTimeout(() => { if (!live.everConnected) { try { ws.close(); } catch (_) {} startDemo(); } }, 2500);
+  const fallback = setTimeout(() => { if (!live.everConnected) { try { ws.close(); } catch (_) {} explainLocked(); startDemo(); } }, 2500);
   live.ws = ws;
   ws.onopen = () => { live.connected = live.everConnected = true; clearTimeout(fallback); setModeLine(); sendPresence(); loadSetup();
-    if (musicOn) ws.send(JSON.stringify({ type: 'music', on: true })); };
+    if (musicOn) ws.send(JSON.stringify({ type: 'music', on: true }));
+    if (uiPrefs.code === false) ws.send(JSON.stringify({ type: 'code', show: false })); };
   ws.onmessage = m => { let msg; try { msg = JSON.parse(m.data); } catch (_) { return; }
     if (msg.type === 'snapshot') onSnapshot(msg); else if (msg.type === 'event') onLiveEvent(msg.event, false);
     else if (msg.type === 'focus-result') toast(msg.message);
+    else if (msg.type === 'code') setCodeOn(!!msg.show);
     else if (msg.type === 'music') music = musicOn && msg.music || null;
     else if (msg.type === 'setup') loadSetup();
-    else if (msg.type === 'approval') onApproval(msg.approval, true); else if (msg.type === 'approval-resolved') onApprovalResolved(msg); };
+    else if (msg.type === 'approval') onApproval(msg.approval, true); else if (msg.type === 'approval-resolved') onApprovalResolved(msg); else if (msg.type === 'hooks-outdated') onOutdatedHooks(msg.hooks); };
   ws.onclose = () => {
     clearTimeout(fallback);
-    if (!live.everConnected) { startDemo(); return; }
+    if (!live.everConnected) { explainLocked(); startDemo(); return; }
     live.connected = false; setModeLine(); updateMusicBtn(); setTimeout(connectLive, 2000);
   };
+}
+
+// A server that answers but refuses this browser's key: say how to open the office with it.
+function explainLocked() {
+  if (live.lockedSaid) return; live.lockedSaid = true;
+  officeAuth.fetch('/api/auth').then(r => { if (r.status === 401) toast('This office needs its key. Open it from the Agent Office menu (Open in browser), or with the link the office server printed. Showing the demo meanwhile.'); }).catch(() => {});
 }
 
 /* ---------- demo mode: simulated agents ---------- */
@@ -4586,6 +5166,11 @@ function startDemo() {
     a.spot = home; a.where = 'Own desk'; a.g.position.set(home.x, 0, home.z); a.yaw = a.yawT = yawOf(home.face);
     setState(a, 'idle', 'Session started');
   });
+  PROJECTS.forEach((p, i) => {                                // so the demo desks already have a past
+    const DAY = 864e5, now = Date.now(); let d = remember({ ...emptyDesk(), dayCount: [2, 9, 16, 31][i % 4] }, 'team', now - 20 * DAY);
+    for (let k = [1, 3, 6, 0][i % 4]; k > 0; k--) d = remember(d, 'merge', now - (k * 2 + 2) * DAY);
+    demoDesks.set(p.key, i % 2 ? remember(d, 'unstuck', now - 3 * DAY, 4) : d);
+  });
   curFloor = floors[floors.length - 1]; yOffTarget = yOff = -curFloor.i * FLOOR_H; rebuildTower(); refreshFloorVisuals();
   buildCustomize(); renderJSON(); setModeLine(); goBuilding();
   agents.filter(a => a.kind === 'main').forEach(mainLoop);
@@ -4604,34 +5189,37 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 /* ---------- boot ---------- */
-window.agentOffice = { agents, SPOTS, DOOR };   // for debugging from the console
+window.agentOffice = { agents, SPOTS, DOOR, camera };   // for debugging from the console
 curFloor = makeFloor('lobby', 'Your first project', true); rebuildTower();
 setLiftOpen(uiPrefs.lift !== false); if (uiPrefs.panel === false) setPanelOpen(false);
 showDetailTab(uiPrefs.detailTab === 'activity' ? 'activity' : 'chat');
-applyScene(uiPrefs.theme in SCENES ? uiPrefs.theme : 'auto'); buildCustomize(); renderJSON(); drawTerm(); drawBoard(); layout(); loadPacks();
+applyScene(uiPrefs.theme in SCENES ? uiPrefs.theme : 'auto'); buildCustomize(); renderJSON(); layout(); loadPacks();
 if (Object.hasOwn(CITIES, uiPrefs.city)) setCity(uiPrefs.city);
 setView('3d'); Object.assign(cam, { theta: goal.theta, phi: goal.phi, radius: goal.radius }); cam.target.copy(goal.target); applyCam();
-if (MODE === 'demo' || !/^https?:$/.test(location.protocol)) startDemo(); else connectLive();
+if (MODE === 'demo' || !/^https?:$/.test(location.protocol)) startDemo(); else officeAuth.ready.then(connectLive);
 syncCrewButtons();
 if (!uiPrefs.guideDone && !uiPrefs.crew) openWelcome();
 else if (!Object.hasOwn(CITIES, uiPrefs.city)) { tourAfterCity = !uiPrefs.guideDone || params.has('tour'); $('#city-picker').showModal(); $('#city-choices [aria-pressed="true"]')?.focus(); }
 else if (!uiPrefs.guideDone || params.has('tour')) startGuide(Number.isInteger(uiPrefs.guideStep) ? uiPrefs.guideStep : 0);
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { agents.forEach(a => a.labelDirty = true); floorLabels.forEach(l => l.draw()); drawTerm(); drawBoard(); drawNeon(); floors.forEach(f => drawSign(f, true)); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { agents.forEach(a => a.labelDirty = true); floorLabels.forEach(l => l.draw()); screensDirty = true; drawNeon(); floors.forEach(f => drawSign(f, true)); });
 
 let last = performance.now(), uiT = 0;
+let screenT = 0;
 function step(dt) {
   if (Math.abs(vo.x - vo.tx) > .3 || Math.abs(vo.y - vo.ty) > .3) { const k = 1 - Math.exp(-dt * 9); vo.x += (vo.tx - vo.x) * k; vo.y += (vo.ty - vo.y) * k; applyViewOffset(); }
+  if ((viewMode === 'screen') !== !!vo.zoomed) layout();            // entering or leaving a screen reframes the view
   const sdt = dt * speed; simTime += sdt; tickTimers();
   if (MODE === 'live') liveTick(dt);
   stepFlight(dt); if (!flight || flight.landing) skyDome.position.y = 0;
   yOff += (yOffTarget - yOff) * (reduced ? 1 : 1 - Math.exp(-dt * 5)); building.position.y = city.position.y = yOff;
   floorGlow();
   for (const a of agents.slice()) updateAgent(a, dt, sdt);
-  updateHoops(dt); updateArcade(dt); updateParty(dt); updateClashes();
+  updateHoops(dt); updateArcade(dt); updateParty(dt); updateClashes(); updateFx(dt); if (deskDirty) drawDesks();
   { let want = 0; for (const a of agents) if (a.floor === curFloor && !a.onRoof && Math.hypot(a.g.position.x - 12.6, a.g.position.z + 1.8) < 1.9) want = 1;
     lift.open += (want - lift.open) * (1 - Math.exp(-dt * 6));
     lift.l.position.z = -1.8 - .275 - lift.open * .5; lift.r.position.z = -1.8 + .275 + lift.open * .5;
     lift.lamp.color.set(want ? '#59CD90' : '#2A3238'); }
+  screenT += dt; if (screensDirty || screenT > .5) { drawScreens(screensDirty); screensDirty = false; screenT = 0; }
   let n = 0; for (const a of agents) if (a.labelDirty && n < 4) { drawLabel(a); n++; }
   if (!renderer.xr.isPresenting) { keyPan(dt); updateCam(dt); updateShell(); }
   uiT += dt;
@@ -4640,9 +5228,11 @@ function step(dt) {
     const txt = ap.live ? `Claude Code asks you itself in ${Math.max(0, Math.ceil((ap.expiresAt - Date.now()) / 1000))}s` : `Demo auto-approves in ${Math.max(0, Math.ceil(ap.deadline - simTime))}s`;
     if (tEl.textContent !== txt) tEl.textContent = txt; }
 }
+let hiddenFrames = 0;
 renderer.setAnimationLoop(() => {
   const now = performance.now(), dt = Math.min(.05, (now - last) / 1000); last = now;
-  step(dt); renderer.render(scene, camera);
+  step(dt);
+  if (!review.open || ++hiddenFrames % 30 === 0) renderer.render(scene, camera);   // the review window covers the office: a frame now and then is enough
 });
 // Debug helper: fast-forward the office (runs even when the tab is in the background).
 window.agentOffice.advance = async seconds => { for (let t = 0; t < seconds; t += .05) { step(.05); for (let k = 0; k < 6; k++) await null; } renderer.render(scene, camera); };

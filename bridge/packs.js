@@ -1,11 +1,17 @@
 // Model packs: folders of glTF models that replace the office's built-in furniture (and later its characters).
 // Each pack is <packs>/<id>/pack.json plus the .glb/.gltf files it names, served to the page under /packs/<id>/.
+// Packs come from anywhere, so only model and texture files are served, never documents or scripts, and never
+// anything a symlink points to outside the packs folder.
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import { dataDir } from './auth.js';
 
-const SUPPORT = { darwin: 'Library/Application Support/Agent Office', win32: 'AppData/Roaming/Agent Office', linux: '.config/agent-office' };
-export const packsDir = (home = os.homedir()) => process.env.AGENT_OFFICE_PACKS || path.join(home, SUPPORT[process.platform] || SUPPORT.linux, 'packs');
+export const packsDir = home => process.env.AGENT_OFFICE_PACKS || path.join(dataDir(home), 'packs');
+export const PACK_TYPES = { '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.bin': 'application/octet-stream',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.ktx2': 'image/ktx2' };
+export const MAX_PACK_FILE = 64 * 1024 * 1024;
+// A pack file can't run as a page even if someone opens its URL directly.
+export const PACK_HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox", 'Cross-Origin-Resource-Policy': 'same-origin', 'Cache-Control': 'no-cache' };
 
 // Every folder with a readable pack.json; a broken pack is skipped, never fatal.
 export function listPacks(dir = packsDir()) {
@@ -23,9 +29,15 @@ export function listPacks(dir = packsDir()) {
   return packs.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// /packs/<id>/<file> → the file on disk, or null when it would leave the packs folder.
+// /packs/<id>/<file> → { file, type } for a model or texture really inside the packs folder, else null.
 export function packFile(urlPath, dir = packsDir()) {
   let rel; try { rel = decodeURIComponent(urlPath.replace(/^\/packs\/+/, '')); } catch { return null; }
-  const file = path.resolve(dir, rel), root = path.resolve(dir);
-  return file.startsWith(root + path.sep) && rel.includes('/') ? file : null;
+  if (rel.includes('\0') || !rel.includes('/')) return null;
+  const root = path.resolve(dir), file = path.resolve(root, rel), type = PACK_TYPES[path.extname(file).toLowerCase()];
+  if (!type || !file.startsWith(root + path.sep)) return null;
+  try {
+    const realRoot = fs.realpathSync(root), real = fs.realpathSync(file), st = fs.statSync(real);
+    if (!real.startsWith(realRoot + path.sep) || !st.isFile() || st.size > MAX_PACK_FILE) return null;
+    return { file: real, type };
+  } catch { return null; }
 }

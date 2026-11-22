@@ -40,6 +40,16 @@ pub struct Found {
     pub messages: Vec<Message>,
     /// The log itself says the turn is over, so it overrides hooks still saying "thinking" (see Store::adopt).
     pub ended: bool,
+    /// Subagents its logs show still at work (Claude Code only).
+    pub subs: Vec<FoundSub>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FoundSub {
+    pub id: String,
+    pub kind: String,
+    pub task: Option<String>,
+    pub at: u64,
 }
 
 fn mtime_ms(p: &Path) -> Option<u64> {
@@ -158,6 +168,21 @@ pub fn archived_home() -> HashSet<String> {
     }
 }
 
+/// Subagents a session's logs show still at work. Hooks report a subagent's start once, so an office opened later
+/// (or restarted) finds it here. One that was cut off mid-tool looks the same until its log leaves the window.
+fn running_subs(proj: &Path, id: &str, now: u64) -> Vec<FoundSub> {
+    recent_logs(&proj.join(id).join("subagents"), now).into_iter().filter_map(|(log, at)| {
+        let lines = tail(&log);
+        let last = lines.iter().rev().find(|o| matches!(o["type"].as_str(), Some("user" | "assistant")))?;
+        let mid_turn = last["type"] == "user" || last["message"]["content"].as_array().is_some_and(|c| c.iter().any(|x| x["type"] == "tool_use"));
+        if !mid_turn { return None; }
+        let meta: Value = fs::read_to_string(log.with_extension("meta.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
+        let id = log.file_stem()?.to_string_lossy().trim_start_matches("agent-").to_string();
+        let kind = meta["agentType"].as_str().filter(|t| !t.is_empty()).map_or("subagent".into(), |t| crate::store::clip(t, 60));
+        Some(FoundSub { id, kind, task: meta["description"].as_str().filter(|t| !t.is_empty()).map(|t| crate::store::clip(t, 120)), at })
+    }).collect()
+}
+
 fn claude(home: &Path, now: u64, out: &mut Vec<Found>, archived: &HashSet<String>) {
     for proj in dirs(&home.join(".claude/projects")) {
         let folder = proj.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
@@ -182,9 +207,11 @@ fn claude(home: &Path, now: u64, out: &mut Vec<Found>, archived: &HashSet<String
                 Some(_) => ("thinking", "Thinking"),
                 None => ("idle", "Session started"),
             };
-            let (status, activity) = settle(status, activity, at, now);
+            let subs = running_subs(&proj, &id, now);
+            let (status, activity) = if subs.is_empty() { settle(status, activity, at, now) } else { ("working".into(), "Waiting on a subagent".into()) };
+            let at = subs.iter().map(|x| x.at).fold(at, u64::max);
             let t = read_tail(&log).unwrap_or_default();
-            out.push(Found { agent: "claude-code".into(), id, cwd: root.to_string_lossy().into(), project: None, entrypoint, at, status, activity, title: t.title, messages: t.messages, ended: false });
+            out.push(Found { agent: "claude-code".into(), id, cwd: root.to_string_lossy().into(), project: None, entrypoint, at, status, activity, title: t.title, messages: t.messages, ended: false, subs });
         }
     }
 }
@@ -213,7 +240,7 @@ fn codex(home: &Path, now: u64, out: &mut Vec<Found>) {
             let (status, activity) = settle(status, activity, at, now);
             let ended = last.as_deref().is_some_and(|t| t != "task_started");
             out.push(Found { agent: "codex".into(), id: format!("codex:{id}"), cwd: meta["cwd"].as_str().unwrap_or("").into(), project: None,
-                             entrypoint: meta["originator"].as_str().map(String::from), at, status, activity, title: None, messages: vec![], ended });
+                             entrypoint: meta["originator"].as_str().map(String::from), at, status, activity, title: None, messages: vec![], ended, subs: vec![] });
         }
     }
 }
@@ -248,7 +275,7 @@ fn cursor(home: &Path, now: u64, out: &mut Vec<Found>) {
                 let first = head(&log, 1).into_iter().next().filter(|o| o["role"] == "user");
                 let title = first.as_ref().and_then(cursor_prompt);
                 let entrypoint = first.as_ref().and_then(cursor_text).filter(|t| from_t3(t)).map(|_| "t3-code".to_string());
-                out.push(Found { agent: "cursor".into(), id: format!("cursor:{id}"), cwd, project: None, entrypoint, at, status, activity, title, messages: vec![], ended: done });
+                out.push(Found { agent: "cursor".into(), id: format!("cursor:{id}"), cwd, project: None, entrypoint, at, status, activity, title, messages: vec![], ended: done, subs: vec![] });
             }
         }
     }
@@ -286,6 +313,22 @@ mod tests {
     fn write(p: &Path, lines: &[Value]) {
         fs::create_dir_all(p.parent().unwrap()).unwrap();
         fs::write(p, lines.iter().map(|l| l.to_string() + "\n").collect::<String>()).unwrap();
+    }
+
+    #[test]
+    fn finds_the_subagents_a_chat_still_has_at_work() {
+        let home = tmp("subs");
+        let shop = home.join("code/shop");
+        fs::create_dir_all(&shop).unwrap();
+        let folder = home.join(".claude/projects").join(encode(&shop.to_string_lossy()));
+        let subs = folder.join("s1/subagents");
+        write(&folder.join("s1.jsonl"), &[json!({ "type": "assistant", "cwd": shop, "entrypoint": "cli", "message": { "content": [{ "type": "tool_use", "name": "Agent" }] } })]);
+        write(&subs.join("agent-a1.jsonl"), &[json!({ "type": "assistant", "message": { "content": [{ "type": "tool_use", "name": "Bash" }] } })]);
+        fs::write(subs.join("agent-a1.meta.json"), json!({ "agentType": "general-purpose", "description": "Wire the frontend" }).to_string()).unwrap();
+        write(&subs.join("agent-a2.jsonl"), &[json!({ "type": "assistant", "message": { "content": [{ "type": "text", "text": "All done." }] } })]);
+        let found = scan(&home, now_ms() + 10 * 60_000);                             // a long test run: quiet for ten minutes
+        assert_eq!(found[0].subs.iter().map(|x| (x.id.as_str(), x.kind.as_str(), x.task.as_deref())).collect::<Vec<_>>(), vec![("a1", "general-purpose", Some("Wire the frontend"))]);
+        assert_eq!((found[0].status.as_str(), found[0].activity.as_str()), ("working", "Waiting on a subagent"));
     }
 
     #[test]

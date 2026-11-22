@@ -77,3 +77,15 @@ test('skips chats archived in the Claude desktop app, even though archiving writ
   assert.deepEqual([...archivedChats(home)], ['gone']);
   assert.deepEqual(scan(home).map(f => f.id), ['kept']);
 });
+
+test('finds the subagents a chat still has at work, and counts the chat as working while they are', () => {
+  const home = tmp('subs'), shop = path.join(home, 'code', 'shop'); fs.mkdirSync(shop, { recursive: true });
+  const folder = path.join(home, '.claude', 'projects', encode(shop)), subs = path.join(folder, 's1', 'subagents');
+  write(path.join(folder, 's1.jsonl'), [{ type: 'assistant', cwd: shop, entrypoint: 'cli', message: { content: [{ type: 'tool_use', name: 'Agent' }] } }]);
+  write(path.join(subs, 'agent-a1.jsonl'), [{ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash' }] } }]);
+  fs.writeFileSync(path.join(subs, 'agent-a1.meta.json'), JSON.stringify({ agentType: 'general-purpose', description: 'Wire the frontend' }));
+  write(path.join(subs, 'agent-a2.jsonl'), [{ type: 'assistant', message: { content: [{ type: 'text', text: 'All done.' }] } }]);
+  const [f] = scan(home, Date.now() + 10 * 60_000);                       // a long test run: quiet for ten minutes
+  assert.deepEqual(f.subs.map(x => [x.id, x.type, x.task]), [['a1', 'general-purpose', 'Wire the frontend']]);
+  assert.deepEqual([f.status, f.activity], ['working', 'Waiting on a subagent']);
+});

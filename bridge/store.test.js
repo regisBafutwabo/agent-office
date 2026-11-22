@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store, summarizeTool, entrypointLabel } from './store.js';
-import { chatLink } from './focus.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { chatLink, t3Environment } from './focus.js';
 
 const base = { session_id: 's1', cwd: '/Users/me/code/shop', permission_mode: 'default' };
 
@@ -108,6 +111,19 @@ test('permission prompts mark the session as waiting and SessionEnd forgets it',
   assert.equal(st.snapshot().sessions.length, 0);
 });
 
+test("a subagent's permission prompt leaves the main session working", () => {
+  const st = new Store();
+  st.ingest({ ...base, hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_input: { subagent_type: 'Explore', description: 'Look around' } });
+  st.ingest({ ...base, hook_event_name: 'SubagentStart', agent_id: 'x1', agent_type: 'Explore' });
+  st.ingest({ ...base, hook_event_name: 'PermissionRequest', agent_id: 'x1', tool_name: 'Bash', tool_input: { command: 'make test' } });
+  st.ingest({ ...base, hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'Claude needs your permission to use Bash' });
+  let s = st.snapshot().sessions[0];
+  assert.equal(s.status, 'working'); assert.equal(s.subagents[0].status, 'waiting');
+  st.ingest({ ...base, hook_event_name: 'PostToolUse', agent_id: 'x1', tool_name: 'Bash', tool_input: { command: 'make test' } });
+  s = st.snapshot().sessions[0];
+  assert.equal(s.subagents[0].status, 'thinking');
+});
+
 test('skips helper agents that only report SubagentStop', () => {
   const st = new Store();
   const e = st.ingest({ ...base, hook_event_name: 'SubagentStop', agent_id: 'helper', last_assistant_message: 'make it public' });
@@ -148,6 +164,24 @@ test('opens the exact chat in the Claude and Codex apps, and only there', () => 
   assert.equal(chatLink({ agent: 'codex', id, term: 'Apple_Terminal' }), null);   // Codex CLI in a terminal: open the tab instead
   assert.equal(chatLink({ agent: 'codex', id: 'codex:../../x' }), null);
   assert.equal(chatLink({ agent: 'codex', id, entrypoint: 't3-code' }), null);   // run by T3 Code: open T3 Code, not the Codex app
+});
+
+test('opens a T3 Code session at its own thread, and only with valid ids', () => {
+  const st = new Store(), thread = 'fceae35e-a7d0-4d26-b667-aa2413567acf', env = '3232e3cc-4af0-4943-bba3-a85dcaf45bf7';
+  st.ingest({ ...base, hook_event_name: 'SessionStart' }, 't3-code', undefined, 'claude-code', { app: 'com.t3tools.t3code', t3Thread: thread });
+  st.ingest({ ...base, hook_event_name: 'Stop' }, 't3-code', undefined, 'claude-code', { t3Thread: '../x?y' });
+  const s = st.snapshot().sessions[0];
+  assert.equal(s.t3Thread, thread);
+  assert.deepEqual(chatLink(s, env), { bundle: 'com.t3tools.t3code', url: `t3code://threads/${env}/${thread}` });
+  assert.equal(chatLink(s, null), null);                                   // no environment id: just bring T3 Code forward
+  assert.equal(chatLink(s, 'not-a-uuid/../x'), null);
+  assert.equal(chatLink({ ...s, t3Thread: undefined }, env), null);
+  assert.equal(chatLink({ ...s, t3Thread: 'abc' }, env), null);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'office-t3-'));
+  assert.equal(t3Environment(home), null);
+  fs.mkdirSync(path.join(home, '.t3/userdata'), { recursive: true }); fs.writeFileSync(path.join(home, '.t3/userdata/environment-id'), `${env}\n`);
+  assert.equal(t3Environment(home), env);
+  fs.rmSync(home, { recursive: true, force: true });
 });
 
 test('ignores payloads without a session or event name', () => {
@@ -270,4 +304,18 @@ test('chats archived in the desktop app leave, but come back with their next hoo
   assert.deepEqual(st.snapshot().sessions.map(s => s.id), ['s2']);
   st.ingest({ ...base, hook_event_name: 'UserPromptSubmit', prompt: 'back again' });
   assert.ok(st.snapshot().sessions.some(s => s.id === 's1'));
+});
+
+test('a subagent already at work when the office opens walks in, and leaves when its log or a hook says it finished', () => {
+  const st = new Store(() => null), sub = { id: 'a1', type: 'general-purpose', task: 'Wire the frontend', at: 1 };
+  st.adopt({ ...found('s1', 'working'), subs: [sub] });
+  assert.deepEqual(st.adoptSubs({ id: 's1', subs: [sub] }).map(e => [e.type, e.agentId, e.agentTask]), [['SubagentStart', 'a1', 'Wire the frontend']]);
+  assert.deepEqual(st.adoptSubs({ id: 's1', subs: [sub] }), []);         // already here
+  assert.deepEqual(st.adoptSubs({ id: 's1', subs: [] }).map(e => e.type), ['SubagentStop']);
+  st.adoptSubs({ id: 's1', subs: [sub] });
+  st.ingest({ session_id: 's1', cwd: '/Users/me/code/shop', hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'ls' }, agent_id: 'a1', agent_type: 'general-purpose' });
+  assert.deepEqual(st.adoptSubs({ id: 's1', subs: [] }), []);            // a hook reported on it, so only a hook ends it
+  assert.equal(st.snapshot().sessions[0].subagents.length, 1);
+  st.ingest({ session_id: 's1', cwd: '/Users/me/code/shop', hook_event_name: 'SubagentStop', agent_id: 'a1' });
+  assert.deepEqual(st.adoptSubs({ id: 's1', subs: [sub] }), []);         // its log still reads mid-turn for a moment: it stays gone
 });
