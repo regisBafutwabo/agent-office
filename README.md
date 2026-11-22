@@ -1,6 +1,6 @@
 # <img src="desktop/src-tauri/icons/128x128@2x.png" alt="Agent Office logo" width="48" height="48" align="absmiddle"> Agent Office
 
-A 3D office where your Claude Code agents work. Every session you run in the **Claude desktop app** or in the **terminal** becomes an agent that rides up in the lift, takes a desk, walks to the library when it researches, raises a hand when it needs your permission, and heads to the lounge when it's done. Subagents show up as smaller teammates. When one finishes, it stays at its desk while its main agent walks over to review the work, then lets it go.
+A 3D office where your coding agents work. Every session you run in the **Claude desktop app**, the **terminal**, T3 Code, Codex, Cursor and [other tools](#other-coding-agents) becomes an agent that rides up in the lift, takes a desk, walks to the library when it researches, raises a hand when it needs your permission, and heads to the lounge when it's done. A session that ends and resumes keeps its desk. Subagents show up as smaller teammates, and ones already at work when you open the office come back with them. When one finishes, it stays at its desk while its main agent walks over to review the work, then lets it go.
 
 Works in any browser on your computer. Phone and VR headset support comes next (see the roadmap).
 
@@ -78,7 +78,7 @@ web/index.html    ── the 3D office (Three.js)
 
 - The plugin's hook script posts each event to `http://127.0.0.1:4747/hook`. It gives up after one second and never blocks or changes what Claude Code does.
 - The bridge only listens on `127.0.0.1`, so nothing leaves your machine. Prompts and file names are shown in the office, so treat it like your terminal.
-- Two keys guard the office, each in a file only you can read in the data folder (`~/Library/Application Support/Agent Office`, or `~/.config/agent-office` on Linux). Hooks send `hook-token`, which can only report events and ask for permission. Office pages hold `ui-token`, which reads sessions and code and answers permission requests. Other accounts on the same computer, and web pages, get neither. The office also refuses requests whose `Host` isn't `localhost`, an IP address, or a name you allow, which stops DNS-rebinding pages.
+- Two keys guard the office, each in a file only you can read in the data folder (`~/Library/Application Support/Agent Office`, or `~/.config/agent-office` on Linux). Hooks send `hook-token`, which can only report events and ask for permission. Office pages hold `ui-token`, which reads sessions and code and answers permission requests. Other accounts on the same computer, and web pages, get neither. Hooks from before 0.5.0 have no key, so their events are refused: update the plugin and start new sessions (see [INSTALL.md](INSTALL.md#updating)). The office also refuses requests whose `Host` isn't `localhost`, an IP address, or a name you allow, which stops DNS-rebinding pages.
 - Model packs can only serve model and texture files (`.glb`, `.gltf`, `.bin`, `.png`, `.jpg`, `.webp`, `.ktx2`), never pages or scripts, and never a file a symlink points to outside the pack. The review window only shows files the card lists.
 - Where agents go is decided by placement rules in `web/index.html` (search for "Placement rules"): three or more file reads in a row send an agent to the library, web research goes to the lounge, plan mode goes to the war room, and finished agents take a break after 45 seconds and then drift between the lounge, coffee bar, basketball machines, the arcade and the rooftop. Agents look around, stretch and sip coffee while they work.
 
@@ -142,6 +142,8 @@ Agents react to how a command went, not to finishing a reply:
 - **Failed:** a puff of soot.
 - **Comeback:** a command that failed and then passes gets a short cheer and confetti. If it had failed 3 times or more, the cheer is bigger and the desk remembers it.
 
+Each reaction pops a manga-style bubble above the agent that says what happened, with the command and how long it took underneath: **PASSED!**, **FAIL…**, **YES!** or **FINALLY!!**, and a thought cloud counting the seconds while a command runs. Passes also get a line in the Activity feed.
+
 Each project's desk keeps what happened there. A plant grows after 1, 3, 7, 14 and 30 days of work, every merge adds a gold cup (the first becomes a big one at five), and a steel knot marks the times an agent got itself unstuck. The agent's card lists the dated moments under **Desk memories**. Memories hold counts and dates only, never prompts, commands or file names, and they are saved in this browser.
 
 ## Reviewing what changed
@@ -155,7 +157,7 @@ An agent's card shows what its checkout holds that you haven't reviewed, so you 
 
 Git reads the checkout, so agents working in one folder share one list, and the card says when that is the case. Claude Code reports the changed lines; other tools show the file name only. To keep code out of the office altogether, turn off **Customize → Show code in agent cards and reviews**: the office then keeps and shows file names only.
 
-The two screens in the war room show the same thing for the whole floor. The large one is a review board: one row per session with its files to review, its last command and the files it reported editing. The small one shows the floor's latest reported edit. Click a screen to bring the camera up close, click a row on the board to open that session's review, and press Escape or click away to go back. The screens are 3D only; the plan view doesn't show them.
+The two screens in the war room show the same thing for the whole floor. The large one is a review board: one row per session with its files to review, its last command, its active subagents and the files it reported editing. The small one shows the floor's latest reported edit. Click a screen to bring the camera up close, click a row on the board to open that session's review, and press Escape or click away to go back. The screens are 3D only; the plan view doesn't show them.
 
 ## Everything that needs you, in one place
 
