@@ -4,9 +4,9 @@ A 3D office where your coding agents work. Every session you run in the **Claude
 
 Works in any browser on your computer. Phone and VR headset support comes next (see the roadmap).
 
-![Agent Office demo: agents working on a sunlit office floor overlooking Seoul](docs/images/office-seoul.png)
+[![Agent Office trailer: agents arrive at their desks, react to test runs, ask for permission, and party on the rooftop after dark](docs/images/trailer.gif)](docs/images/trailer.mp4)
 
-*The actual demo scene, exported at 3000 × 1800 with fictional projects and the artistic Seoul skyline. City footprints © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright). Click the image for full resolution.*
+*A 33-second tour of the demo office. [Watch it in full quality (MP4)](docs/images/trailer.mp4). Recorded with `scripts/record-trailer.mjs`; city footprints © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).*
 
 > **Preview.** Agent Office is early and Mac-first. The desktop app is signed and notarized by Apple. **Open chat** relies on how the Claude and Codex apps open their chats today; that isn't documented by either app and could change, in which case the button still brings the app forward. Issues and ideas are welcome.
 
@@ -95,6 +95,10 @@ The first-visit tour shows how project floors, agent activity, tool connections,
 The office follows your clock by default (**Customize → Office theme → Auto**): night until 5:00, dawn into daylight by 8:00, daylight until 17:00, then golden hour and night by 20:00. Colors and light blend through the transitions, the sun crosses the sky during the day, and the city lights come on at dusk. Pick any other theme to keep it fixed; your choice is remembered.
 
 Choose **Seoul**, **San Francisco**, or **Generic city** on your first visit, or change it under **Customize → City**. City views combine bundled OpenStreetMap footprints with stylized landmarks and artistic scenery, with windows that light up at night. Your choice is saved on this device. See [the city data notes](web/cities/README.md) to change the office centers and rebake the snapshots.
+
+![Agent Office demo: agents working on a sunlit office floor overlooking Seoul](docs/images/office-seoul.png)
+
+*The actual demo scene, exported at 3000 × 1800 with fictional projects and the artistic Seoul skyline. City footprints © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright). Click the image for full resolution.*
 
 ## Rooftop DJ
 
