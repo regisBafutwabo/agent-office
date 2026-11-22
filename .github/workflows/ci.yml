@@ -96,3 +96,23 @@ jobs:
         with:
           workspaces: desktop/src-tauri
       - run: cargo test --locked
+
+  sizes:
+    name: No large files in git
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      # Every clone downloads a file forever once it's committed. Videos and big images belong in a GitHub
+      # comment's user-attachments link instead (see scripts/record-trailer.mjs). City data is the exception.
+      - name: Added or changed files stay under 1 MB
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          big=$(git diff --diff-filter=AM --name-only "$BASE" HEAD -- . ':!web/cities/' | while IFS= read -r f; do
+            size=$(git cat-file -s "HEAD:$f"); if [ "$size" -gt 1048576 ]; then echo "$f ($(( size / 1024 )) KB)"; fi
+          done)
+          if [ -n "$big" ]; then echo "::error::Files over 1 MB belong outside git:"; echo "$big"; exit 1; fi

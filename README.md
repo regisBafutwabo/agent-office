@@ -4,9 +4,9 @@ A 3D office where your coding agents work. Every session you run in the **Claude
 
 Works in any browser on your computer. Phone and VR headset support comes next (see the roadmap).
 
-[![Agent Office trailer: agents arrive at their desks, react to test runs, ask for permission, and party on the rooftop after dark](docs/images/trailer.gif)](docs/images/trailer.mp4)
+https://github.com/user-attachments/assets/7734fd2b-2400-4ac0-aedf-d976f908f321
 
-*A 33-second tour of the demo office. [Watch it in full quality (MP4)](docs/images/trailer.mp4). Recorded with `scripts/record-trailer.mjs`; city footprints © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).*
+*A 33-second tour of the demo office: agents arrive at their desks, react to test runs, ask for permission, and party on the rooftop after dark. Recorded with `scripts/record-trailer.mjs`; city footprints © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).*
 
 > **Preview.** Agent Office is early and Mac-first. The desktop app is signed and notarized by Apple. **Open chat** relies on how the Claude and Codex apps open their chats today; that isn't documented by either app and could change, in which case the button still brings the app forward. Issues and ideas are welcome.
 
