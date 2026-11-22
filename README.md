@@ -202,7 +202,7 @@ claude plugin marketplace remove agent-office
 
 ## Development
 
-Contributors: branch from `develop` and open your pull request against `develop`. It is merged into `main` for each release.
+Contributors: branch from `develop` and open your pull request against `develop`. It is merged into `main` for each release. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full steps.
 
 ```bash
 npm test                                  # bridge and city bake unit tests
