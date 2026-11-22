@@ -1,0 +1,7 @@
+# gitleaks's default rules, plus the one known false positive in this repo.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "The sample WebSocket key from RFC 6455, used in the desktop server's handshake tests"
+regexes = ['''dGhlIHNhbXBsZSBub25jZQ==''']
