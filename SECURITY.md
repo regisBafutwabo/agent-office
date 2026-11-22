@@ -26,4 +26,4 @@ Agent Office runs on your own computer and listens only on `127.0.0.1`. These ar
 
 Out of scope: anything that needs the attacker to already run code as you on your computer, since they could then read the keys and your agents' files directly.
 
-How the office protects itself is described in [How it works](README.md#how-it-works) and in the [security review](docs/security-review-2026-11-20.md).
+How the office protects itself is described in [How it works](docs/how-it-works.md) and in the [security review](docs/security-review-2026-11-20.md).

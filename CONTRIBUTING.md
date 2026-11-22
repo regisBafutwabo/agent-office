@@ -53,7 +53,7 @@ Do these steps:
 
 To use live agents, install the hooks. See [Quick start](README.md#quick-start) in the README.
 
-To work on the desktop app, install Rust. Then see [Desktop app (macOS)](README.md#desktop-app-macos).
+To work on the desktop app, install Rust. Then see [Build the Mac app](INSTALL.md#from-source). To run the app while you work on it, run `npm run dev` in `desktop/`.
 
 ## 3. Make a branch
 
