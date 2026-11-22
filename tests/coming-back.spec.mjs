@@ -19,8 +19,11 @@ test('two agents editing one file are flagged, and still are after a reload', as
   await page.reload();
   await expect(row(page, 'Restyle the cart')).toContainText('Same file as Fix the cart total');
 
-  // Push the edits out of the bridge's last 80 events: the page's own record still has the clash.
-  for (let i = 0; i < 90; i++) await office.hook({ hook_event_name: 'PreToolUse', session_id: 'c1', cwd, tool_name: 'Read', tool_input: { file_path: `${cwd}/notes${i}.md` } });
+  // Push the edits out of the bridge's history, so only the page's own record can bring the clash back.
+  const state = async () => (await fetch(`${office.url}/api/state`, { headers: { Authorization: `Bearer ${office.key}` } })).json();
+  const { recentMax } = await state();
+  for (let i = 0; i <= recentMax; i++) await office.hook({ hook_event_name: 'PreToolUse', session_id: 'c1', cwd, tool_name: 'Read', tool_input: { file_path: `${cwd}/notes${i}.md` } });
+  expect((await state()).recent.some(e => e.tool === 'Edit'), 'the edits are gone from the snapshot').toBe(false);
   await page.reload();
   await expect(row(page, 'Fix the cart total')).toContainText('Same file as Restyle the cart');
 });
