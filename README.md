@@ -202,8 +202,11 @@ claude plugin marketplace remove agent-office
 
 ## Development
 
+Contributors: branch from `develop` and open your pull request against `develop`. It is merged into `main` for each release.
+
 ```bash
 npm test                                  # bridge and city bake unit tests
+npm run test:e2e                          # the office page in a browser (first run: npx playwright install chromium)
 (cd desktop/src-tauri && cargo test)      # desktop app server tests
 claude --plugin-dir ./plugin              # try the hooks in one session without installing them
 ```
