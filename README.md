@@ -157,6 +157,14 @@ Git reads the checkout, so agents working in one folder share one list, and the 
 
 The two screens in the war room show the same thing for the whole floor. The large one is a review board: one row per session with its files to review, its last command and the files it reported editing. The small one shows the floor's latest reported edit. Click a screen to bring the camera up close, click a row on the board to open that session's review, and press Escape or click away to go back. The screens are 3D only; the plan view doesn't show them.
 
+## Everything that needs you, in one place
+
+Agents from every tool you run show up together: the Claude app, the terminal, T3 Code, Codex, Cursor and the rest.
+
+- **Needs you:** a strip at the top lists every agent waiting on you, oldest first, with the tool and project it's in. Answer a held permission request right there with **Allow** or **Deny**, or jump to the agent's app with **Open**.
+- **By tool:** the agent list can be grouped by project (one floor each) or by the tool each agent runs in.
+- **Wall mode:** the **Wall** button goes full screen with only the building, the "needs you" strip and a big status light per agent, for a spare monitor or a TV. Press Esc to leave.
+
 ## Approving from the office
 
 When an agent needs permission, it raises its hand and its floor pulses amber. If the office is open on your screen, you can answer right there: **Allow**, **Deny**, or **Answer in Claude Code**. You can do this from the agent's card or from the pop-up alert.
