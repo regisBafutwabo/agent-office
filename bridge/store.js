@@ -16,6 +16,12 @@ const clip = (s, n = 140) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); 
 // No project folder: a tool's background helper (Codex's app runs one in "/" when it opens), not a chat you started.
 const isHelperDir = cwd => !cwd || cwd === '/';
 
+// T3 Code runs delegates in ~/.t3/worktrees/<project>/t3-<id>: name those after the project, not the id.
+export function projectName(cwd) {
+  const t3 = /[\\/]\.t3[\\/]worktrees[\\/]([^\\/]+)[\\/][^\\/]+[\\/]?$/.exec(cwd || '');
+  return t3 ? t3[1] : path.basename(cwd || '') || 'session';
+}
+
 export function entrypointLabel(raw) {
   if (!raw || raw === 'unknown') return 'unknown';
   if (/^t3[- ]?code$/i.test(raw)) return 't3-code';   // Claude's CLAUDE_CODE_ENTRYPOINT and Codex's originator ("T3 Code")
@@ -169,7 +175,7 @@ export class Store {
     if (s && !s.fromLog && !this.correctFromLog(s, f)) return null;
     if (isNew && isHelperDir(f.cwd)) return null;
     if (isNew) {
-      s = { id: f.id, agent: f.agent, cwd: f.cwd, project: f.project || path.basename(f.cwd) || 'session', entrypoint: entrypointLabel(f.entrypoint),
+      s = { id: f.id, agent: f.agent, cwd: f.cwd, project: f.project || projectName(f.cwd), entrypoint: entrypointLabel(f.entrypoint),
             startedAt: f.at, lastEventAt: f.at, status: f.status, activity: f.activity, permissionMode: 'default', subagents: {}, tool: null,
             title: f.title || null, transcriptTitle: f.title || null, messages: f.messages, fromLog: true };
       this.sessions.set(f.id, s);
@@ -223,7 +229,7 @@ export class Store {
     if (!s) {
       const root = projectDir || p.cwd || '';
       if (isHelperDir(root)) return null;
-      s = { id: sid, agent, cwd: root, project: path.basename(root) || 'session', entrypoint: entrypointLabel(entrypoint),
+      s = { id: sid, agent, cwd: root, project: projectName(root), entrypoint: entrypointLabel(entrypoint),
             startedAt: now, lastEventAt: now, status: 'idle', activity: 'Session started', permissionMode: p.permission_mode || 'default',
             subagents: {}, tool: null };
       this.sessions.set(sid, s);

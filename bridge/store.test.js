@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Store, summarizeTool, entrypointLabel } from './store.js';
+import { Store, summarizeTool, entrypointLabel, projectName } from './store.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -327,4 +327,13 @@ test('a snapshot carries every event the store keeps, how many it keeps, and its
   assert.equal(snap.recentMax, 200);
   assert.equal(snap.recent.length, 200);
   assert.ok(Math.abs(snap.now - Date.now()) < 1000);
+});
+
+test('names a T3 Code worktree session after its project, not the worktree id', () => {
+  assert.equal(projectName('/Users/me/.t3/worktrees/shop/t3-18d88757-e3a86b90d2bbc862'), 'shop');
+  assert.equal(projectName('/Users/me/Documents/shop'), 'shop');
+  assert.equal(projectName(''), 'session');
+  const st = new Store(() => null);
+  st.ingest({ hook_event_name: 'SessionStart', session_id: 'w1', cwd: '/Users/me/.t3/worktrees/shop/t3-00954f20-4587100c12f4c13f' }, 't3-code');
+  assert.equal(st.snapshot().sessions[0].project, 'shop');
 });
