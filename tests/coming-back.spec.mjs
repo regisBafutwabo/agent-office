@@ -15,6 +15,7 @@ test('two agents editing one file are flagged, and still are after a reload', as
   await edit(office, 'c2', 'cart.js');
   await expect(row(page, 'Restyle the cart')).toContainText('Same file as Fix the cart total');
   await expect(page.locator('#recap')).toBeHidden();
+  await expect(page.locator('#recap-bell')).toBeHidden();
 
   await page.reload();
   await expect(row(page, 'Restyle the cart')).toContainText('Same file as Fix the cart total');
@@ -35,15 +36,43 @@ test('coming back after a while shows what happened meanwhile', async ({ page, o
   await office.hook({ hook_event_name: 'Stop', session_id: 'r1', cwd });
   await open(page, office);
 
-  const recap = page.locator('#recap');
+  const recap = page.locator('#recap'), bell = page.locator('#recap-bell');
+  await expect(bell).toBeVisible();
+  await expect(bell).toContainText('1');
+  await expect(recap).toBeHidden();   // the list waits for the bell
+  await bell.click();
   await expect(recap).toBeVisible();
   await expect(recap).toContainText('While you were away · last here 30m ago');
   await expect(recap.locator('.recap-row', { hasText: 'Upgrade the router' })).toContainText('finished · 1 failed command');
   await recap.locator('.recap-row', { hasText: 'Upgrade the router' }).click();
   await expect(page.locator('#detail')).toBeVisible();
   await expect(page.locator('#d-name')).toHaveText('Upgrade the router');
+  await bell.click();
+  await expect(recap).toBeHidden();
+  await bell.click();
   await page.locator('#recap-close').click();
   await expect(recap).toBeHidden();
+  await expect(bell).toBeHidden();
+});
+
+test("what you already answered in the coding app isn't counted as missed", async ({ page, office }) => {
+  await page.addInitScript(t => localStorage.setItem('agent-office:seen', String(t)), Date.now() - 30 * 60 * 1000);
+  await start(office, 'a1', 'Seen in the app');
+  await office.hook({ hook_event_name: 'Stop', session_id: 'a1', cwd });
+  await office.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'a1', cwd, prompt: 'thanks, now the docs' });
+  await start(office, 'a2', 'Not seen yet');
+  await office.hook({ hook_event_name: 'Stop', session_id: 'a2', cwd });
+  await open(page, office);
+  const bell = page.locator('#recap-bell');
+  await expect(bell).toContainText('1');
+  await bell.click();
+  await expect(page.locator('#recap .recap-row', { hasText: 'Not seen yet' })).toContainText('finished');
+  await expect(page.locator('#recap .recap-row', { hasText: 'Seen in the app' })).toHaveCount(0);
+
+  // Replying to it from the coding app now takes it off too, and an empty list puts the bell away.
+  await office.hook({ hook_event_name: 'UserPromptSubmit', session_id: 'a2', cwd, prompt: 'ok, ship it' });
+  await expect(page.locator('#recap-bell')).toBeHidden();
+  await expect(page.locator('#recap')).toBeHidden();
 });
 
 test('a session that ended while you were away is still in the recap', async ({ page, office }) => {
@@ -52,6 +81,7 @@ test('a session that ended while you were away is still in the recap', async ({ 
   await office.hook({ hook_event_name: 'Stop', session_id: 'e1', cwd });
   await office.hook({ hook_event_name: 'SessionEnd', session_id: 'e1', cwd, reason: 'exit' });
   await open(page, office);
+  await page.locator('#recap-bell').click();
   await expect(page.locator('#recap .recap-row', { hasText: 'Tidy the README' })).toContainText('finished · closed the session');
 });
 
@@ -62,7 +92,8 @@ test('missing events while the connection was down brings a recap when it comes 
   // Last looked five minutes ago, then the connection dropped (the Mac slept, the Wi-Fi went).
   await page.evaluate(() => { seenAt -= 5 * 60 * 1000; live.ws.close(); });
   await office.hook({ hook_event_name: 'Stop', session_id: 'd1', cwd });
-  await expect(page.locator('#recap .recap-row', { hasText: 'Migrate the database' })).toContainText('finished', { timeout: 10_000 });
+  await page.locator('#recap-bell').click({ timeout: 10_000 });
+  await expect(page.locator('#recap .recap-row', { hasText: 'Migrate the database' })).toContainText('finished');
 });
 
 test("a subagent that has left doesn't make its parent look like it shares a file after a reload", async ({ page, office }) => {
