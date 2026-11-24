@@ -3,7 +3,7 @@
 const SEEN_KEY = 'agent-office:seen', CLASHES_KEY = 'agent-office:clashes';
 const AWAY_MS = 2 * 60 * 1000;                  // away at least this long: say what happened meanwhile
 const RECAP_KEEP = 400;
-const recapEl = $('#recap'), recapList = $('#recap-list');
+const recapEl = $('#recap'), recapList = $('#recap-list'), bellEl = $('#recap-bell');
 const recapLog = [];                            // the bridge's events, oldest first
 let recentMax = 200;                            // how many events the bridge keeps (each snapshot says)
 // Event times come from the bridge's clock; a phone or another computer may disagree with it.
@@ -12,6 +12,8 @@ const serverNow = () => Date.now() - clockSkew;
 const storedNumber = k => { try { return Number(localStorage.getItem(k)) || 0; } catch (_) { return 0; } };
 // Last time someone was looking at a connected office, on the bridge's clock. 0: never, or already recapped.
 let seenAt = storedNumber(SEEN_KEY), awaySince = seenAt;
+// What the bell holds: the stretch you were away for, on the bridge's clock. 0: nothing missed.
+let missedSince = 0, missedUntil = 0;
 
 function keepSeen() { seenAt = serverNow(); try { localStorage.setItem(SEEN_KEY, String(seenAt)); } catch (_) {} }
 const watching = () => MODE === 'live' && live.connected && live.gotSnapshot && document.visibilityState === 'visible';
@@ -30,9 +32,11 @@ function onDisconnect() { if (MODE === 'live' && live.gotSnapshot && !awaySince)
 const eventId = e => `${e.at}|${e.sessionId}|${e.agentId || ''}|${e.type}|${e.tool || ''}|${e.summary || ''}`;
 function logEvents(list) {
   const have = new Set(recapLog.map(eventId));
-  for (const e of list) if (!have.has(eventId(e))) { have.add(eventId(e)); recapLog.push(e); }
+  let added = false;
+  for (const e of list) if (!have.has(eventId(e))) { have.add(eventId(e)); recapLog.push(e); added = true; }
   recapLog.sort((x, y) => x.at - y.at);
   if (recapLog.length > RECAP_KEEP) recapLog.splice(0, recapLog.length - RECAP_KEEP);
+  if (added && missedSince) refreshMissed();   // a prompt sent from the coding app takes its session off the list
 }
 // A snapshot replaces what the page knows, so it also says how much history the bridge kept and on which clock.
 function onSnapshotHistory(msg) {
@@ -41,16 +45,18 @@ function onSnapshotHistory(msg) {
   logEvents(msg.recent || []);
 }
 
-// One line per session that did something worth knowing since `since`, plus every clash that started since then.
+// One line per session that did something worth knowing between `since` and `until`, plus every clash that started then.
 // A session that ended meanwhile is gone from the office, so its line comes from the events alone.
-function recapLines(since) {
-  const by = new Map();
+// A prompt you sent in the coding app, then or since, means you saw that chat there: only what came after it counts.
+function recapLines(since, until = Infinity) {
+  const by = new Map(), fresh = () => ({ failed: 0, subs: 0, done: false, merged: false, ended: false, session: null });
   for (const e of recapLog) {
     if (!(e.at > since)) continue;
-    const r = by.get(e.sessionId) || by.set(e.sessionId, { failed: 0, subs: 0, done: false, merged: false, ended: false, session: null }).get(e.sessionId);
+    if (e.type === 'UserPromptSubmit') { const r = fresh(); r.session = e.session || by.get(e.sessionId)?.session || null; by.set(e.sessionId, r); continue; }
+    if (e.at > until) continue;
+    const r = by.get(e.sessionId) || by.set(e.sessionId, fresh()).get(e.sessionId);
     if (e.session) r.session = e.session;
     if (e.type === 'Stop') r.done = true;
-    else if (e.type === 'UserPromptSubmit') r.done = false;
     if (e.type === 'SessionEnd') r.ended = true;
     if (e.merged) r.merged = true;
     if (e.failed) r.failed++;
@@ -58,7 +64,7 @@ function recapLines(since) {
   }
   const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
   const lines = [];
-  for (const c of clashes) if (c.since > since) lines.push({ a: c.a, rank: 0, text: `edited ${c.file} while ${c.b.name} did too` });
+  for (const c of clashes) if (c.since > since && c.since <= until) lines.push({ a: c.a, rank: 0, text: `edited ${c.file} while ${c.b.name} did too` });
   for (const [id, r] of by) {
     const a = live.byId.get(id), here = a && !a.gone;
     if (!here && !r.ended) continue;
@@ -70,9 +76,9 @@ function recapLines(since) {
   return lines.sort((x, y) => x.rank - y.rank);
 }
 
-function showRecap(since) {
-  const lines = recapLines(since);
-  if (!lines.length) return;
+function showRecap() {
+  const since = missedSince, lines = recapLines(since, missedUntil);
+  if (!lines.length) { clearMissed(); return; }
   const cut = recapLog.length && recapLog[0].at > since && recapLog.length >= recentMax;
   $('#recap-title').textContent = `While you were away · last here ${ago(since + clockSkew)} ago`;
   $('#recap-note').textContent = `Only the bridge's last ${recentMax} events are kept, so earlier activity isn't shown.`;
@@ -82,10 +88,21 @@ function showRecap(since) {
     return a ? `<button class="need recap-row" data-id="${a.id}"><span class="av" style="--c:${a.color}">${faceImg(a)}</span>${what}</button>`
       : `<div class="need recap-row ended"><span class="av" aria-hidden="true">✓</span>${what}</div>`;
   }).join('');
-  recapEl.hidden = false; fitTops();
+  recapEl.hidden = false; bellEl.setAttribute('aria-expanded', 'true'); fitTops();
 }
-function hideRecap() { recapEl.hidden = true; fitTops(); }
-$('#recap-close').onclick = hideRecap;
+function hideRecap() { recapEl.hidden = true; bellEl.setAttribute('aria-expanded', 'false'); fitTops(); }
+// The bell shows how many things you missed; the list opens only when you ask for it.
+function refreshMissed() {
+  const n = missedSince ? recapLines(missedSince, missedUntil).length : 0;
+  if (!n) { clearMissed(); return; }
+  $('#recap-count').textContent = n > 99 ? '99+' : String(n);
+  bellEl.setAttribute('aria-label', `What you missed: ${n} ${n === 1 ? 'update' : 'updates'}`);
+  bellEl.hidden = false;
+  if (!recapEl.hidden) showRecap();
+}
+function clearMissed() { missedSince = missedUntil = 0; bellEl.hidden = true; hideRecap(); }
+bellEl.onclick = () => { if (recapEl.hidden) showRecap(); else hideRecap(); };
+$('#recap-close').onclick = clearMissed;
 recapList.addEventListener('click', e => {
   const b = e.target.closest('[data-id]'), a = b && agents.find(x => x.id === b.dataset.id); if (!a) return;
   if (appEl.classList.contains('wall')) setWall(false);
@@ -94,7 +111,10 @@ recapList.addEventListener('click', e => {
 
 // After every snapshot: a first one after being away, or a reconnect after missing events, recaps once.
 function recapOnSnapshot() {
-  if (awaySince && serverNow() - awaySince > AWAY_MS) showRecap(awaySince);
+  if (awaySince && serverNow() - awaySince > AWAY_MS) {
+    missedSince = missedSince ? Math.min(missedSince, awaySince) : awaySince;   // still unread from last time: keep it
+    missedUntil = serverNow(); refreshMissed();
+  }
   awaySince = 0;
   if (document.visibilityState === 'visible') keepSeen();
 }
