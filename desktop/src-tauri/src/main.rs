@@ -241,6 +241,7 @@ fn main() {
             let menu_items = connect_items.clone();
             let ready = update::Ready::default();
             let check_now = update::CheckNow::default();
+            update::serve_to_page(app.handle(), &ready);
             tauri::async_runtime::spawn(update::watch(app.handle().clone(), menu.clone(), update_item, update_separator, ready.clone(), check_now.clone()));
 
             TrayIconBuilder::with_id(TRAY_ID)

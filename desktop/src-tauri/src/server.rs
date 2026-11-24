@@ -121,6 +121,7 @@ pub fn router(port: u16, creds: Credentials, on_change: OnChange) -> Router {
         .route("/api/setup", get(setup_status))
         .route("/api/setup/{tool}", post(setup_connect))
         .route("/api/face/{session}/{mood}", post(save_face))
+        .route("/api/update", get(update_status).post(update_install))
         .route("/ws", get(ws))
         .route("/vendor/three.min.js", get(three))
         .route("/vendor/GLTFLoader.js", get(|| async { ([(header::CONTENT_TYPE, "text/javascript")], GLTF_LOADER) }))
@@ -406,6 +407,16 @@ async fn app_icon(Path(file): Path<String>) -> Response {
 }
 
 /// Which coding tools report to the office, for the office's "Connect agents" buttons.
+/// A downloaded app update, so the office can offer it until you close the offer or restart.
+async fn update_status() -> Json<Value> {
+    Json(json!({ "version": crate::update::waiting(), "current": env!("CARGO_PKG_VERSION") }))
+}
+
+/// "Restart to update" on the office page: the same install as the menu-bar menu's.
+async fn update_install() -> StatusCode {
+    if tokio::task::spawn_blocking(crate::update::install_waiting).await.unwrap_or(false) { StatusCode::ACCEPTED } else { StatusCode::CONFLICT }
+}
+
 async fn setup_status() -> Json<Value> {
     Json(tokio::task::spawn_blocking(setup::status_json).await.unwrap_or_else(|_| json!({ "tools": [] })))
 }
@@ -767,7 +778,7 @@ mod tests {
             let ev = r#"{"hook_event_name":"SessionStart","session_id":"keys","cwd":"/tmp"}"#;
             let status = |m: &str, p: &str, h: &[(&str, &str)], b: &str| request(port, m, p, h, b.as_bytes()).0;
             let bearer = |k: &str| format!("Bearer {k}");
-            for p in ["/api/state", "/api/changes?session=keys", "/api/changes/diff?session=keys&path=a", "/api/packs", "/api/setup", "/api/auth"] {
+            for p in ["/api/state", "/api/changes?session=keys", "/api/changes/diff?session=keys&path=a", "/api/packs", "/api/setup", "/api/auth", "/api/update"] {
                 assert_eq!(status("GET", p, &[], ""), 401, "{p}");
                 assert_eq!(status("GET", p, &[("Authorization", &bearer(HOOK))], ""), 401, "{p}");
                 assert_eq!(status("GET", p, &[("X-Agent-Office-Token", HOOK)], ""), 401, "{p}");
@@ -775,6 +786,12 @@ mod tests {
             // Never with the page key here: setup would really change this machine's hooks.
             assert_eq!(status("POST", "/api/setup/codex", &[], ""), 401);
             assert_eq!(status("POST", "/api/setup/codex", &[("X-Agent-Office-Token", HOOK)], ""), 401);
+            assert_eq!(status("POST", "/api/update", &[("X-Agent-Office-Token", HOOK)], ""), 401);
+            // Nothing downloaded in a test: the page's install button has nothing to install.
+            assert_eq!(page(port, "POST", "/api/update", "").0, 409);
+            let (code, update) = page(port, "GET", "/api/update", "");
+            assert_eq!(code, 200);
+            assert!(update.contains("\"version\":null"), "{update}");
             assert_eq!(status("POST", "/api/log", &[], "x"), 401);
             assert_eq!(status("POST", "/api/face/keys/done", &[], "x"), 401);
             assert_eq!(status("POST", "/hook", &[], ev), 401);

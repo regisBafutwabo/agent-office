@@ -189,6 +189,16 @@
   </div>
   <div class="hint glass" id="hint">Drag to orbit · Scroll to zoom · Click an agent · <kbd>[</kbd><kbd>]</kbd> panels</div>
   <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+  <aside class="update-toast glass" id="update-toast" hidden role="status" aria-live="polite" aria-label="App update">
+    <p id="update-text"></p>
+    <div class="update-actions">
+      <a class="btn sm ghost" id="update-notes" target="_blank" rel="noopener">What's new</a>
+      <button class="btn sm primary" id="update-go">Restart to update</button>
+    </div>
+    <button class="icon-btn update-close" id="update-close" aria-label="Close update notice">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </aside>
   <a class="city-credit" id="city-credit" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" hidden>© OpenStreetMap contributors</a>
   <dialog class="city-picker welcome" id="welcome" aria-labelledby="welcome-title" aria-describedby="welcome-description">
     <h2 id="welcome-title">Who’s on your team?</h2>
@@ -246,6 +256,7 @@
 <script src="/js/changes.js"></script>
 <script src="/js/events.js"></script>
 <script src="/js/recap.js"></script>
+<script src="/js/update.js"></script>
 <script src="/js/tour.js"></script>
 <script src="/js/connection.js"></script>
 <script src="/js/boot.js"></script>

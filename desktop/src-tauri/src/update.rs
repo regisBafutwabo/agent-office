@@ -6,7 +6,7 @@ use crate::setup::{support_dir, version};
 use crate::store::now_ms;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::{AppHandle, Wry};
@@ -25,6 +25,24 @@ pub type Ready = Arc<Mutex<Option<(Update, Vec<u8>)>>>;
 
 /// "Check for Updates…" wakes the background check, which then reports what it found.
 pub type CheckNow = Arc<tokio::sync::Notify>;
+
+/// The downloaded version the office page offers to install (GET /api/update), and how to install it.
+static WAITING: Mutex<Option<String>> = Mutex::new(None);
+static INSTALL: OnceLock<Box<dyn Fn() + Send + Sync>> = OnceLock::new();
+
+/// For the office page: the update that's downloaded and one restart away, if any.
+pub fn waiting() -> Option<String> { WAITING.lock().unwrap().clone() }
+
+/// The page's "Restart to update" button. False when nothing is waiting.
+pub fn install_waiting() -> bool {
+    match (waiting(), INSTALL.get()) { (Some(_), Some(run)) => { run(); true } _ => false }
+}
+
+/// Lets the page install the update the menu-bar menu would.
+pub fn serve_to_page(app: &AppHandle, ready: &Ready) {
+    let (app, ready) = (app.clone(), ready.clone());
+    let _ = INSTALL.set(Box::new(move || install(&app, &ready)));
+}
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -83,6 +101,7 @@ pub async fn watch(app: AppHandle, menu: Menu<Wry>, item: MenuItem<Wry>, separat
             }
         }
         let ready_version = ready.lock().unwrap().as_ref().map(|(u, _)| u.version.clone());
+        WAITING.lock().unwrap().clone_from(&ready_version);
         if let Some(v) = ready_version {
             let _ = item.set_text(format!("Restart to update to {v}"));
             if !shown {
