@@ -13,6 +13,10 @@ set -eu
 cd "$(dirname "$0")/.."
 
 version=$(node -p 'require("./desktop/src-tauri/tauri.conf.json").version')
+# "What's new" in the app comes from desktop/whats-new.md; its first line must name this version, so old notes can't ship.
+if [ "$(head -1 desktop/whats-new.md)" != "# $version" ]; then
+  echo "Write this version's notes first: desktop/whats-new.md must start with '# $version'." >&2; exit 1
+fi
 repo=https://github.com/regisBafutwabo/agent-office
 TAURI_SIGNING_PRIVATE_KEY=$(cat "${AGENT_OFFICE_SIGNING_KEY:-$HOME/.tauri/agent-office.key}")
 TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$(security find-generic-password -s agent-office-updater -a signing-key -w)
@@ -40,7 +44,7 @@ VERSION=$version URL="$repo/releases/download/v$version/$archive" SIG="$bundle/m
   const { VERSION, URL, SIG } = process.env;
   console.log(JSON.stringify({
     version: VERSION,
-    notes: `See ${URL.split("/download/")[0]}/tag/v${VERSION}`,
+    notes: readFileSync("desktop/whats-new.md", "utf8").split("\n").slice(1).join("\n").trim(),
     pub_date: new Date().toISOString(),
     platforms: { "darwin-aarch64": { signature: readFileSync(SIG, "utf8").trim(), url: URL } },
   }, null, 2));

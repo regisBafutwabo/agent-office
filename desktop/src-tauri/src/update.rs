@@ -26,12 +26,13 @@ pub type Ready = Arc<Mutex<Option<(Update, Vec<u8>)>>>;
 /// "Check for Updates…" wakes the background check, which then reports what it found.
 pub type CheckNow = Arc<tokio::sync::Notify>;
 
-/// The downloaded version the office page offers to install (GET /api/update), and how to install it.
-static WAITING: Mutex<Option<String>> = Mutex::new(None);
+/// The downloaded version and its notes, which the office page offers to install (GET /api/update), and how to install it.
+static WAITING: Mutex<Option<(String, Option<String>)>> = Mutex::new(None);
 static INSTALL: OnceLock<Box<dyn Fn() + Send + Sync>> = OnceLock::new();
 
 /// For the office page: the update that's downloaded and one restart away, if any.
-pub fn waiting() -> Option<String> { WAITING.lock().unwrap().clone() }
+/// The notes are the release's "What's new" in plain words (latest.json's `notes`, from desktop/whats-new.md).
+pub fn waiting() -> Option<(String, Option<String>)> { WAITING.lock().unwrap().clone() }
 
 /// The page's "Restart to update" button. False when nothing is waiting.
 pub fn install_waiting() -> bool {
@@ -101,7 +102,7 @@ pub async fn watch(app: AppHandle, menu: Menu<Wry>, item: MenuItem<Wry>, separat
             }
         }
         let ready_version = ready.lock().unwrap().as_ref().map(|(u, _)| u.version.clone());
-        WAITING.lock().unwrap().clone_from(&ready_version);
+        *WAITING.lock().unwrap() = ready.lock().unwrap().as_ref().map(|(u, _)| (u.version.clone(), u.body.clone()));
         if let Some(v) = ready_version {
             let _ = item.set_text(format!("Restart to update to {v}"));
             if !shown {

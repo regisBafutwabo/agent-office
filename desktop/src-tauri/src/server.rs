@@ -409,7 +409,8 @@ async fn app_icon(Path(file): Path<String>) -> Response {
 /// Which coding tools report to the office, for the office's "Connect agents" buttons.
 /// A downloaded app update, so the office can offer it until you close the offer or restart.
 async fn update_status() -> Json<Value> {
-    Json(json!({ "version": crate::update::waiting(), "current": env!("CARGO_PKG_VERSION") }))
+    let (version, notes) = crate::update::waiting().unzip();
+    Json(json!({ "version": version, "notes": notes.flatten(), "current": env!("CARGO_PKG_VERSION") }))
 }
 
 /// "Restart to update" on the office page: the same install as the menu-bar menu's.

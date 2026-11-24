@@ -192,7 +192,7 @@
   <aside class="update-toast glass" id="update-toast" hidden role="status" aria-live="polite" aria-label="App update">
     <p id="update-text"></p>
     <div class="update-actions">
-      <a class="btn sm ghost" id="update-notes" target="_blank" rel="noopener">What's new</a>
+      <button class="btn sm ghost" id="update-notes">What's new</button>
       <button class="btn sm primary" id="update-go">Restart to update</button>
     </div>
     <button class="icon-btn update-close" id="update-close" aria-label="Close update notice">
@@ -227,6 +227,11 @@
     <p class="rv-warn chg-warn" id="rv-warn" hidden></p>
     <div class="rv-body"><ol class="rv-files" id="rv-files"></ol><div class="rv-diff" id="rv-diff"></div></div>
     <footer><div class="rv-run" id="rv-run"></div><button class="btn" id="rv-refresh" title="Read the checkout again">Refresh</button><button class="btn" id="rv-chat" hidden></button><button class="btn primary" id="rv-mark">Mark reviewed</button></footer>
+  </dialog>
+  <dialog class="city-picker whats-new" id="whats-new" aria-labelledby="wn-title">
+    <h2 id="wn-title">What's new</h2>
+    <div class="wn-body" id="wn-body"></div>
+    <div class="guide-actions"><button class="btn ghost" id="wn-later">Later</button><button class="btn primary" id="wn-go">Restart to update</button></div>
   </dialog>
   <dialog class="city-picker" id="city-picker" aria-labelledby="city-title" aria-describedby="city-description">
     <h2 id="city-title">Pick your city</h2>
