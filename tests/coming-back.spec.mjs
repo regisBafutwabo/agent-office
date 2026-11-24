@@ -92,7 +92,9 @@ test('missing events while the connection was down brings a recap when it comes 
   // Last looked five minutes ago, then the connection dropped (the Mac slept, the Wi-Fi went).
   await page.evaluate(() => { seenAt -= 5 * 60 * 1000; live.ws.close(); });
   await office.hook({ hook_event_name: 'Stop', session_id: 'd1', cwd });
-  await page.locator('#recap-bell').click({ timeout: 10_000 });
+  // The page reconnects after two seconds; CI's software rendering makes everything after that slow too.
+  await expect(page.locator('#recap-bell')).toBeVisible({ timeout: 15_000 });
+  await page.locator('#recap-bell').click();
   await expect(page.locator('#recap .recap-row', { hasText: 'Migrate the database' })).toContainText('finished');
 });
 
