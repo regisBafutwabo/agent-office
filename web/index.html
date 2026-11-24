@@ -189,6 +189,16 @@
   </div>
   <div class="hint glass" id="hint">Drag to orbit · Scroll to zoom · Click an agent · <kbd>[</kbd><kbd>]</kbd> panels</div>
   <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+  <aside class="update-toast glass" id="update-toast" hidden role="status" aria-live="polite" aria-label="App update">
+    <p id="update-text"></p>
+    <div class="update-actions">
+      <button class="btn sm ghost" id="update-notes">What's new</button>
+      <button class="btn sm primary" id="update-go">Restart to update</button>
+    </div>
+    <button class="icon-btn update-close" id="update-close" aria-label="Close update notice">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </aside>
   <a class="city-credit" id="city-credit" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" hidden>© OpenStreetMap contributors</a>
   <dialog class="city-picker welcome" id="welcome" aria-labelledby="welcome-title" aria-describedby="welcome-description">
     <h2 id="welcome-title">Who’s on your team?</h2>
@@ -218,6 +228,11 @@
     <div class="rv-body"><ol class="rv-files" id="rv-files"></ol><div class="rv-diff" id="rv-diff"></div></div>
     <footer><div class="rv-run" id="rv-run"></div><button class="btn" id="rv-refresh" title="Read the checkout again">Refresh</button><button class="btn" id="rv-chat" hidden></button><button class="btn primary" id="rv-mark">Mark reviewed</button></footer>
   </dialog>
+  <dialog class="city-picker whats-new" id="whats-new" aria-labelledby="wn-title">
+    <h2 id="wn-title">What's new</h2>
+    <div class="wn-body" id="wn-body"></div>
+    <div class="guide-actions"><button class="btn ghost" id="wn-later">Later</button><button class="btn primary" id="wn-go">Restart to update</button></div>
+  </dialog>
   <dialog class="city-picker" id="city-picker" aria-labelledby="city-title" aria-describedby="city-description">
     <h2 id="city-title">Pick your city</h2>
     <p id="city-description">Choose the view outside. You can change it in Customize.</p>
@@ -246,6 +261,7 @@
 <script src="/js/changes.js"></script>
 <script src="/js/events.js"></script>
 <script src="/js/recap.js"></script>
+<script src="/js/update.js"></script>
 <script src="/js/tour.js"></script>
 <script src="/js/connection.js"></script>
 <script src="/js/boot.js"></script>

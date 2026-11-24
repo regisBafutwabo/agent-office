@@ -231,6 +231,12 @@ pre.json{margin:0;padding:12px;background:var(--panel-2);border:1px solid var(--
 .city-picker .themes{grid-template-columns:1fr;padding:0}
 .city-picker .city-card{height:40px}
 .welcome{width:min(480px,calc(100% - 32px))}
+.whats-new{width:min(440px,calc(100% - 32px))}
+.wn-body{max-height:50vh;overflow:auto;margin:8px 0 16px;font:400 14px/21px var(--font-b);color:var(--ink-2)}
+.wn-body ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:10px}
+.wn-body p{margin:0 0 10px;color:var(--ink-2);font:inherit}
+.wn-body b{color:var(--ink)}
+.wn-body a{color:inherit}
 .crew-choices{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0}
 .crew-choice{padding:20px 12px;border:2px solid var(--line);border-radius:var(--r-lg);background:var(--panel-2);cursor:pointer;text-align:center}
 .crew-choice[aria-pressed="true"]{border-color:var(--accent);background:var(--panel-3)}
@@ -407,6 +413,11 @@ body.live .speed-top, body.live .demo-only{display:none}
 .toasts{position:absolute;top:var(--top);right:calc(var(--panel-w) + 32px);display:flex;flex-direction:column;gap:8px;z-index:7;align-items:flex-end;pointer-events:none;max-width:min(460px,calc(100% - var(--panel-w) - 48px))}
 #app.panel-off .toasts{top:112px}
 #app.has-needs .toasts{top:calc(var(--top) + var(--needs-h,0px) + 8px)}
+.update-toast{position:absolute;right:calc(var(--panel-w) + 32px);bottom:16px;z-index:8;width:min(340px,calc(100% - var(--panel-w) - 48px));padding:12px 40px 12px 14px;border-radius:var(--r-lg);box-shadow:var(--e-2);display:flex;flex-direction:column;gap:10px;animation:tin .25s ease-out}
+.update-toast p{margin:0;display:flex;flex-direction:column;gap:2px;font:400 12px/16px var(--font-b);color:var(--muted)}
+.update-toast b{font:600 13px/18px var(--font-b);color:var(--ink)}
+.update-actions{display:flex;gap:8px;justify-content:flex-end}
+.update-close{position:absolute;top:8px;right:8px}
 .toast{pointer-events:auto;display:flex;align-items:center;gap:12px;min-height:44px;padding:8px 8px 8px 12px;border-radius:var(--r-lg);box-shadow:var(--e-2);font:400 13px/18px var(--font-b);animation:tin .25s ease-out}
 .toast>span:not(.toast-av){flex:1;min-width:0}
 .toast-av{position:relative;flex:none;margin-left:-4px}
@@ -431,6 +442,7 @@ body.live .speed-top, body.live .demo-only{display:none}
   .empty{top:38%;left:50%;width:calc(100% - 32px)}
   .panel.collapsed ~ .city-credit{bottom:56px}   /* follow the folded sheet down */
   .panel.collapsed ~ .toasts{bottom:84px}
+  .update-toast{left:16px;right:16px;width:auto;bottom:calc(44% + 36px)}
   .lift{top:var(--top);left:16px;right:16px;width:auto;height:48px;max-height:none;padding:2px 4px;overflow:hidden;display:flex;align-items:center}
   .lift-head{height:auto;padding-left:4px;flex:none}
   .lift-title{display:none}
