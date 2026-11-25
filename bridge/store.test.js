@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Store, summarizeTool, entrypointLabel, projectName } from './store.js';
+import { Store, summarizeTool, entrypointLabel, projectName, mainCheckout } from './store.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -336,4 +336,19 @@ test('names a T3 Code worktree session after its project, not the worktree id', 
   const st = new Store(() => null);
   st.ingest({ hook_event_name: 'SessionStart', session_id: 'w1', cwd: '/Users/me/.t3/worktrees/shop/t3-00954f20-4587100c12f4c13f' }, 't3-code');
   assert.equal(st.snapshot().sessions[0].project, 'shop');
+});
+
+test('agents in worktrees of one repo share its floor and name, and keep their own folder', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wt-'));
+  const repo = path.join(tmp, 'shop'), wt = path.join(tmp, '.t3', 'worktrees', 'shop', 't3-abc');
+  fs.mkdirSync(path.join(repo, '.git', 'worktrees', 't3-abc'), { recursive: true }); fs.mkdirSync(wt, { recursive: true });
+  fs.writeFileSync(path.join(wt, '.git'), `gitdir: ${repo}/.git/worktrees/t3-abc\n`);
+  assert.equal(mainCheckout(wt), repo);
+  assert.equal(mainCheckout(repo), repo);   // .git is a folder: already the main checkout
+  assert.equal(mainCheckout(path.join(tmp, 'nowhere')), path.join(tmp, 'nowhere'));
+  const st = new Store(() => null);
+  st.ingest({ hook_event_name: 'SessionStart', session_id: 'w2', cwd: wt }, 't3-code');
+  const s = st.snapshot().sessions[0];
+  assert.deepEqual([s.cwd, s.home, s.project], [wt, repo, 'shop']);
+  fs.rmSync(tmp, { recursive: true, force: true });
 });
