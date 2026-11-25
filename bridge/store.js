@@ -1,4 +1,5 @@
 // Turns raw Claude Code hook payloads into a small, UI-friendly model of sessions and subagents.
+import fs from 'node:fs';
 import path from 'node:path';
 import { validTty, validChat, validUuid } from './focus.js';
 import { readTranscript, MESSAGE_CHARS } from './transcript.js';
@@ -16,7 +17,16 @@ const clip = (s, n = 140) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); 
 // No project folder: a tool's background helper (Codex's app runs one in "/" when it opens), not a chat you started.
 const isHelperDir = cwd => !cwd || cwd === '/';
 
-// T3 Code runs delegates in ~/.t3/worktrees/<project>/t3-<id>: name those after the project, not the id.
+// A git worktree (T3 Code's delegates, Claude Code's --worktree) points back to its main checkout in its .git file.
+// Agents in any checkout of one repo share that repo's floor and name; their own folder stays their cwd.
+export function mainCheckout(cwd) {
+  try {
+    const m = /^gitdir:\s*(.+?)[\\/]\.git[\\/]worktrees[\\/][^\\/]+[\\/]?\s*$/.exec(fs.readFileSync(path.join(cwd, '.git'), 'utf8'));
+    return m ? m[1] : cwd;
+  } catch (_) { return cwd; }
+}
+
+// T3 Code runs delegates in ~/.t3/worktrees/<project>/t3-<id>: name those after the project, not the id, even once the worktree is gone.
 export function projectName(cwd) {
   const t3 = /[\\/]\.t3[\\/]worktrees[\\/]([^\\/]+)[\\/][^\\/]+[\\/]?$/.exec(cwd || '');
   return t3 ? t3[1] : path.basename(cwd || '') || 'session';
@@ -140,7 +150,7 @@ export class Store {
     const target = agentId ? s.subagents[agentId] : s; if (!target) return null;
     target.status = 'thinking'; target.activity = activity;
     const e = { type: 'PermissionResolved', sessionId, at: Date.now(), agentId: agentId || null, agentType: null, message: activity,
-      session: { id: s.id, agent: s.agent, cwd: s.cwd, project: s.project, title: s.title || null, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity } };
+      session: { id: s.id, agent: s.agent, cwd: s.cwd, home: s.home || s.cwd, project: s.project, title: s.title || null, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity } };
     this.recent.push(e); if (this.recent.length > RECENT_MAX) this.recent.shift();
     return e;
   }
@@ -175,7 +185,8 @@ export class Store {
     if (s && !s.fromLog && !this.correctFromLog(s, f)) return null;
     if (isNew && isHelperDir(f.cwd)) return null;
     if (isNew) {
-      s = { id: f.id, agent: f.agent, cwd: f.cwd, project: f.project || projectName(f.cwd), entrypoint: entrypointLabel(f.entrypoint),
+      const home = mainCheckout(f.cwd);
+      s = { id: f.id, agent: f.agent, cwd: f.cwd, home, project: f.project || projectName(home), entrypoint: entrypointLabel(f.entrypoint),
             startedAt: f.at, lastEventAt: f.at, status: f.status, activity: f.activity, permissionMode: 'default', subagents: {}, tool: null,
             title: f.title || null, transcriptTitle: f.title || null, messages: f.messages, fromLog: true };
       this.sessions.set(f.id, s);
@@ -187,7 +198,7 @@ export class Store {
       if (!changed) return null;
     }
     const e = { type: 'SessionFound', sessionId: s.id, at: Date.now(), agentId: null, agentType: null, message: isNew ? 'Already running' : null,
-      session: { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, t3Thread: s.t3Thread || null, cwd: s.cwd, project: s.project, title: s.title, merged: !!s.merged,
+      session: { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, t3Thread: s.t3Thread || null, cwd: s.cwd, home: s.home || s.cwd, project: s.project, title: s.title, merged: !!s.merged,
                  entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity, messages: s.messages } };
     if (replacesSessionId) e.replacesSessionId = replacesSessionId;
     if (isNew) { this.recent.push(e); if (this.recent.length > RECENT_MAX) this.recent.shift(); }   // only the arrival goes in the feed
@@ -229,7 +240,8 @@ export class Store {
     if (!s) {
       const root = projectDir || p.cwd || '';
       if (isHelperDir(root)) return null;
-      s = { id: sid, agent, cwd: root, project: projectName(root), entrypoint: entrypointLabel(entrypoint),
+      const home = mainCheckout(root);
+      s = { id: sid, agent, cwd: root, home, project: projectName(home), entrypoint: entrypointLabel(entrypoint),
             startedAt: now, lastEventAt: now, status: 'idle', activity: 'Session started', permissionMode: p.permission_mode || 'default',
             subagents: {}, tool: null };
       this.sessions.set(sid, s);
@@ -285,7 +297,7 @@ export class Store {
       case 'SessionEnd': e.reason = p.reason; this.ended.add(sid); this.sessions.delete(sid); this.transcriptChecks.delete(sid); this.pendingTasks.delete(sid); break;
       default: break;
     }
-    e.session = { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, t3Thread: s.t3Thread || null, cwd: s.cwd, project: s.project, title: s.title || null, merged: !!s.merged, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity, context: s.context || null };
+    e.session = { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, t3Thread: s.t3Thread || null, cwd: s.cwd, home: s.home || s.cwd, project: s.project, title: s.title || null, merged: !!s.merged, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity, context: s.context || null };
     if (chatChanged) e.session.messages = s.messages;
     this.recent.push(e); if (this.recent.length > RECENT_MAX) this.recent.shift();
     return e;

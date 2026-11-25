@@ -81,7 +81,7 @@ function subSeat(a, type) {
 }
 function liveMain(s, instant) {
   let a = live.byId.get(s.id); if (a && !(a.gone && a.leaving)) return a;   // already out the door: a fresh agent comes in
-  const floor = ensureFloor(s.cwd || s.project, s.project, true), isNew = floor !== curFloor && !floorAgents(floor).length;
+  const floor = ensureFloor(s.home || s.cwd || s.project, s.project, true), isNew = floor !== curFloor && !floorAgents(floor).length;
   const home = mainSeat(floor);
   const saved = loadAgentPrefs(s.cwd);
   const same = agents.filter(x => x.kind === 'main' && x.project.key === s.project).length;

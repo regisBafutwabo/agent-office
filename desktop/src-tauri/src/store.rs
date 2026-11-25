@@ -59,6 +59,26 @@ fn is_helper_dir(cwd: &str) -> bool {
     cwd.is_empty() || cwd == "/"
 }
 
+/// A git worktree (T3 Code's delegates, Claude Code's --worktree) points back to its main checkout in its .git file.
+/// Agents in any checkout of one repo share that repo's floor and name; their own folder stays their cwd.
+pub fn main_checkout(cwd: &str) -> String {
+    let Ok(text) = std::fs::read_to_string(Path::new(cwd).join(".git")) else { return cwd.into() };
+    let Some(gitdir) = text.trim().strip_prefix("gitdir:").map(str::trim) else { return cwd.into() };
+    let dir = Path::new(gitdir);
+    match (dir.parent(), dir.parent().and_then(Path::parent)) {
+        (Some(w), Some(git)) if w.file_name().is_some_and(|n| n == "worktrees") && git.file_name().is_some_and(|n| n == ".git") =>
+            git.parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|| cwd.into()),
+        _ => cwd.into(),
+    }
+}
+
+/// The folder's name, except T3 Code's ~/.t3/worktrees/<project>/t3-<id>, named after the project even once the worktree is gone.
+pub fn project_name(home: &str) -> String {
+    let p = Path::new(home);
+    let t3 = p.parent().filter(|w| w.parent().is_some_and(|x| x.ends_with(".t3/worktrees")));
+    t3.unwrap_or(p).file_name().map(|f| f.to_string_lossy().to_string()).filter(|s| !s.is_empty()).unwrap_or_else(|| "session".into())
+}
+
 fn str_of<'a>(v: &'a Value, k: &str) -> &'a str {
     v.get(k).and_then(Value::as_str).unwrap_or("")
 }
@@ -172,6 +192,8 @@ pub struct Session {
     /// Which tool the session runs in: claude-code, codex, cursor, gemini…
     pub agent: String,
     pub cwd: String,
+    /// The repo's main checkout when cwd is one of its worktrees, otherwise cwd: the office's floor.
+    pub home: String,
     pub project: String,
     pub entrypoint: String,
     pub started_at: u64,
@@ -312,7 +334,7 @@ impl Store {
         }
         let event = json!({
             "type": "PermissionResolved", "sessionId": session_id, "at": now_ms(), "agentId": agent_id, "agentType": null, "message": activity,
-            "session": { "id": s.id, "agent": s.agent, "cwd": s.cwd, "project": s.project, "title": s.title, "entrypoint": s.entrypoint,
+            "session": { "id": s.id, "agent": s.agent, "cwd": s.cwd, "home": s.home, "project": s.project, "title": s.title, "entrypoint": s.entrypoint,
                          "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity },
         });
         self.recent.push_back(event.clone());
@@ -383,10 +405,10 @@ impl Store {
             }
             None if is_helper_dir(&f.cwd) => return None,
             None => {
-                let folder = Path::new(&f.cwd).file_name().map(|n| n.to_string_lossy().to_string());
-                let project = f.project.clone().or(folder).filter(|s| !s.is_empty()).unwrap_or_else(|| "session".into());
+                let home = main_checkout(&f.cwd);
+                let project = f.project.clone().filter(|s| !s.is_empty()).unwrap_or_else(|| project_name(&home));
                 self.sessions.push(Session {
-                    id: f.id, agent: f.agent, cwd: f.cwd, project, entrypoint: entrypoint_label(f.entrypoint.as_deref()), started_at: f.at, last_event_at: f.at,
+                    id: f.id, agent: f.agent, cwd: f.cwd, home, project, entrypoint: entrypoint_label(f.entrypoint.as_deref()), started_at: f.at, last_event_at: f.at,
                     status: f.status, activity: f.activity, permission_mode: "default".into(), subagents: vec![], tool: None,
                     app: None, term: None, tty: None, chat: None, t3_thread: None, title: f.title.clone(), merged: false, messages: f.messages, context: None,
                     transcript_title: f.title, first_prompt: None, transcript_checked_at: 0, pending_tasks: vec![], from_log: true,
@@ -398,7 +420,7 @@ impl Store {
         let mut event = json!({
             "type": "SessionFound", "sessionId": s.id, "at": now_ms(), "agentId": null, "agentType": null,
             "message": if new { Value::from("Already running") } else { Value::Null },
-            "session": { "id": s.id, "agent": s.agent, "cwd": s.cwd, "project": s.project, "title": s.title, "merged": s.merged, "entrypoint": s.entrypoint,
+            "session": { "id": s.id, "agent": s.agent, "cwd": s.cwd, "home": s.home, "project": s.project, "title": s.title, "merged": s.merged, "entrypoint": s.entrypoint,
                          "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": s.app, "term": s.term, "chat": s.chat, "t3Thread": s.t3_thread, "messages": s.messages },
         });
         if let Some(id) = replaces { event["replacesSessionId"] = id.into(); }
@@ -452,9 +474,10 @@ impl Store {
                 if is_helper_dir(&cwd) {
                     return None;
                 }
-                let project = Path::new(&cwd).file_name().map(|f| f.to_string_lossy().to_string()).filter(|s| !s.is_empty()).unwrap_or_else(|| "session".into());
+                let home = main_checkout(&cwd);
+                let project = project_name(&home);
                 self.sessions.push(Session {
-                    id: sid.into(), agent: agent.into(), cwd, project, entrypoint: entrypoint_label(entrypoint), started_at: now, last_event_at: now,
+                    id: sid.into(), agent: agent.into(), cwd, home, project, entrypoint: entrypoint_label(entrypoint), started_at: now, last_event_at: now,
                     status: "idle".into(), activity: "Session started".into(),
                     permission_mode: if pm.is_empty() { "default".into() } else { pm.into() }, subagents: vec![], tool: None,
                     app: None, term: None, tty: None, chat: None, t3_thread: None,
@@ -646,7 +669,7 @@ impl Store {
             _ => {}
         }
         e.insert("session".into(), json!({
-            "id": s.id, "agent": s.agent, "cwd": s.cwd, "project": s.project, "title": s.title, "merged": s.merged, "entrypoint": s.entrypoint,
+            "id": s.id, "agent": s.agent, "cwd": s.cwd, "home": s.home, "project": s.project, "title": s.title, "merged": s.merged, "entrypoint": s.entrypoint,
             "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": s.app, "term": s.term, "chat": s.chat, "t3Thread": s.t3_thread,
             "context": s.context,
         }));
@@ -668,6 +691,25 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn agents_in_worktrees_of_one_repo_share_its_floor_and_name() {
+        let tmp = std::env::temp_dir().join(format!("agent-office-wt-{}-{}", std::process::id(), now_ms()));
+        let (repo, wt) = (tmp.join("shop"), tmp.join(".t3/worktrees/shop/t3-abc"));
+        std::fs::create_dir_all(repo.join(".git/worktrees/t3-abc")).unwrap();
+        std::fs::create_dir_all(&wt).unwrap();
+        std::fs::write(wt.join(".git"), format!("gitdir: {}/.git/worktrees/t3-abc\n", repo.display())).unwrap();
+        let (repo, wt) = (repo.to_string_lossy().to_string(), wt.to_string_lossy().to_string());
+        assert_eq!(main_checkout(&wt), repo);
+        assert_eq!(main_checkout(&repo), repo, ".git is a folder: already the main checkout");
+        assert_eq!(project_name("/Users/me/.t3/worktrees/shop/t3-gone"), "shop", "named after the project once the worktree is gone");
+        assert_eq!(project_name("/Users/me/code/shop"), "shop");
+        let mut st = Store::default();
+        st.ingest(&json!({ "session_id": "w1", "cwd": wt, "hook_event_name": "SessionStart" }), Some("t3-code"), None);
+        let s = &st.sessions[0];
+        assert_eq!((s.cwd.as_str(), s.home.as_str(), s.project.as_str()), (wt.as_str(), repo.as_str(), "shop"));
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
 
     #[test]
     fn snapshot_carries_every_kept_event_the_limit_and_the_clock() {
