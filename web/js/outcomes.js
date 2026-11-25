@@ -135,6 +135,7 @@ const BUB = {
   yes:     { text: 'YES!',      ink: '#06D6A0', shape: 'oval',   life: 2.4, speed: true },
   finally: { text: 'FINALLY!!', ink: '#EF476F', shape: 'burst2', life: 4.5 },
   run:     { ink: '#4CC9F0', shape: 'cloud', life: Infinity },
+  heard:   { text: '!',         ink: '#E5534B', shape: 'bang',   life: 1.1, size: 170 },   // called back from a break
 };
 const BUB_FONT = n => `${n}px Bangers, Impact, "Arial Black", sans-serif`;
 function starPath(x, cx, cy, rx, ry, n, inner, jitter = 0) {
@@ -151,6 +152,7 @@ function drawBubble(a, kind, tag, text, drop = -1) {
   if (B.shape === 'burst') { starPath(x, 256, 92, 232, 84, 14, .78); x.fillStyle = '#FFF7D6'; x.fill(); x.stroke(); }
   else if (B.shape === 'jag') { starPath(x, 256, 92, 220, 80, 20, .84, .6); x.fillStyle = '#FFFFFF'; x.fill(); x.stroke(); }
   else if (B.shape === 'burst2') { starPath(x, 256, 92, 246, 90, 20, .72); x.fillStyle = '#EF476F'; x.fill(); x.stroke(); starPath(x, 256, 92, 206, 72, 20, .8); x.fillStyle = '#FFF7D6'; x.fill(); }
+  else if (B.shape === 'bang') { starPath(x, 256, 104, 118, 100, 12, .72); x.fillStyle = '#FFD166'; x.fill(); x.stroke(); }
   else if (B.shape === 'oval') {
     x.beginPath(); x.ellipse(256, 88, 168, 70, 0, 0, 7); x.fillStyle = '#FFFFFF'; x.fill(); x.stroke();
     x.beginPath(); x.moveTo(222, 150); x.lineTo(200, 190); x.lineTo(262, 154); x.fill(); x.stroke(); x.beginPath(); x.ellipse(256, 88, 165, 67, 0, 0, 7); x.fill();
@@ -159,9 +161,9 @@ function drawBubble(a, kind, tag, text, drop = -1) {
     x.lineWidth = 12; puffs.forEach(([cx, cy, r]) => { x.beginPath(); x.arc(cx, cy, r, 0, 7); x.stroke(); });
     x.fillStyle = '#FFFFFF'; puffs.forEach(([cx, cy, r]) => { x.beginPath(); x.arc(cx, cy, r, 0, 7); x.fill(); });
   }
-  const words = text || B.text, size = kind === 'run' ? 62 : 84;
+  const words = text || B.text, size = B.size || (kind === 'run' ? 62 : 84);
   x.font = BUB_FONT(size); x.textAlign = 'center'; x.textBaseline = 'middle';
-  const w = fitText(x, words, B.shape === 'oval' ? 300 : 360), ty = kind === 'run' ? 96 : 94;
+  const w = fitText(x, words, B.shape === 'oval' ? 300 : 360), ty = kind === 'run' ? 96 : kind === 'heard' ? 112 : 94;
   x.lineWidth = 12; x.strokeStyle = ink; x.strokeText(w, 256, ty); x.fillStyle = B.ink; x.fillText(w, 256, ty);
   if (B.sparkle) { sparkle(x, 30, 40, 18); sparkle(x, 486, 30, 15); sparkle(x, 494, 150, 12); }
   if (B.vein) { x.strokeStyle = '#E5534B'; x.lineWidth = 8; for (const [dx, dy, ex, ey, cx2, cy2] of [[-22, -6, -8, -22, -12, -6], [6, -22, 22, -8, 6, -6], [22, 6, 8, 22, 12, 6], [-6, 22, -22, 8, -6, 6]]) { x.beginPath(); x.moveTo(450 + dx, 176 + dy); x.quadraticCurveTo(450 + cx2, 176 + cy2, 450 + ex, 176 + ey); x.stroke(); } }
@@ -191,5 +193,5 @@ function updateBubble(a, dt) {
   a.bub.scale.set(2.9 * pop, 1.45 * pop, 1);
   a.bub.position.y = a.topY + 1.6 + Math.min(a.bubAge, B.life) * (B.life < Infinity ? .05 : 0);
   a.bub.material.opacity = B.life < Infinity ? Math.min(1, (B.life - a.bubAge) / .5) : 1;
-  a.bub.material.rotation = a.bubKind === 'fail' ? Math.sin(a.bubAge * 14) * .05 : 0;
+  a.bub.material.rotation = a.bubKind === 'fail' ? Math.sin(a.bubAge * 14) * .05 : a.bubKind === 'heard' ? Math.sin(a.bubAge * 30) * .1 * Math.max(0, 1 - a.bubAge * 2) : 0;
 }
