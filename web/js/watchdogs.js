@@ -73,7 +73,16 @@ function setContext(a, c, replay) {
   }
 }
 
-function mainSeat(floor) { return floor.deskSeats.find(d => !d.owner && !d.by) || freeSpots(['hightable', 'stool'], floor)[0] || floor.deskSeats[0]; }
+// Desks first, then hot desks and the café, then any seat in the lounge or meeting room. Null: the floor is full.
+const SPARE_SEATS = ['hightable', 'stool', 'booth', 'meeting', 'sofa', 'armchair', 'pouf', 'beanbag'];
+function mainSeat(floor) { return floor.deskSeats.find(d => !d.owner && !d.by) || freeSpots(SPARE_SEATS, floor)[0] || null; }
+// A full project floor gets another one, "<project> · 2", "· 3"…, so a big team never shares a chair.
+function floorWithSeat(key, name) {
+  for (let k = 1; ; k++) {
+    const floor = ensureFloor(k === 1 ? key : `${key}#${k}`, k === 1 ? name : `${name} · ${k}`, true), seat = mainSeat(floor);
+    if (seat) return { floor, seat };
+  }
+}
 function subSeat(a, type) {
   const fl = a.floor, home = type === 'Plan' ? freeSpots(['meeting'], fl)[0] : null;
   return home || fl.deskSeats.filter(d => !d.by).sort((p, q) => Math.hypot(p.x - a.home.x, p.z - a.home.z) - Math.hypot(q.x - a.home.x, q.z - a.home.z))[0]
@@ -81,8 +90,7 @@ function subSeat(a, type) {
 }
 function liveMain(s, instant) {
   let a = live.byId.get(s.id); if (a && !(a.gone && a.leaving)) return a;   // already out the door: a fresh agent comes in
-  const floor = ensureFloor(s.home || s.cwd || s.project, s.project, true), isNew = floor !== curFloor && !floorAgents(floor).length;
-  const home = mainSeat(floor);
+  const { floor, seat: home } = floorWithSeat(s.home || s.cwd || s.project, s.project), isNew = floor !== curFloor && !floorAgents(floor).length;
   const saved = loadAgentPrefs(s.cwd);
   const same = agents.filter(x => x.kind === 'main' && x.project.key === s.project).length;
   const fallback = s.project + (same ? ` ${same + 1}` : '');
@@ -134,7 +142,7 @@ function comeBack(a, state, activity) {
   if (!a.exiting || a.gone && a.leaving) return;
   a.leaveT++; a.exiting = a.gone = a.awaitingReview = false; deskDirty = true;
   const h = a.home;
-  if (h.by && h.by !== a.id || h.type === 'desk' && h.owner && h.owner !== a) { const n = a.kind === 'main' ? mainSeat(a.floor) : subSeat(a.parent, a.subType); if (a.ws === h) a.ws = n; a.home = n; }
+  if (h.by && h.by !== a.id || h.type === 'desk' && h.owner && h.owner !== a) { const n = a.kind === 'main' ? mainSeat(a.floor) || a.floor.deskSeats[0] : subSeat(a.parent, a.subType); if (a.ws === h) a.ws = n; a.home = n; }
   a.home.by = a.id; if (a.kind === 'main' && a.home.type === 'desk') { a.home.owner = a; if (a.floor === curFloor) a.home.chairMat.color.set(a.color); }
   applyStatus(a, state, activity);
   if (a.dest === DOOR || a.spot === DOOR) place(a, workSpot(a), true);
