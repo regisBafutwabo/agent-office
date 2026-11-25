@@ -42,9 +42,11 @@ function onLiveEvent(e, replay) {
     case 'UserPromptSubmit':
       emit(a, 'UserPromptSubmit', `"${e.prompt || ''}"`, e.at); seeAgent(a); unstick(a); a.run = null;
       if (!replay) changeDesk(a, d => workedOn(d, e.at));
-      a.ws = chooseWorkspot(a); a.streak = 0;
-      applyStatus(a, 'thinking', e.prompt || 'New prompt');
-      place(a, s.permissionMode === 'plan' ? (spotOfType(a, ['meeting']) || a.ws) : a.ws, true);
+      { const idleAt = !replay && !a.busy && (a.spot || a.dest);   // on a break when you called: it sprints back
+        a.ws = chooseWorkspot(a); a.streak = 0;
+        applyStatus(a, 'thinking', e.prompt || 'New prompt');
+        place(a, s.permissionMode === 'plan' ? (spotOfType(a, ['meeting']) || a.ws) : a.ws, true);
+        if (idleAt) sprintBack(a, idleAt); }
       break;
     case 'PreToolUse':
       emit(who, 'PreToolUse', label, e.at); toolCalls++; who.asked = null;

@@ -20,7 +20,7 @@ function walkTo(a, s) {
   pts.push(...route(start.x, start.z, end.x, end.z));
   if (end.x !== s.x || end.z !== s.z) pts.push(new THREE.Vector2(s.x, s.z));
   a.path = pts; a.spot = null; a.dest = s; a.where = 'Walking'; a.laptop.visible = false; uiDirty = true;
-  return new Promise(r => { a.arrive = () => { a.spot = s; a.dest = null; a.arrivedAt = performance.now(); a.where = s.type ? (s === a.home && a.kind === 'main' ? 'Own desk' : PLACE[s.type]) : ''; uiDirty = true; detailDirty = true; updateScreen(a); r(); }; });
+  return new Promise(r => { a.arrive = () => { a.sprint = null; a.spot = s; a.dest = null; a.arrivedAt = performance.now(); a.where = s.type ? (s === a.home && a.kind === 'main' ? 'Own desk' : PLACE[s.type]) : ''; uiDirty = true; detailDirty = true; updateScreen(a); r(); }; });
 }
 function chooseWorkspot(a) {
   const away = () => { const f = freeSpots(LOUNGE_WORK, a.floor); return f.length ? pick(f) : null; };
@@ -28,9 +28,42 @@ function chooseWorkspot(a) {
   if (a.pref === 'lounge') return away() || a.home;
   return Math.random() < .5 ? a.home : (away() || a.home);
 }
+/* ---------- sprinting back: called back from a break, anime style ---------- */
+// The sprint lasts until the walk ends, even if a tool call re-aims it on the way: arriving is what clears it.
+const SPRINT = 2.5;                                                // times walking speed
+const SKID = 1.2;                                                 // the last this-many units are a skid into the seat
+const IDLE_TYPES = ['coffee','hoops','arcade','beanbag','pouf','sofa'];
+function sprintBack(a, from) {
+  if (!a.path.length || !from || !IDLE_TYPES.includes(from.type) || a.onRoof) return;
+  say(a, 'heard');                                                 // "!": it heard you
+  if (!reduced) a.sprint = { hold: .3, puffIn: 0, skid: false };    // a beat to turn and crouch, then off; reduced motion: it walks
+}
+const pathLeft = a => { const p = a.g.position; let d = 0, x = p.x, z = p.z; for (const v of a.path) { d += Math.hypot(v.x - x, v.y - z); x = v.x; z = v.y; } return d; };
+// Speed smoke: grey puffs left at the feet that swell, drift up and fade. Pooled, and only on the floor being shown.
+const DUST_GEO = new THREE.IcosahedronGeometry(.14, 1), DUST_MAX = 80, dust = [], dustPool = [];
+function puff(a, back, side, up, life) {
+  if (dust.length >= DUST_MAX || a.floor !== curFloor || !a.g.visible || document.hidden) return;
+  const m = dustPool.pop() || new THREE.Mesh(DUST_GEO, new THREE.MeshStandardMaterial({ roughness: 1, transparent: true, depthWrite: false }));
+  m.material.color.set(sceneT.dark ? '#AEB6BB' : '#D9DCDE'); m.material.emissive.set(sceneT.dark ? '#2A3034' : '#3C3E40');   // lit from within a little, so it reads as smoke, not a pebble
+  const ux = Math.sin(a.yaw), uz = Math.cos(a.yaw), sx = rand(-side, side), p = a.g.position, s = rand(.7, 1.1);
+  m.position.set(p.x - ux * back + uz * sx, rand(.06, .14), p.z - uz * back - ux * sx); m.scale.setScalar(s); m.material.opacity = .9;
+  scene.add(m);
+  dust.push({ m, s, floor: a.floor, age: 0, life, v: new THREE.Vector3(-ux * rand(.2, .6) + uz * sx * 2, up * rand(.7, 1.3), -uz * rand(.2, .6) - ux * sx * 2) });
+}
+const dustBurst = (a, n) => { for (let i = 0; i < n; i++) puff(a, rand(-.1, .25), .35, .55, rand(.6, .9)); };
+function updateDust(sdt) {
+  for (let i = dust.length - 1; i >= 0; i--) {
+    const d = dust[i]; d.age += sdt;
+    if (d.age >= d.life) { scene.remove(d.m); dustPool.push(d.m); dust.splice(i, 1); continue; }
+    const k = d.age / d.life;
+    d.m.position.addScaledVector(d.v, sdt); d.v.multiplyScalar(1 - Math.min(1, sdt * 3));
+    d.m.scale.setScalar(d.s * (1 + k * 1.3)); d.m.material.opacity = .9 * (1 - k * k);
+    d.m.visible = d.floor === curFloor;
+  }
+}
 const IDLE_WEIGHT = { hoops: 4, arcade: 3 };                       // the games are the fun ones: pick them more often
 function chooseIdle(fl) {
-  const f = freeSpots(['coffee','hoops','arcade','beanbag','pouf','sofa'], fl); if (!f.length) return null;
+  const f = freeSpots(IDLE_TYPES, fl); if (!f.length) return null;
   let r = Math.random() * f.reduce((n, s) => n + (IDLE_WEIGHT[s.type] || 1), 0);
   return f.find(s => (r -= IDLE_WEIGHT[s.type] || 1) < 0) || f[f.length - 1];
 }
@@ -171,8 +204,16 @@ function updateAgent(a, dt, sdt) {
   const swivel = !a.path.length && !!a.spot && !!a.spot.chair && a.pose === 'think' && !(a.cheerUntil > performance.now());
   g.visible = a.onRoof ? roofGroup.visible : a.floor === curFloor;
   if (a.path.length) {
-    const tgt = a.path[0], dx = tgt.x - g.position.x, dz = tgt.y - g.position.z, d = Math.hypot(dx, dz), step = 2.5 * sdt;
-    if (d <= step) { g.position.x = tgt.x; g.position.z = tgt.y; a.path.shift(); if (!a.path.length && a.arrive) { const f = a.arrive; a.arrive = null; f(); } }
+    const tgt = a.path[0], dx = tgt.x - g.position.x, dz = tgt.y - g.position.z, d = Math.hypot(dx, dz);
+    let step = 2.5 * sdt;
+    if (a.sprint && a.sprint.hold > 0) { a.sprint.hold -= sdt; step = 0; }   // still turns toward the desk
+    else if (a.sprint) {                                           // a skid slows at a steady rate, so speed goes with √(distance left)
+      const S = a.sprint, left = pathLeft(a), skid = left < SKID;
+      if (skid && !S.skid) dustBurst(a, 6);
+      S.skid = skid; step *= SPRINT * (skid ? Math.max(.25, Math.sqrt(left / SKID)) : 1);
+      if ((S.puffIn -= sdt) <= 0) { S.puffIn = skid ? .035 : .055; puff(a, .25, .12, skid ? .25 : .4, rand(.45, .7)); }
+    }
+    if (d <= step) { g.position.x = tgt.x; g.position.z = tgt.y; a.path.shift(); if (!a.path.length && a.arrive) { if (a.sprint) dustBurst(a, 5); const f = a.arrive; a.arrive = null; f(); } }
     else { g.position.x += dx / d * step; g.position.z += dz / d * step; a.yawT = Math.atan2(dx, dz); }
   } else if (a.spot && a.spot.face) a.yawT = yawOf(a.spot.face) + (swivel ? Math.sin(a.animT * .8) * .45 : 0);
   a.yaw = lerpAngle(a.yaw, a.yawT ?? a.yaw, 1 - Math.exp(-sdt * (swivel ? 3 : 10))); g.rotation.y = a.yaw;
@@ -185,7 +226,12 @@ function updateAgent(a, dt, sdt) {
   const pose = animationPose(a, moving), carrying = moving && !a.onRoof;
   const onLaptop = !moving && a.busy && !!a.spot && !!a.spot.laptop;
   switch (pose) {
-    case 'walk': bob = Math.abs(Math.sin(t * 9)) * .06; l = Math.sin(t * 9) * .6; r = carrying ? -l * .3 : -l; break;   // the laptop arm swings less
+    case 'walk':
+      if (a.sprint && a.sprint.hold > 0) { l = -.7; r = .7; le = re = -1.4; bob = -.08; lean = .25; }   // crouched to go
+      else if (a.sprint && a.sprint.skid) { l = r = .8; le = re = -.3; tilt = -.15; bob = -.05; lean = -.3; }   // skidding: leaning back, arms flung behind
+      else if (a.sprint) { bob = Math.abs(Math.sin(t * 15)) * .1; l = Math.sin(t * 15) * 1.15; r = carrying ? -l * .3 : -l; le = re = -1.4; tilt = -.12; lean = .38; }   // head down, elbows bent, arms pumping
+      else { bob = Math.abs(Math.sin(t * 9)) * .06; l = Math.sin(t * 9) * .6; r = carrying ? -l * .3 : -l; }   // the laptop arm swings less
+      break;
     case 'type': l = -1.15 + Math.sin(t * 17) * .13; r = -1.15 + Math.sin(t * 17 + 1.7) * .13; tilt = .12; break;
     case 'think': tilt = Math.sin(t * 1.4) * .12 - .05; r = -2.1; l = -.15; bob = Math.sin(t * 2) * .015; break;
     case 'read': l = r = -.95; tilt = .28; bob = Math.sin(t * 1.5) * .01; break;
@@ -260,7 +306,8 @@ function updateAgent(a, dt, sdt) {
   // legs swing when walking and point forward when sitting; the body rests on the seat
   const seated = !moving && !!a.spot && a.spot.y > 0;
   let legL = 0, legR = 0;
-  if (moving) { legL = Math.sin(t * 9) * .55; legR = -legL; }
+  if (moving && a.sprint && (a.sprint.skid || a.sprint.hold > 0)) { legL = -.75 * (a.sprint.skid ? 1 : .5); legR = .35; }   // front foot planted ahead
+  else if (moving) { legL = Math.sin(t * (a.sprint ? 15 : 9)) * (a.sprint ? .95 : .55); legR = -legL; }
   else if (seated) legL = legR = -1.45;
   else if (pose === 'shoot') { const u = a.shootU || 0; if (u > .36 && u < .46) legL = legR = -.35; }
   a.pelvisY += ((seated ? a.spot.y + .29 : LEG) - a.pelvisY) * (1 - Math.exp(-dt * 10));

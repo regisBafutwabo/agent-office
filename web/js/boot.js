@@ -68,7 +68,7 @@ function step(dt) {
   yOff += (yOffTarget - yOff) * (reduced ? 1 : 1 - Math.exp(-dt * 5)); building.position.y = city.position.y = yOff;
   floorGlow();
   for (const a of agents.slice()) updateAgent(a, dt, sdt);
-  updateHoops(dt); updateArcade(dt); updateParty(dt); updateClashes(); updateFx(dt); if (deskDirty) drawDesks();
+  updateHoops(dt); updateArcade(dt); updateParty(dt); updateClashes(); updateFx(dt); updateDust(sdt); if (deskDirty) drawDesks();
   { let want = 0; for (const a of agents) if (a.floor === curFloor && !a.onRoof && Math.hypot(a.g.position.x - 12.6, a.g.position.z + 1.8) < 1.9) want = 1;
     lift.open += (want - lift.open) * (1 - Math.exp(-dt * 6));
     lift.l.position.z = -1.8 - .275 - lift.open * .5; lift.r.position.z = -1.8 + .275 + lift.open * .5;
