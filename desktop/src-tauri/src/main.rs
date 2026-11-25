@@ -292,7 +292,16 @@ fn main() {
                 maybe_notify(&handle, &notified, event);
             });
             tauri::async_runtime::spawn(server::run(port(), credentials().clone(), on_change));
-            open_office(app.handle());
+            // The server scans running chats before it listens; a window opened sooner shows a blank page and never retries.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                for _ in 0..150 {
+                    if tokio::net::TcpStream::connect(("127.0.0.1", port())).await.is_ok() { break; }
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+                let app = handle.clone();
+                let _ = handle.run_on_main_thread(move || open_office(&app));
+            });
             Ok(())
         })
         .build(tauri::generate_context!())
