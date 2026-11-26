@@ -329,6 +329,10 @@ function toast(msg, action, fn, who, mood, approvalId) {
   el.innerHTML = `${face ? `<span class="toast-av"><img class="toast-face" style="--c:${who.color}" src="${face}" alt="">${badge}</span>` : ''}<span title="${esc(msg)}">${esc(msg)}</span>`;
   for (const [label, run, primary] of actions) { const b = document.createElement('button'); b.className = primary ? 'btn primary' : 'btn'; b.textContent = label; b.onclick = () => { run(); el.remove(); }; el.appendChild(b); }
   if (actions.length) el.dataset.keep = '1';
+  if (who || actions.length) {                                      // agent news and toasts that wait 45 s: let you dismiss them now
+    const x = document.createElement('button'); x.className = 'toast-x'; x.type = 'button'; x.setAttribute('aria-label', 'Close'); x.textContent = '✕';
+    x.onclick = () => el.remove(); el.appendChild(x);
+  }
   if (approvalId) { el.dataset.approval = approvalId; el.setAttribute('role', 'alert'); }
   // Over three, drop the oldest plain toast first, then the oldest one with buttons; a held permission request stays.
   const wrap = $('#toasts'); wrap.prepend(el);

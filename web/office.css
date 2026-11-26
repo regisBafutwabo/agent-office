@@ -420,6 +420,9 @@ body.live .speed-top, body.live .demo-only{display:none}
 .update-close{position:absolute;top:8px;right:8px}
 .toast{pointer-events:auto;display:flex;align-items:center;gap:12px;min-height:44px;padding:8px 8px 8px 12px;border-radius:var(--r-lg);box-shadow:var(--e-2);font:400 13px/18px var(--font-b);animation:tin .25s ease-out}
 .toast>span:not(.toast-av){flex:1;min-width:0}
+.toast-x{flex:none;width:28px;height:28px;margin-left:-4px;border:0;border-radius:var(--r-sm);background:none;color:var(--ink-2);font:400 13px/1 var(--font-b);cursor:pointer;opacity:.7}
+.toast-x:hover{opacity:1;background:var(--panel-2)}
+.toast-x:focus-visible{opacity:1;outline:2px solid var(--accent);outline-offset:1px}
 .toast-av{position:relative;flex:none;margin-left:-4px}
 .toast-face{display:block;width:28px;height:28px;border-radius:50%;background:color-mix(in srgb,var(--c) 28%,var(--panel-2))}
 @keyframes tin{from{opacity:0;transform:translateY(-6px)}}
@@ -455,8 +458,8 @@ body.live .speed-top, body.live .demo-only{display:none}
   #lift-list::-webkit-scrollbar{display:none}
   .lift-btn{width:auto;height:32px;flex:none;grid-template-columns:auto auto}
   /* touch targets: an invisible 44px hit area around small controls */
-  .icon-btn.sm,.topbar .seg button,.lift-btn,.d-tabs button,.btn.sm,.toast .btn,.tabs button{position:relative}
-  .icon-btn.sm::after,.topbar .seg button::after,.lift-btn::after,.d-tabs button::after,.btn.sm::after,.toast .btn::after,.tabs button::after,.row-open::after{content:"";position:absolute;left:50%;top:50%;width:max(100%,44px);height:max(100%,44px);transform:translate(-50%,-50%)}
+  .icon-btn.sm,.topbar .seg button,.lift-btn,.d-tabs button,.btn.sm,.toast .btn,.toast-x,.tabs button{position:relative}
+  .icon-btn.sm::after,.topbar .seg button::after,.lift-btn::after,.d-tabs button::after,.btn.sm::after,.toast .btn::after,.toast-x::after,.tabs button::after,.row-open::after{content:"";position:absolute;left:50%;top:50%;width:max(100%,44px);height:max(100%,44px);transform:translate(-50%,-50%)}
   .floor-row{min-height:44px;padding-top:12px}
   .row-open{right:4px;width:32px;height:32px}
   .row-slot{width:28px}
