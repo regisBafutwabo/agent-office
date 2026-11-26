@@ -128,7 +128,6 @@ function toolGroup(a) {
 const groupBy = () => uiPrefs.group === 'tool' ? 'tool' : 'project';
 function setGroupBy(g) { uiPrefs.group = g; saveUi(); document.querySelectorAll('#roster-group button').forEach(b => b.setAttribute('aria-pressed', b.dataset.group === g)); rosterEl._html = null; uiDirty = true; }
 $('#roster-group').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setGroupBy(b.dataset.group); });
-setTimeout(() => setGroupBy(groupBy()));   // uiPrefs is defined further down
 const familyRows = m => row(m) + agents.filter(s => s.parent === m).map(row).join('');
 function rosterHtml(mains) {
   if (groupBy() === 'tool') {

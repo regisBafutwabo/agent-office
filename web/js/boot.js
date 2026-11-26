@@ -57,6 +57,7 @@ else if (!Object.hasOwn(CITIES, uiPrefs.city)) { tourAfterCity = !uiPrefs.guideD
 else if (!uiPrefs.guideDone || params.has('tour')) startGuide(Number.isInteger(uiPrefs.guideStep) ? uiPrefs.guideStep : 0);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { agents.forEach(a => a.labelDirty = true); floorLabels.forEach(l => l.draw()); screensDirty = true; drawNeon(); floors.forEach(f => drawSign(f, true)); });
 
+setGroupBy(groupBy());   // here, not in ui.js: uiPrefs comes from layout.js, and a timer there could fire before it loaded
 let last = performance.now(), uiT = 0;
 let screenT = 0;
 function step(dt) {
@@ -85,8 +86,9 @@ function step(dt) {
 let hiddenFrames = 0;
 renderer.setAnimationLoop(() => {
   const now = performance.now(), dt = Math.min(.05, (now - last) / 1000); last = now;
-  step(dt);
+  if (!window.agentOffice.held) step(dt);
   if (!review.open || ++hiddenFrames % 30 === 0) renderer.render(scene, camera);   // the review window covers the office: a frame now and then is enough
 });
-// Debug helper: fast-forward the office (runs even when the tab is in the background).
+// Debug helpers: fast-forward the office (runs even when the tab is in the background); `held = true` stops the clock in between,
+// so a test sees the moment it stepped to and not whatever the frames did while it waited.
 window.agentOffice.advance = async seconds => { for (let t = 0; t < seconds; t += .05) { step(.05); for (let k = 0; k < 6; k++) await null; } renderer.render(scene, camera); };
