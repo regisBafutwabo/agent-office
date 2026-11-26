@@ -26,6 +26,7 @@ test('an agent on a break sprints back to its desk when you send a prompt, and s
   await settle(page);
   expect(await page.evaluate(() => agents.find(x => x.kind === 'main').spot.type)).toMatch(/hoops|arcade|coffee/);
 
+  await page.evaluate(() => { agentOffice.held = true; });         // stop the clock between steps, so a slow machine sees the same moments
   await office.hook({ hook_event_name: 'UserPromptSubmit', session_id: 's1', cwd, prompt: 'Back to work' });
   await expect.poll(() => page.evaluate(() => !!agents.find(x => x.kind === 'main').sprint)).toBe(true);
   const run = await page.evaluate(async () => {
@@ -70,6 +71,8 @@ test('an agent on the roof sprints to the lift when you send a prompt, rides dow
   });
   expect(up).toEqual({ onRoof: true, at: true, sprinted: false, roofShown: true });
 
+  // Stop the clock: on a slow CI machine the frames ran on while the test waited, and the "!" was gone before it looked.
+  await page.evaluate(() => { agentOffice.held = true; });
   await office.hook({ hook_event_name: 'UserPromptSubmit', session_id: 's1', cwd, prompt: 'Back to work' });
   await expect.poll(() => page.evaluate(() => !!agents.find(x => x.kind === 'main').sprint)).toBe(true);
   const run = await page.evaluate(async () => {
