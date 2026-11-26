@@ -176,10 +176,11 @@ function roam(a) {
     return;
   }
   // idle for a long while with nothing merged (still waiting on review), or it's party time: go up to the terrace; otherwise sometimes
+  if (a.chat && Math.random() < .7) return;                 // mid-conversation at the café counter: stay a while longer
   const waitingOnMerge = !a.merged && performance.now() - a.idleSince > IDLE_ROOF_MS;
   if ((isParty() || waitingOnMerge || Math.random() < .3) && roofFree().length) { goRoof(a); return; }
-  const sp = chooseIdle(a.floor);
-  if (sp && sp !== a.spot) { place(a, sp, true); setState(a, 'idle', IDLE_ACTIVITY[sp.type]); }
+  const sp = chooseIdle(a.floor, a);
+  if (sp && sp !== a.spot) { a.cafe = sp.type === 'stool' ? sp : null; place(a, sp, true); setState(a, 'idle', IDLE_ACTIVITY[sp.type]); }
 }
 
 // Tell the bridge whether this office is on screen: it only holds permission requests while someone is watching.

@@ -98,7 +98,7 @@ const BREAK_SPOTS = new Set(['hoops', 'arcade', 'beanbag', 'pouf', 'coffee']);
 function onBreak(a) {
   if (a.onRoof) return true;
   const s = a.dest || a.spot;
-  return !!s && BREAK_SPOTS.has(s.type) && s !== a.wanderSpot;
+  return !!s && (BREAK_SPOTS.has(s.type) || s === a.cafe) && s !== a.wanderSpot;
 }
 function place(a, spot, force) {
   if (a.spot && a.spot === a.wanderSpot) { force = true; a.wanderSpot = null; }

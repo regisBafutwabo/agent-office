@@ -136,6 +136,7 @@ const BUB = {
   finally: { text: 'FINALLY!!', ink: '#EF476F', shape: 'burst2', life: 4.5 },
   run:     { ink: '#4CC9F0', shape: 'cloud', life: Infinity },
   heard:   { text: '!',         ink: '#E5534B', shape: 'bang',   life: 1.1, size: 170 },   // called back from a break
+  chat:    { ink: '#15212A', shape: 'oval', life: 2.2, size: 96, scale: .6, y: 1.3 },   // small talk at the café counter
 };
 const BUB_FONT = n => `${n}px Bangers, Impact, "Arial Black", sans-serif`;
 function starPath(x, cx, cy, rx, ry, n, inner, jitter = 0) {
@@ -192,8 +193,8 @@ function updateBubble(a, dt) {
   a.bub.visible = !!a.bubKind && bubView(a);
   if (!a.bub.visible) return;
   const t = Math.min(1, a.bubAge / .22), pop = 1 + 2.7 * (t - 1) ** 3 + 1.7 * (t - 1) ** 2;   // ease-out-back: a little overshoot
-  a.bub.scale.set(2.9 * pop, 1.45 * pop, 1);
-  a.bub.position.y = a.topY + 1.6 + Math.min(a.bubAge, B.life) * (B.life < Infinity ? .05 : 0);
+  const k = pop * (B.scale || 1); a.bub.scale.set(2.9 * k, 1.45 * k, 1);
+  a.bub.position.y = a.topY + (B.y || 1.6) + Math.min(a.bubAge, B.life) * (B.life < Infinity ? .05 : 0);
   a.bub.material.opacity = B.life < Infinity ? Math.min(1, (B.life - a.bubAge) / .5) : 1;
   a.bub.material.rotation = a.bubKind === 'fail' ? Math.sin(a.bubAge * 14) * .05 : a.bubKind === 'heard' ? Math.sin(a.bubAge * 30) * .1 * Math.max(0, 1 - a.bubAge * 2) : 0;
 }
