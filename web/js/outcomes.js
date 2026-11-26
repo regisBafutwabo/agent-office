@@ -174,8 +174,10 @@ function drawBubble(a, kind, tag, text, drop = -1) {
   }
   a.B.t.needsUpdate = true;
 }
+// Bubbles ride in the agent's group, so unlike bursts they can show on the terrace too, whenever the roof is shown.
+const bubView = a => a.onRoof ? roofGroup.visible && a.g.visible && !document.hidden : inView(a);
 function say(a, kind, tag, text, drop) {
-  if (!inView(a)) return;
+  if (!bubView(a)) return;
   if (!a.bub || a.bub.parent !== a.g) {
     a.B = a.B || canvasTex(512, 256);
     a.bub = new THREE.Sprite(new THREE.SpriteMaterial({ map: a.B.t, depthTest: false, transparent: true })); a.bub.renderOrder = 11; a.g.add(a.bub);
@@ -187,7 +189,7 @@ function updateBubble(a, dt) {
   if (!a.bub) return;
   const B = a.bubKind && BUB[a.bubKind];
   if (B && (a.bubAge += dt) >= B.life) a.bubKind = null;
-  a.bub.visible = !!a.bubKind && inView(a);
+  a.bub.visible = !!a.bubKind && bubView(a);
   if (!a.bub.visible) return;
   const t = Math.min(1, a.bubAge / .22), pop = 1 + 2.7 * (t - 1) ** 3 + 1.7 * (t - 1) ** 2;   // ease-out-back: a little overshoot
   a.bub.scale.set(2.9 * pop, 1.45 * pop, 1);

@@ -61,7 +61,7 @@ async function goRoof(a) {
 // Back down to the agent's floor, arriving through the lift.
 async function leaveRoof(a) {
   if (!a.onRoof) return;
-  await roofWalkTo(a, ROOF_LIFT); a.leaving = true; await wait(.6);
+  await roofWalkTo(a, ROOF_LIFT); a.leaving = true; await wait(a.sprint ? .35 : .6);   // called back: an express lift
   scene.add(a.g); a.onRoof = false; a.spot = DOOR; a.leaving = false; a.appear = 0;
   a.g.position.set(DOOR.x, 0, DOOR.z); a.yaw = a.yawT = -Math.PI / 2;
 }

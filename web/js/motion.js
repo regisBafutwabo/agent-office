@@ -30,35 +30,38 @@ function chooseWorkspot(a) {
 }
 /* ---------- sprinting back: called back from a break, anime style ---------- */
 // The sprint lasts until the walk ends, even if a tool call re-aims it on the way: arriving is what clears it.
+// From the roof it lasts through the lift too: only the walk to the seat (walkTo) arrives.
 const SPRINT = 2.5;                                                // times walking speed
 const SKID = 1.2;                                                 // the last this-many units are a skid into the seat
 const IDLE_TYPES = ['coffee','hoops','arcade','beanbag','pouf','sofa'];
 function sprintBack(a, from) {
-  if (!a.path.length || !from || !IDLE_TYPES.includes(from.type) || a.onRoof) return;
+  if (!a.path.length || !from || !(a.onRoof || IDLE_TYPES.includes(from.type))) return;
   say(a, 'heard');                                                 // "!": it heard you
   if (!reduced) a.sprint = { hold: .3, puffIn: 0, skid: false };    // a beat to turn and crouch, then off; reduced motion: it walks
 }
 const pathLeft = a => { const p = a.g.position; let d = 0, x = p.x, z = p.z; for (const v of a.path) { d += Math.hypot(v.x - x, v.y - z); x = v.x; z = v.y; } return d; };
-// Speed smoke: grey puffs left at the feet that swell, drift up and fade. Pooled, and only on the floor being shown.
+// Speed smoke: grey puffs left at the feet that swell, drift up and fade. Pooled, and only on the floor being shown
+// (or, on the terrace, while the roof is: they live in roofGroup there, so they sit on the deck and move with the building).
 const DUST_GEO = new THREE.IcosahedronGeometry(.14, 1), DUST_MAX = 80, dust = [], dustPool = [];
 function puff(a, back, side, up, life) {
-  if (dust.length >= DUST_MAX || a.floor !== curFloor || !a.g.visible || document.hidden) return;
+  const roof = a.onRoof;
+  if (dust.length >= DUST_MAX || (roof ? !roofGroup.visible : a.floor !== curFloor) || !a.g.visible || document.hidden) return;
   const m = dustPool.pop() || new THREE.Mesh(DUST_GEO, new THREE.MeshStandardMaterial({ roughness: 1, transparent: true, depthWrite: false }));
   m.material.color.set(sceneT.dark ? '#AEB6BB' : '#D9DCDE'); m.material.emissive.set(sceneT.dark ? '#2A3034' : '#3C3E40');   // lit from within a little, so it reads as smoke, not a pebble
   const ux = Math.sin(a.yaw), uz = Math.cos(a.yaw), sx = rand(-side, side), p = a.g.position, s = rand(.7, 1.1);
-  m.position.set(p.x - ux * back + uz * sx, rand(.06, .14), p.z - uz * back - ux * sx); m.scale.setScalar(s); m.material.opacity = .9;
-  scene.add(m);
-  dust.push({ m, s, floor: a.floor, age: 0, life, v: new THREE.Vector3(-ux * rand(.2, .6) + uz * sx * 2, up * rand(.7, 1.3), -uz * rand(.2, .6) - ux * sx * 2) });
+  m.position.set(p.x - ux * back + uz * sx, (roof ? ROOF_Y : 0) + rand(.06, .14), p.z - uz * back - ux * sx); m.scale.setScalar(s); m.material.opacity = .9;
+  (roof ? roofGroup : scene).add(m);
+  dust.push({ m, s, floor: a.floor, roof, age: 0, life, v: new THREE.Vector3(-ux * rand(.2, .6) + uz * sx * 2, up * rand(.7, 1.3), -uz * rand(.2, .6) - ux * sx * 2) });
 }
 const dustBurst = (a, n) => { for (let i = 0; i < n; i++) puff(a, rand(-.1, .25), .35, .55, rand(.6, .9)); };
 function updateDust(sdt) {
   for (let i = dust.length - 1; i >= 0; i--) {
     const d = dust[i]; d.age += sdt;
-    if (d.age >= d.life) { scene.remove(d.m); dustPool.push(d.m); dust.splice(i, 1); continue; }
+    if (d.age >= d.life) { d.m.parent.remove(d.m); dustPool.push(d.m); dust.splice(i, 1); continue; }
     const k = d.age / d.life;
     d.m.position.addScaledVector(d.v, sdt); d.v.multiplyScalar(1 - Math.min(1, sdt * 3));
     d.m.scale.setScalar(d.s * (1 + k * 1.3)); d.m.material.opacity = .9 * (1 - k * k);
-    d.m.visible = d.floor === curFloor;
+    d.m.visible = d.roof ? roofGroup.visible : d.floor === curFloor;
   }
 }
 const IDLE_WEIGHT = { hoops: 4, arcade: 3 };                       // the games are the fun ones: pick them more often
@@ -208,7 +211,7 @@ function updateAgent(a, dt, sdt) {
     let step = 2.5 * sdt;
     if (a.sprint && a.sprint.hold > 0) { a.sprint.hold -= sdt; step = 0; }   // still turns toward the desk
     else if (a.sprint) {                                           // a skid slows at a steady rate, so speed goes with √(distance left)
-      const S = a.sprint, left = pathLeft(a), skid = left < SKID;
+      const S = a.sprint, left = pathLeft(a), skid = left < SKID && !a.onRoof;   // the roof leg runs straight into the lift
       if (skid && !S.skid) dustBurst(a, 6);
       S.skid = skid; step *= SPRINT * (skid ? Math.max(.25, Math.sqrt(left / SKID)) : 1);
       if ((S.puffIn -= sdt) <= 0) { S.puffIn = skid ? .035 : .055; puff(a, .25, .12, skid ? .25 : .4, rand(.45, .7)); }
