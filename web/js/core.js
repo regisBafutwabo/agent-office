@@ -85,7 +85,8 @@ const PLACE = { desk:'Desk', sofa:'Lounge sofa', armchair:'Lounge chair', pouf:'
   booth:'Focus booth', meeting:'War room', library:'Library', coffee:'Coffee bar', hoops:'Basketball machine', beanbag:'Beanbag', arcade:'Arcade' };
 const LOUNGE_WORK = ['sofa','armchair','hightable','stool','booth'];
 Object.assign(PLACE, { roofsofa:'Sofa', roofchair:'Lounge chair', barstool:'Bar', firepit:'Fire pit', lounger:'Sun lounger', rail:'View', dance:'Dance floor' });
-const IDLE_ACTIVITY = { coffee:'Making a flat white', hoops:'Shooting hoops', arcade:'Playing an arcade game', beanbag:'Lounging on a beanbag', pouf:'Chatting in the lounge', sofa:'Relaxing on the sofa' };
+const IDLE_ACTIVITY = { coffee:'Making a flat white', hoops:'Shooting hoops', arcade:'Playing an arcade game', beanbag:'Lounging on a beanbag', pouf:'Chatting in the lounge', sofa:'Relaxing on the sofa',
+  stool:'Having a coffee at the counter' };
 const PREFS = { anywhere:'Anywhere', desk:'Own desk', lounge:'Lounge first' };
 
 /* ---------- renderer / scene ---------- */

@@ -20,7 +20,7 @@ function walkTo(a, s) {
   pts.push(...route(start.x, start.z, end.x, end.z));
   if (end.x !== s.x || end.z !== s.z) pts.push(new THREE.Vector2(s.x, s.z));
   a.path = pts; a.spot = null; a.dest = s; a.where = 'Walking'; a.laptop.visible = false; uiDirty = true;
-  return new Promise(r => { a.arrive = () => { a.sprint = null; a.spot = s; a.dest = null; a.arrivedAt = performance.now(); a.where = s.type ? (s === a.home && a.kind === 'main' ? 'Own desk' : PLACE[s.type]) : ''; uiDirty = true; detailDirty = true; updateScreen(a); r(); }; });
+  return new Promise(r => { a.arrive = () => { a.sprint = null; if (a.cafe !== s) a.cafe = null; a.spot = s; a.dest = null; a.arrivedAt = performance.now(); a.where = s.type ? (s === a.home && a.kind === 'main' ? 'Own desk' : PLACE[s.type]) : ''; uiDirty = true; detailDirty = true; updateScreen(a); r(); }; });
 }
 function chooseWorkspot(a) {
   const away = () => { const f = freeSpots(LOUNGE_WORK, a.floor); return f.length ? pick(f) : null; };
@@ -35,7 +35,7 @@ const SPRINT = 2.5;                                                // times walk
 const SKID = 1.2;                                                 // the last this-many units are a skid into the seat
 const IDLE_TYPES = ['coffee','hoops','arcade','beanbag','pouf','sofa'];
 function sprintBack(a, from) {
-  if (!a.path.length || !from || !(a.onRoof || IDLE_TYPES.includes(from.type))) return;
+  if (!a.path.length || !from || !(a.onRoof || IDLE_TYPES.includes(from.type) || from === a.cafe)) return;   // a stool counts only as a break, not as a seat it worked at
   say(a, 'heard');                                                 // "!": it heard you
   if (!reduced) a.sprint = { hold: .3, puffIn: 0, skid: false };    // a beat to turn and crouch, then off; reduced motion: it walks
 }
@@ -65,11 +65,53 @@ function updateDust(sdt) {
   }
 }
 const IDLE_WEIGHT = { hoops: 4, arcade: 3 };                       // the games are the fun ones: pick them more often
-function chooseIdle(fl) {
+function chooseIdle(fl, a) {
+  const stools = freeSpots(['stool'], fl), there = cafeGoers(fl, a), mine = a && a.cafe && a.spot === a.cafe;
+  if ((stools.length || mine) && Math.random() < (there.length ? CAFE_JOIN : CAFE_ODDS)) {
+    if (mine) return a.cafe;                                       // already at the counter: stay on its stool
+    if (!there.length) return pick(stools);
+    const gap = s => Math.min(...there.map(x => Math.abs(x.cafe.x - s.x)));
+    return stools.reduce((b, s) => gap(s) < gap(b) ? s : b);       // the stool next to whoever is there
+  }
   const f = freeSpots(IDLE_TYPES, fl); if (!f.length) return null;
   let r = Math.random() * f.reduce((n, s) => n + (IDLE_WEIGHT[s.type] || 1), 0);
   return f.find(s => (r -= IDLE_WEIGHT[s.type] || 1) < 0) || f[f.length - 1];
 }
+/* ---------- the café counter: idle agents sit together and chat ---------- */
+// Stools are also laptop seats and overflow homes, so a break there is told apart by a.cafe: the stool it took for a break.
+const CAFE_ODDS = .22, CAFE_JOIN = .8;                             // a break starts at the counter now and then, and joins whoever is there
+const CHAT_WORDS = ['heh', 'haha', 'mhm', 'ooh', 'lol', 'hmm', 'ha!', 'no way', '♪', 'right?'];
+const atCafe = a => a.kind === 'main' && !!a.cafe && a.spot === a.cafe && !a.path.length && !a.busy && !a.onRoof && !a.leaving && !a.exiting;
+const cafeGoers = (fl, a) => agents.filter(x => x !== a && x.floor === fl && x.cafe && !x.busy && (x.spot === x.cafe || x.dest === x.cafe));
+function updateCafe(sdt) {
+  const groups = new Map();
+  for (const a of agents) {
+    if (atCafe(a)) { (groups.get(a.floor) || groups.set(a.floor, []).get(a.floor)).push(a); continue; }
+    a.chat = a.chatYaw = null;
+  }
+  for (const fl of floors) if (fl.cafe && !groups.has(fl)) fl.cafe.speaker = null;
+  for (const [fl, g] of groups) {
+    const c = fl.cafe ||= { speaker: null, next: 0 }, now = performance.now();
+    for (const a of g) a.coffeeUntil = now + COFFEE_MS;              // a coffee from the counter, sipped between turns
+    if (g.length < 2) { const a = g[0]; a.chat = a.chatYaw = null; c.speaker = null; c.next = 1; cafeSays(a, IDLE_ACTIVITY.stool); continue; }
+    if (!g.includes(c.speaker)) c.speaker = null;
+    if ((c.next -= sdt) <= 0) {                                    // the next turn: someone else talks, or a quiet beat
+      const was = c.speaker; if (was && was.bubKind === 'chat') was.bubKind = null;   // one bubble at a time
+      c.speaker = was && Math.random() < .3 ? null : pick(g.filter(x => x !== was)); c.to = pick(g.filter(x => x !== c.speaker));
+      c.next = c.speaker ? rand(2.4, 4) : rand(1.5, 3);
+      if (c.speaker) { say(c.speaker, 'chat', '', pick(CHAT_WORDS)); for (const x of g) if (x !== c.speaker && Math.random() < .6) x.nodT = 0; }
+    }
+    for (const a of g) {
+      // Listeners face the speaker, the speaker faces whom it's telling; in a pause, the others. Mostly, so they stay at the counter.
+      const to = !c.speaker ? g.filter(x => x !== a) : [c.speaker !== a ? c.speaker : g.includes(c.to) && c.to !== a ? c.to : g.find(x => x !== a)];
+      const dx = to.reduce((n, x) => n + x.spot.x, 0) / to.length - a.spot.x, dz = to.reduce((n, x) => n + x.spot.z, 0) / to.length - a.spot.z;
+      a.chatYaw = Math.hypot(dx, dz) < .1 ? null : lerpAngle(yawOf(a.spot.face), Math.atan2(dx, dz), .8);   // the middle stool in a pause: to the counter
+      a.chat = a === c.speaker ? 'talk' : 'listen';
+      cafeSays(a, 'Chatting at the café counter');
+    }
+  }
+}
+function cafeSays(a, activity) { if (a.activity !== activity) setState(a, a.state, activity); }
 
 /* ---------- behaviour ---------- */
 function makePlan(p) {
@@ -144,8 +186,8 @@ async function mainLoop(a) {
     await wait(3);
     if (a.pending.length) continue;
     if (Math.random() < .45 && await goRoof(a)) { await Promise.race([wait(rand(14, 26)), new Promise(r => a.wake = r)]); a.wake = null; continue; }
-    const idle = chooseIdle(a.floor);
-    if (idle) { setState(a, 'done', `Heading to the ${PLACE[idle.type].toLowerCase()}`); await walkTo(a, idle);
+    const idle = chooseIdle(a.floor, a);
+    if (idle) { a.cafe = idle.type === 'stool' ? idle : null; setState(a, 'done', `Heading to the ${PLACE[idle.type].toLowerCase()}`); await walkTo(a, idle);
       a.pose = poseFor(a); setState(a, 'idle', IDLE_ACTIVITY[idle.type]); }
     else setState(a, 'idle', 'Waiting for the next prompt');
     await Promise.race([wait(rand(8, 14)), new Promise(r => a.wake = r)]); a.wake = null;
@@ -218,7 +260,7 @@ function updateAgent(a, dt, sdt) {
     }
     if (d <= step) { g.position.x = tgt.x; g.position.z = tgt.y; a.path.shift(); if (!a.path.length && a.arrive) { if (a.sprint) dustBurst(a, 5); const f = a.arrive; a.arrive = null; f(); } }
     else { g.position.x += dx / d * step; g.position.z += dz / d * step; a.yawT = Math.atan2(dx, dz); }
-  } else if (a.spot && a.spot.face) a.yawT = yawOf(a.spot.face) + (swivel ? Math.sin(a.animT * .8) * .45 : 0);
+  } else if (a.spot && a.spot.face) a.yawT = a.chatYaw ?? yawOf(a.spot.face) + (swivel ? Math.sin(a.animT * .8) * .45 : 0);
   a.yaw = lerpAngle(a.yaw, a.yawT ?? a.yaw, 1 - Math.exp(-sdt * (swivel ? 3 : 10))); g.rotation.y = a.yaw;
   // The chair turns with whoever sits in it. Chairs are shared by every floor, so only the floor on show may move them.
   if (!a.path.length && a.spot && a.spot.chair && a.floor === curFloor) a.spot.chair.rotation.y = a.yaw;
@@ -275,6 +317,10 @@ function updateAgent(a, dt, sdt) {
     cupDown = !!a.cupDownAt;
   }
   if (holdsCup) { l = moving ? -.5 + Math.sin(t * 9) * .08 : -.45; le = -1.1; }   // forearm up, the cup in front
+  if (a.chat && !moving && !reduced) {                         // chatting at the counter: the speaker talks with a hand, the others nod along
+    if (a.chat === 'talk') { r = -1.3 + Math.sin(t * 5) * .3; rz = .2 + Math.sin(t * 2.5) * .25; re = -.9; tilt += Math.sin(t * 6) * .06; bob += Math.abs(Math.sin(t * 6)) * .012; }
+    else if (a.nodT != null && a.nodT < 1.2) { a.nodT += sdt; tilt += Math.sin(a.nodT * Math.PI * 2.5) * .14 * (1 - a.nodT / 1.2); }
+  }
   if (swivel) {
     if (a.restSpot !== a.spot) { a.restSpot = a.spot; a.rest = armrestAt(a, a.spot); }
     const R = a.rest;
