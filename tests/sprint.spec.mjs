@@ -16,6 +16,7 @@ test('an agent on a break sprints back to its desk when you send a prompt, and s
 
   // On a break across the room. A plain walk there is no sprint.
   const walked = await page.evaluate(async () => {
+    agentOffice.held = true;
     const a = agents.find(x => x.kind === 'main'); a.pref = 'desk'; goToFloor(a.floor.i);
     for (let i = 0; i < 60 && a.path.length; i++) await agentOffice.advance(.25);
     const far = freeSpots(['hoops', 'arcade', 'coffee'], a.floor).sort((p, q) => Math.hypot(q.x - a.home.x, q.z - a.home.z) - Math.hypot(p.x - a.home.x, p.z - a.home.z))[0];
@@ -26,7 +27,6 @@ test('an agent on a break sprints back to its desk when you send a prompt, and s
   await settle(page);
   expect(await page.evaluate(() => agents.find(x => x.kind === 'main').spot.type)).toMatch(/hoops|arcade|coffee/);
 
-  await page.evaluate(() => { agentOffice.held = true; });         // stop the clock between steps, so a slow machine sees the same moments
   await office.hook({ hook_event_name: 'UserPromptSubmit', session_id: 's1', cwd, prompt: 'Back to work' });
   await expect.poll(() => page.evaluate(() => !!agents.find(x => x.kind === 'main').sprint)).toBe(true);
   const run = await page.evaluate(async () => {
@@ -59,6 +59,7 @@ test('an agent on the roof sprints to the lift when you send a prompt, rides dow
 
   // Up to the terrace, at the spot farthest from the lift, with the roof on show. Going up is a plain walk.
   const up = await page.evaluate(async () => {
+    agentOffice.held = true;
     const a = agents.find(x => x.kind === 'main'); a.pref = 'desk'; goToFloor(a.floor.i);
     for (let i = 0; i < 60 && a.path.length; i++) await agentOffice.advance(.25);
     goRoof(a); let sprinted = false;
@@ -71,8 +72,6 @@ test('an agent on the roof sprints to the lift when you send a prompt, rides dow
   });
   expect(up).toEqual({ onRoof: true, at: true, sprinted: false, roofShown: true });
 
-  // Stop the clock: on a slow CI machine the frames ran on while the test waited, and the "!" was gone before it looked.
-  await page.evaluate(() => { agentOffice.held = true; });
   await office.hook({ hook_event_name: 'UserPromptSubmit', session_id: 's1', cwd, prompt: 'Back to work' });
   await expect.poll(() => page.evaluate(() => !!agents.find(x => x.kind === 'main').sprint)).toBe(true);
   const run = await page.evaluate(async () => {
