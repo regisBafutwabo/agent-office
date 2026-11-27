@@ -89,6 +89,11 @@ renderer.setAnimationLoop(() => {
   if (!window.agentOffice.held) step(dt);
   if (!review.open || ++hiddenFrames % 30 === 0) renderer.render(scene, camera);   // the review window covers the office: a frame now and then is enough
 });
-// Debug helpers: fast-forward the office (runs even when the tab is in the background); `held = true` stops the clock in between,
-// so a test sees the moment it stepped to and not whatever the frames did while it waited.
-window.agentOffice.advance = async seconds => { for (let t = 0; t < seconds; t += .05) { step(.05); for (let k = 0; k < 6; k++) await null; } renderer.render(scene, camera); };
+// Advance simulation independently of the frame loop, even in a background tab.
+// Set `held = true` to keep the clock still between manual steps.
+window.agentOffice.advance = async seconds => {
+  for (let t = 0; t < seconds; t += .05) {
+    step(.05);
+    for (let k = 0; k < 6; k++) await null;
+  }
+};

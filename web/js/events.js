@@ -74,12 +74,12 @@ function onLiveEvent(e, replay) {
       if (e.type === 'Notification' && perm && [...a.subs.values()].some(x => x.state === 'waiting')) break;
       if (perm) {
         applyStatus(who, 'waiting', e.type === 'PermissionRequest' ? `Needs permission: ${label}` : (e.message || 'Needs your permission'));
-        if (!replay) { toast(`${a.name} needs your permission in the ${whereFrom(a).toLowerCase()}`, 'Show me', () => select(who, true), who, 'waiting'); chime('needs', a); nudgeTitle(`✋ ${a.name} needs you`); }
+        if (!replay) { toast({ title: 'Needs your permission', detail: `${a.name} · in the ${whereFrom(a).toLowerCase()}` }, 'Find', () => select(who, true), who, 'waiting'); chime('needs', a); nudgeTitle(`✋ ${a.name} needs you`); }
       } else if (e.notificationType === 'idle_prompt') applyStatus(a, 'idle', 'Waiting for your input');
       break; }
     case 'Stop': emit(a, 'Stop', 'Finished responding', e.at); unstick(a); a.run = null; applyStatus(a, 'done', a.merged ? 'Finished · merged' : 'Finished');
       if (!replay) { chime('done', a); nudgeTitle(`✓ ${a.name} is done`); if (a.floor !== curFloor || viewMode !== 'floor') { unseenOf(a.floor).add(a.id); uiDirty = true; } }
-      if (!replay) toast(`${a.name} finished in ~/${a.project.key}`, hostName(a) ? [[opensChat(a) ? 'Open chat' : `Open in ${hostName(a)}`, () => openHost(a), true], ['Show me', () => select(a, true)]] : 'Show me', () => select(a, true), a, 'done');
+      if (!replay) toast({ title: `Finished · ${a.project.key}`, detail: a.name }, openOrFind(a), null, a, 'done');
       break;
     case 'SubagentStart': emit(who, 'SubagentStart', `${e.agentType || 'Subagent'} started`, e.at); if (!replay) changeDesk(a, d => remember(d, 'team', e.at)); break;
     case 'SubagentStop': emit(who, 'SubagentStop', e.message || 'Returned its result', e.at); who.run = null;
@@ -192,8 +192,8 @@ function onApproval(ap, fresh) {
   who.approval = { live: true, id: ap.id, tool: ap.tool || 'a tool', cmd: ap.summary ? `${ap.tool} ${ap.summary}` : ap.tool, expiresAt: ap.expiresAt };
   applyStatus(who, 'waiting', `Needs permission: ${who.approval.cmd}`);
   detailDirty = true; uiDirty = true;
-  if (fresh) toast(`${who.name} on floor ${floorNum(who.floor)} wants to run ${who.approval.cmd}`,
-    [['Allow', () => decide(who, 'allow'), true], ['Deny', () => decide(who, 'deny')], ['Show me', () => select(who, true)]], null, who, 'waiting', ap.id);
+  if (fresh) toast({ title: `Wants to run ${who.approval.cmd}`, detail: `${who.name} · floor ${floorNum(who.floor)}` },
+    [['Allow', () => decide(who, 'allow'), true], ['Deny', () => decide(who, 'deny')], ['Find', () => select(who, true)]], null, who, 'waiting', ap.id);
 }
 function onApprovalResolved(msg) {
   for (const a of agents) if (a.approval && a.approval.live && a.approval.id === msg.id) { a.approval = null; detailDirty = true; uiDirty = true;
