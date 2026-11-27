@@ -16,6 +16,9 @@ const viaT3 = a => (a.parent || a).entrypoint === 't3-code';
 const opensChat = a => { const s = a.parent || a; return viaT3(a) ? !!s.hostT3Thread : (!!s.hostChat || (s.agentName === 'codex' && !s.hostTerm && (!s.hostApp || s.hostApp === 'com.openai.codex'))); };
 const hostName = a => { const s = a.parent || a; return viaT3(a) ? 'T3 Code' : HOST_APPS[s.hostApp] || HOST_TERMS[s.hostTerm] || (opensChat(a) ? (s.hostChat ? 'Claude' : 'Codex') : null); };
 const openLabel = a => opensChat(a) ? `Open chat in ${hostName(a)}` : `Open in ${hostName(a)}`;
+// A toast's buttons for one agent: open its chat (or app) when the office can, and Find, which flies to it.
+const openOrFind = a => { const find = () => select(a, true);
+  return hostName(a) ? [[opensChat(a) ? 'Open chat' : `Open in ${hostName(a)}`, () => openHost(a), true], ['Find', find]] : [['Find', find, true]]; };
 function openHost(a) {
   const src = a.parent || a;
   if (!live.ws || live.ws.readyState !== 1) { toast('The office server isn’t connected'); return; }
@@ -48,7 +51,7 @@ const customName = (saved, project) => (saved.customName || (saved.customName ==
 // Work got merged: the agent jumps for joy for a few seconds and the office hears about it.
 function celebrate(a) {
   a.cheerUntil = performance.now() + 5000;
-  toast(`${a.name} got merged`, 'Show me', () => select(a, true), a, 'done');
+  toast({ title: 'Merged', detail: a.name }, 'Find', () => select(a, true), a, 'done');
 }
 function retitle(a, title) {
   if (!title || title === a.title) return;

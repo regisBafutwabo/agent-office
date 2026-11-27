@@ -26,7 +26,7 @@ function addClash(a, b, file, now, replay, since = now) {
   clashes.push({ a, b, file, at: now, since, mesh }); uiDirty = true; detailDirty = true; saveClashes();
   for (const x of [a, b]) emit(x, 'SameFile', `${file} · also edited by ${(x === a ? b : a).name}`);
   if (replay) return;
-  toast(`${a.name} and ${b.name} are both editing ${file}. They may overwrite each other.`, 'Show me', () => select(a, true), a, 'waiting');
+  toast({ title: `Both editing ${file}`, detail: `${a.name} and ${b.name} may overwrite each other`, tip: `${fullName(a)} and ${fullName(b)} may overwrite each other` }, 'Find', () => select(a, true), a, 'waiting');
   chime('needs', a.parent || a); nudgeTitle(`⚠ ${a.name} and ${b.name} share a file`);
 }
 // A red bar between the two agents while they share a file; it goes once the overlap is CLASH_MS old or one leaves.
@@ -55,7 +55,7 @@ function setStuck(a, v, replay) {
   const was = a.stuck; a.stuck = v; a.pose = poseFor(a); a.labelDirty = true; uiDirty = true; detailDirty = true;
   if (!v || replay || (was && was.key === v.key)) return;
   emit(a, 'GoingInCircles', `${v.label} failed ${v.n} times`);
-  toast(`${a.name} may be going in circles: ${v.label} failed ${v.n} times in a row`, 'Show me', () => select(a, true), a, 'waiting');
+  toast({ title: `${v.label} failed ${v.n} times in a row`, detail: `${a.name} · may be going in circles` }, 'Find', () => select(a, true), a, 'waiting');
   chime('needs', a.parent || a); nudgeTitle(`↻ ${a.name} is going in circles`);
 }
 function unstick(a) { if (a.fails) a.fails.clear(); if (a.stuck) setStuck(a, null); }
@@ -69,7 +69,7 @@ function setContext(a, c, replay) {
   if (k < .5) a.ctxWarned = false;
   if (k >= CTX_WARN && before < CTX_WARN && !a.ctxWarned && !replay) {
     a.ctxWarned = true;
-    toast(`${a.name}'s memory is ${Math.round(k * 100)}% full. Claude Code will compact it soon and details get summarized.`, 'Show me', () => select(a, true), a, 'waiting');
+    toast({ title: `Context ${Math.round(k * 100)}% full`, detail: `${a.name} · compacting soon`, ms: 6000 }, openOrFind(a), null, a, 'idle');   // a heads-up, not a request: plain face, gone in 6 s
   }
 }
 

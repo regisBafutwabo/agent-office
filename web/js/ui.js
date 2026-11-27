@@ -321,12 +321,20 @@ $('#d-spawn').onclick = async () => {
 };
 
 /* toasts */
+// Agent names are chat titles cut to fit a name tag; hovering a toast shows the whole title.
+const fullName = a => a.name.endsWith('…') && a.title ? String(a.title).replace(/\s+/g, ' ').trim() : a.name;
+// msg is a string, or { title, detail, tip, ms }: a bold one-line title, a muted one-line detail (cut with … when long),
+// the hover text for the detail (by default the detail with the agent's full name), and how long it stays up.
 function toast(msg, action, fn, who, mood, approvalId) {
   const actions = Array.isArray(action) ? action : action ? [[action, fn, true]] : [];
   const el = document.createElement('div'); el.className = 'toast glass';
   const face = who && faceShot(who, mood);
   const badge = face && (who.parent || who).live ? appBadge(who, 'av-app') : '';
-  el.innerHTML = `${face ? `<span class="toast-av"><img class="toast-face" style="--c:${who.color}" src="${face}" alt="">${badge}</span>` : ''}<span title="${esc(msg)}">${esc(msg)}</span>`;
+  const m = typeof msg === 'object' && msg ? msg : { title: String(msg) };
+  const tip = m.tip || (m.detail && who && who.name !== fullName(who) ? m.detail.split(who.name).join(fullName(who)) : m.detail);
+  const text = m.detail ? `<span class="toast-text"><b class="toast-title" title="${esc(m.title)}">${esc(m.title)}</b><span class="toast-detail" title="${esc(tip)}">${esc(m.detail)}</span></span>`
+    : `<span title="${esc(m.title)}">${esc(m.title)}</span>`;
+  el.innerHTML = `${face ? `<span class="toast-av"><img class="toast-face" style="--c:${who.color}" src="${face}" alt="">${badge}</span>` : ''}${text}`;
   for (const [label, run, primary] of actions) { const b = document.createElement('button'); b.className = primary ? 'btn primary' : 'btn'; b.textContent = label; b.onclick = () => { run(); el.remove(); }; el.appendChild(b); }
   if (actions.length) el.dataset.keep = '1';
   if (who || actions.length) {                                      // agent news and toasts that wait 45 s: let you dismiss them now
@@ -337,7 +345,7 @@ function toast(msg, action, fn, who, mood, approvalId) {
   // Over three, drop the oldest plain toast first, then the oldest one with buttons; a held permission request stays.
   const wrap = $('#toasts'); wrap.prepend(el);
   while (wrap.children.length > 3) { const kids = [...wrap.children].reverse(), old = kids.find(t => !t.dataset.keep) || kids.find(t => !t.dataset.approval); if (!old) break; old.remove(); }
-  setTimeout(() => el.remove(), el.dataset.keep ? 45000 : 6000);   // toasts with buttons stay up as long as a request is held
+  setTimeout(() => el.remove(), m.ms || (el.dataset.keep ? 45000 : 6000));   // toasts with buttons stay up as long as a request is held
 }
 
 /* customize */

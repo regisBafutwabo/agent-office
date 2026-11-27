@@ -420,6 +420,11 @@ body.live .speed-top, body.live .demo-only{display:none}
 .update-close{position:absolute;top:8px;right:8px}
 .toast{pointer-events:auto;display:flex;align-items:center;gap:12px;min-height:44px;padding:8px 8px 8px 12px;border-radius:var(--r-lg);box-shadow:var(--e-2);font:400 13px/18px var(--font-b);animation:tin .25s ease-out}
 .toast>span:not(.toast-av){flex:1;min-width:0}
+.toast-text{display:flex;flex-direction:column;min-width:0}
+.toast-title,.toast-detail{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toast-title{font-weight:600;color:var(--ink)}
+.toast-detail{font-size:12px;line-height:16px;color:var(--ink-2)}
+.toast .btn{flex:none}
 .toast-x{flex:none;width:28px;height:28px;margin-left:-4px;border:0;border-radius:var(--r-sm);background:none;color:var(--ink-2);font:400 13px/1 var(--font-b);cursor:pointer;opacity:.7}
 .toast-x:hover{opacity:1;background:var(--panel-2)}
 .toast-x:focus-visible{opacity:1;outline:2px solid var(--accent);outline-offset:1px}
