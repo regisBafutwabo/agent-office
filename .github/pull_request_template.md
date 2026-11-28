@@ -20,3 +20,7 @@
 - [ ] `npm run test:e2e`
 - [ ] `cd desktop/src-tauri && cargo test`
 - [ ] Tried it in the office (say which mode: live, demo, phone, desktop app)
+
+## AI agents
+
+<!-- Did an AI coding agent help to write this change? Say which one, or write "None". -->
