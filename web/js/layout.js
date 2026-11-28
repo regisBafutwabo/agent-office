@@ -15,8 +15,20 @@ $('#vr-btn').onclick = async () => {
 /* ---------- layout ---------- */
 // Collapsible rail + side panel. Per-viewer convenience, so it's kept in localStorage.
 const appEl = $('#app'), liftEl = $('#lift');
-const uiPrefs = (() => { try { return JSON.parse(localStorage.getItem('agent-office:ui')) || {}; } catch (_) { return {}; } })();
-const saveUi = () => { try { localStorage.setItem('agent-office:ui', JSON.stringify(uiPrefs)); } catch (_) {} };
+// Every open office tab reads these settings once, at start. If a tab saved its whole copy, an older tab would put back
+// what another tab changed since: pick Seoul in one tab, hide the floors in an older one, and the next start shows
+// the older tab's city. So each tab notes which settings it changed and saves only those, over what is stored now.
+const readUi = () => { try { const v = JSON.parse(localStorage.getItem('agent-office:ui')); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch (_) { return {}; } };
+const uiChanged = new Set();
+const uiPrefs = new Proxy(readUi(), {
+  set(o, k, v) { o[k] = v; uiChanged.add(k); return true; },
+  deleteProperty(o, k) { delete o[k]; uiChanged.add(k); return true; },
+});
+const saveUi = () => {
+  const stored = readUi();
+  for (const k of uiChanged) { if (Object.hasOwn(uiPrefs, k)) stored[k] = uiPrefs[k]; else delete stored[k]; }
+  try { localStorage.setItem('agent-office:ui', JSON.stringify(stored)); uiChanged.clear(); } catch (_) {}
+};
 const panelOpen = () => isMobile() ? !panel.classList.contains('collapsed') : !appEl.classList.contains('panel-off');
 function setPanelOpen(open) {
   if (isMobile()) { panel.classList.toggle('collapsed', !open); cardFolded = false; }

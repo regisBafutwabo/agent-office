@@ -65,3 +65,32 @@ test('your own models: the panel says where packs go, and Look again finds one a
   await page.getByRole('button', { name: 'Look again' }).click();
   await expect(page.locator('.toast', { hasText: 'No new packs' })).toBeVisible();
 });
+
+// Another office tab saves its settings to the same storage. These tests write that save directly instead of opening a
+// second office: on CI two WebGL pages share a slow software renderer, and the second one misses its connect deadline.
+const saveFromOtherTab = (page, prefs) => page.evaluate(p => {
+  const ui = JSON.parse(localStorage.getItem('agent-office:ui')) || {}; localStorage.setItem('agent-office:ui', JSON.stringify({ ...ui, ...p }));
+}, prefs);
+
+test('a city picked in one tab stays picked when an older tab changes another setting', async ({ page, office }) => {
+  await open(page, office);                                           // the older tab, on Generic city
+  await saveFromOtherTab(page, { city: 'gangnam' });                  // Seoul, picked in another tab
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  await page.getByLabel('Show name tags').uncheck();                 // this used to save the older tab's city too
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('agent-office:ui')))).toMatchObject({ city: 'gangnam', labels: false });
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => cityKey), { timeout: 20_000 }).toBe('gangnam');
+  await expect(page.locator('#city-picker')).not.toBeVisible();
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  await expect(page.getByLabel('Show name tags')).not.toBeChecked();  // and its own change is kept
+});
+
+test('picking the city a tab started with again saves it over another tab’s pick', async ({ page, office }) => {
+  await open(page, office);                                           // on Generic city
+  await saveFromOtherTab(page, { city: 'gangnam' });
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  await page.locator('#cities').getByRole('button', { name: 'Generic city' }).click();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('agent-office:ui')).city)).toBe('generic');
+  await page.reload();
+  expect(await page.evaluate(() => cityKey)).toBe('generic');
+});
