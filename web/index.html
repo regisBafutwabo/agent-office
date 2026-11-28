@@ -102,9 +102,16 @@
         <button class="btn sm" id="sf-bridge" hidden>View Golden Gate</button>
       </div>
       <div id="pack-setting">
-        <h3>Furniture</h3>
+        <h3>Your own models</h3>
+        <p class="pack-intro">Swap the furniture, or the agents themselves, for your own 3D models (.glb or .gltf).</p>
         <label class="field pack-field">Model pack <select id="pack-select"><option value="">Built-in</option></select></label>
-        <p class="pack-empty" id="pack-empty" hidden>Add model packs to <code>~/Library/Application Support/Agent Office/packs</code>, then reopen the office.</p>
+        <p class="pack-where">Put each pack in its own folder in <code id="pack-dir">your packs folder</code>then click <b>Look again</b>.</p>
+        <div class="pack-actions">
+          <button type="button" class="btn sm" id="pack-open" hidden>Open packs folder</button>
+          <button type="button" class="btn sm" id="pack-copy" hidden>Copy path</button>
+          <button type="button" class="btn sm" id="pack-reload">Look again</button>
+          <a class="btn sm ghost" href="https://github.com/regisBafutwabo/agent-office/blob/main/docs/features.md#model-packs" target="_blank" rel="noopener">How to make a pack ↗</a>
+        </div>
       </div>
       <h3>Display</h3>
       <div class="toggles">

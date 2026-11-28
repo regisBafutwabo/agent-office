@@ -190,8 +190,9 @@ Floors and agents show the logo of the tool they come from (Claude, Codex, Curso
 
 Swap the built-in furniture, or the agents themselves, for your own glTF models.
 
-1. Put a folder with a `pack.json` and its `.glb`/`.gltf` files in `~/Library/Application Support/Agent Office/packs` (or set `AGENT_OFFICE_PACKS`).
-2. Reopen the office and pick it under **Customize → Model pack**.
+1. Open **Customize → Your own models** and click **Open packs folder** (or **Copy path**). The folder is `~/Library/Application Support/Agent Office/packs` unless you set `AGENT_OFFICE_PACKS`.
+2. Add a folder with a `pack.json` and its `.glb`/`.gltf` files.
+3. Click **Look again**, then pick the pack under **Model pack**.
 
 Each model is fitted into the space of the piece it replaces, so seats, desks and walkways stay where agents expect them. The format, including rigged characters, is described at the top of `web/js/packs.js`.
 

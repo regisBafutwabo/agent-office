@@ -187,8 +187,10 @@ button{font:inherit;color:inherit}
 .city-views{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .pack-field{display:grid;grid-template-columns:88px minmax(0,1fr);gap:12px;align-items:center;margin:0 8px;font:500 12px/16px var(--font-b);color:var(--ink-2)}
 .pack-field select{width:100%;min-width:0}
-.pack-empty{margin:8px 8px 0;font:400 12px/18px var(--font-b);color:var(--muted)}
-.pack-empty code{font:500 11px/16px var(--font-m);word-break:break-all}
+.pack-intro,.pack-where{margin:0 8px 8px;font:400 12px/18px var(--font-b);color:var(--muted)}
+.pack-where{margin:8px 8px 0}
+.pack-where code{display:block;margin:2px 0;font:500 11px/16px var(--font-m);overflow-wrap:anywhere;color:var(--ink-2)}
+.pack-actions{display:flex;flex-wrap:wrap;gap:8px;margin:8px 8px 0}
 details.cust-agent{border:0;padding:0;border-radius:var(--r-md)}
 /* details slots its content through a UA shadow root, so it would inherit content-box and the inputs overflow */
 details.cust-agent>*{box-sizing:border-box}

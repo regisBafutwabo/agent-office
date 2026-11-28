@@ -47,3 +47,21 @@ test('Customize starts with your agents, names the colors and explains its limit
   await expect(row.getByLabel('Name')).toHaveValue('A'.repeat(18));
   await expect(row.getByText('Names can be up to 18 characters.')).toBeVisible();
 });
+
+test('your own models: the panel says where packs go, and Look again finds one added while the office is open', async ({ page, office }) => {
+  const fs = await import('node:fs'), path = await import('node:path');
+  await open(page, office);
+  await page.getByRole('tab', { name: 'Customize' }).click();
+  await expect(page.getByRole('heading', { name: 'Your own models' })).toBeVisible();
+  await expect(page.locator('#pack-dir')).toHaveText(path.join(office.root, 'packs'));   // the folder the office really reads
+  await expect(page.getByRole('button', { name: 'Open packs folder' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Copy path' })).toBeVisible();
+  await expect(page.getByRole('link', { name: /How to make a pack/ })).toHaveAttribute('href', /features\.md#model-packs$/);
+  fs.mkdirSync(path.join(office.root, 'packs', 'cozy'), { recursive: true });
+  fs.writeFileSync(path.join(office.root, 'packs', 'cozy', 'pack.json'), JSON.stringify({ name: 'Cozy', license: 'CC0', slots: {} }));
+  await page.getByRole('button', { name: 'Look again' }).click();
+  await expect(page.locator('.toast', { hasText: 'Found Cozy' })).toBeVisible();
+  await expect(page.locator('#pack-select option')).toHaveText(['Built-in', 'Cozy (CC0)']);
+  await page.getByRole('button', { name: 'Look again' }).click();
+  await expect(page.locator('.toast', { hasText: 'No new packs' })).toBeVisible();
+});
