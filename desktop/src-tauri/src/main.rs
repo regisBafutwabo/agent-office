@@ -104,7 +104,7 @@ fn update_tray(app: &AppHandle, status: &MenuItem<Wry>, store: &store::Store) {
     let sessions = store.sessions.len();
     let waiting = store.waiting_count();
     let text = match (sessions, waiting) {
-        (0, _) => "No Claude Code sessions yet".to_string(),
+        (0, _) => "No agent sessions yet".to_string(),
         (n, 0) => format!("{n} session{} · all good", if n == 1 { "" } else { "s" }),
         (n, w) => format!("{n} session{} · {w} need{} you", if n == 1 { "" } else { "s" }, if w == 1 { "s" } else { "" }),
     };
@@ -205,7 +205,7 @@ fn main() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
-            let status = MenuItem::with_id(app, "status", "No Claude Code sessions yet", false, None::<&str>)?;
+            let status = MenuItem::with_id(app, "status", "No agent sessions yet", false, None::<&str>)?;
             let open = MenuItem::with_id(app, "open", "Open Agent Office", true, None::<&str>)?;
             let browser = MenuItem::with_id(app, "browser", "Open in browser", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Agent Office", true, None::<&str>)?;

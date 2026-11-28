@@ -69,8 +69,8 @@ function setModeLine() {
   const empty = $('#empty');
   empty.hidden = !(MODE === 'live' && (live.connected ? mains === 0 && live.gotSnapshot : live.everConnected));   // first handshake: no error yet
   if (!empty.hidden) {
-    $('#empty-title').textContent = live.connected ? 'No Claude Code sessions yet' : 'Can’t reach the bridge';
-    $('#empty-body').textContent = live.connected ? 'Start a session in the Claude desktop app or in your terminal. Its agent will ride up in the lift and take a desk.'
+    $('#empty-title').textContent = live.connected ? 'No agent sessions yet' : 'Can’t reach the bridge';
+    $('#empty-body').textContent = live.connected ? 'Start a session in Claude Code, Codex, Cursor or another connected tool. Its agent will ride up in the lift and take a desk.'
                                                   : 'Start it with npm start in the agent-office folder. This page reconnects on its own.';
     $('#empty-steps').hidden = !live.connected;
   }

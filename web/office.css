@@ -473,3 +473,4 @@ body.live .speed-top, body.live .demo-only{display:none}
 @media (prefers-reduced-motion: reduce){
   .pill.s-waiting,.toast,.fl-num.party,.needs-head .dot,.wall-tile.s-waiting .light{animation:none}
 }
+#empty-check{margin-top:12px}

@@ -180,12 +180,13 @@
   </section>
 
   <div class="empty glass" id="empty" hidden>
-    <h2 id="empty-title">No Claude Code sessions yet</h2>
-    <p id="empty-body">Start a session in the Claude desktop app or in your terminal. Its agent will ride up in the lift and take a desk.</p>
+    <h2 id="empty-title">No agent sessions yet</h2>
+    <p id="empty-body">Start a session in Claude Code, Codex, Cursor or another connected tool. Its agent will ride up in the lift and take a desk.</p>
     <ol id="empty-steps">
-      <li>Install the hooks once:<code>claude plugin marketplace add &lt;this folder&gt;</code><code>claude plugin install agent-office@agent-office</code></li>
-      <li>Open a new Claude Code session and send a prompt</li>
+      <li>Connect your tools once: <b>Connect agents</b> in the desktop app’s menu bar, or the steps in INSTALL.md</li>
+      <li>Open a new session and send a prompt</li>
     </ol>
+    <button class="btn sm" id="empty-check" data-rescan>Check again</button>
   </div>
   <div class="hint glass" id="hint">Drag to orbit · Scroll to zoom · Click an agent · <kbd>[</kbd><kbd>]</kbd> panels</div>
   <div class="toasts" id="toasts" role="status" aria-live="polite"></div>

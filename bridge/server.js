@@ -227,6 +227,7 @@ wss.on('connection', ws => {
         .then(message => ws.send(JSON.stringify({ type: 'focus-result', ok: true, message })))
         .catch(err => ws.send(JSON.stringify({ type: 'focus-result', ok: false, message: err.message })));
     }
+    if (msg.type === 'rescan') { rescan(); ws.send(JSON.stringify({ type: 'rescanned' })); }
     if (msg.type === 'decide' && typeof msg.id === 'string' && pending.has(msg.id) && ['allow', 'deny', 'defer'].includes(msg.decision)) pending.get(msg.id).resolve(msg.decision);
   });
 });
@@ -240,13 +241,15 @@ async function syncOllama() {
 // and walk out the ones whose log went quiet.
 for (const f of scan()) { store.adopt(f); store.adoptSubs(f); }
 syncOllama();
-setInterval(() => {
+// One pass over the logs; also run right away when an empty office asks to "Check again".
+function rescan() {
   for (const f of scan()) { const e = store.adopt(f); for (const x of [e, ...store.adoptSubs(f)]) if (x) broadcast({ type: 'event', event: x }); }
   for (const id of store.dropArchived(archivedChats())) broadcast({ type: 'event', event: { type: 'SessionEnd', sessionId: id, at: Date.now(), reason: 'Archived in the Claude app' } });
   syncOllama();
   const before = [...store.sessions.keys()]; store.prune();
   for (const id of before) if (!store.sessions.has(id)) broadcast({ type: 'event', event: { type: 'SessionEnd', sessionId: id, at: Date.now(), reason: 'No news for a while' } });
-}, 10_000).unref();
+}
+setInterval(rescan, 10_000).unref();
 watchMusic(m => { music = m; broadcast({ type: 'music', music }); }, () => [...wss.clients].some(c => c.readyState === 1 && c.music));
 
 server.on('error', err => {
