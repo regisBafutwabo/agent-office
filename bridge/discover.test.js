@@ -28,9 +28,11 @@ test('finds Codex threads you started but not imports or subagents', () => {
   const home = tmp('codex'), day = path.join(home, '.codex', 'sessions', '2026', '10', '01');
   const meta = (id, source) => ({ type: 'session_meta', payload: { id, session_id: id, cwd: '/repo', originator: 'codex_cli_rs', thread_source: source } });
   write(path.join(day, 'rollout-a.jsonl'), [meta('t1', 'user'), { type: 'event_msg', payload: { type: 'task_started' } }, { type: 'event_msg', payload: { type: 'task_complete' } }]);
-  write(path.join(day, 'rollout-b.jsonl'), [meta('t2', 'subagent')]);
+  // A real subagent names its parent; a thread T3 Code starts says "subagent" but has none, and is a chat of its own.
+  write(path.join(day, 'rollout-b.jsonl'), [{ type: 'session_meta', payload: { ...meta('t2', 'subagent').payload, parent_thread_id: 't1', source: { subagent: { thread_spawn: { parent_thread_id: 't1', depth: 1 } } } } }]);
+  write(path.join(day, 'rollout-d.jsonl'), [{ type: 'session_meta', payload: { ...meta('t4', 'subagent').payload, originator: 'T3 Code' } }, { type: 'event_msg', payload: { type: 'task_started' } }]);
   write(path.join(day, 'rollout-c.jsonl'), [{ type: 'session_meta', payload: { id: 't3', cwd: '/repo' } }, { type: 'event_msg', payload: { type: 'task_started', turn_id: 'external-import-turn-1' } }]);
-  assert.deepEqual(scan(home).map(f => [f.id, f.status, f.ended]), [['codex:t1', 'done', true]]);
+  assert.deepEqual(scan(home).map(f => [f.id, f.status, f.ended]).sort(), [['codex:t1', 'done', true], ['codex:t4', 'thinking', false]]);
 });
 
 test('finds Cursor chats and names them after the first prompt', () => {

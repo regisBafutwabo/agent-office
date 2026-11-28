@@ -131,9 +131,11 @@ function codex(home, now, out) {
     for (const { file, at } of recentLogs(day, now)) {
       const first = head(file, 3), meta = first.find(o => o.type === 'session_meta')?.payload;
       const id = meta?.session_id || meta?.id;
-      // Subagent threads and chats imported from other tools aren't chats you're running.
+      // Subagent threads and chats imported from other tools aren't chats you're running. A subagent names its parent;
+      // T3 Code marks the threads it starts "subagent" too, but those have no parent and are chats of their own.
       const imported = first.some(o => String(o.payload?.turn_id || '').startsWith('external-import'));
-      if (!id || imported || (meta.thread_source && meta.thread_source !== 'user')) continue;
+      const subagent = !!(meta?.parent_thread_id || meta?.forked_from_id || meta?.source?.subagent);
+      if (!id || imported || subagent || (meta.thread_source && !['user', 'subagent'].includes(meta.thread_source))) continue;
       const last = tail(file).reverse().map(o => o.payload?.type).find(t => ['task_started', 'task_complete', 'turn_aborted'].includes(t));
       const [status, activity] = settle(...(!last ? ['idle', 'Session started'] : last === 'task_started' ? ['thinking', 'Thinking'] : ['done', 'Finished']), at, now);
       // ended: the log itself says the turn is over, so it overrides hooks still saying "thinking" (see Store.adopt).

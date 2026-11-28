@@ -225,9 +225,11 @@ fn codex(home: &Path, now: u64, out: &mut Vec<Found>) {
             let first = head(&log, 3);
             let Some(meta) = first.iter().find(|o| o["type"] == "session_meta").map(|o| &o["payload"]) else { continue };
             let id = meta["session_id"].as_str().or(meta["id"].as_str()).unwrap_or("");
-            // Subagent threads and chats imported from other tools aren't chats you're running.
+            // Subagent threads and chats imported from other tools aren't chats you're running. A subagent names its parent;
+            // T3 Code marks the threads it starts "subagent" too, but those have no parent and are chats of their own.
             let imported = first.iter().any(|o| o["payload"]["turn_id"].as_str().is_some_and(|t| t.starts_with("external-import")));
-            if id.is_empty() || imported || meta["thread_source"].as_str().is_some_and(|s| s != "user") {
+            let subagent = meta["parent_thread_id"].is_string() || meta["forked_from_id"].is_string() || meta["source"]["subagent"].is_object();
+            if id.is_empty() || imported || subagent || meta["thread_source"].as_str().is_some_and(|s| s != "user" && s != "subagent") {
                 continue;
             }
             let last = tail(&log).into_iter().rev()
@@ -357,10 +359,19 @@ mod tests {
         let day = home.join(".codex/sessions/2026/10/01");
         let meta = |id: &str, source: &str| json!({ "type": "session_meta", "payload": { "id": id, "session_id": id, "cwd": "/repo", "originator": "codex_cli_rs", "thread_source": source } });
         write(&day.join("rollout-a.jsonl"), &[meta("t1", "user"), json!({ "type": "event_msg", "payload": { "type": "task_started" } }), json!({ "type": "event_msg", "payload": { "type": "task_complete" } })]);
-        write(&day.join("rollout-b.jsonl"), &[meta("t2", "subagent")]);
+        // A real subagent names its parent; a thread T3 Code starts says "subagent" but has none, and is a chat of its own.
+        let mut sub = meta("t2", "subagent");
+        sub["payload"]["parent_thread_id"] = json!("t1");
+        sub["payload"]["source"] = json!({ "subagent": { "thread_spawn": { "parent_thread_id": "t1", "depth": 1 } } });
+        write(&day.join("rollout-b.jsonl"), &[sub]);
+        let mut t3 = meta("t4", "subagent");
+        t3["payload"]["originator"] = json!("T3 Code");
+        write(&day.join("rollout-d.jsonl"), &[t3, json!({ "type": "event_msg", "payload": { "type": "task_started" } })]);
         write(&day.join("rollout-c.jsonl"), &[json!({ "type": "session_meta", "payload": { "id": "t3", "cwd": "/repo" } }), json!({ "type": "event_msg", "payload": { "type": "task_started", "turn_id": "external-import-turn-1" } })]);
         let found = scan(&home, now_ms());
-        assert_eq!(found.iter().map(|f| (f.id.as_str(), f.status.as_str(), f.ended)).collect::<Vec<_>>(), vec![("codex:t1", "done", true)]);
+        let mut ids = found.iter().map(|f| (f.id.as_str(), f.status.as_str(), f.ended)).collect::<Vec<_>>();
+        ids.sort();
+        assert_eq!(ids, vec![("codex:t1", "done", true), ("codex:t4", "thinking", false)]);
     }
 
     #[test]
