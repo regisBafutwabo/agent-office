@@ -9,9 +9,10 @@ on:
 permissions:
   contents: read
 
-# A new push to a pull request replaces the run for the old one. Every push to main keeps its own run.
+# A new push to a pull request replaces the run for the old one. Every push to main gets a group of its own: in a
+# shared group GitHub keeps only one waiting run, so quick merges in a row cancelled each other before they started.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
