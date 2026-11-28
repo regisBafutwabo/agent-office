@@ -393,7 +393,8 @@ function updateAgent(a, dt, sdt) {
   a.faceT += dt; if (g.visible && a.faceT > 1 / 12) { a.faceT = 0; drawFace(a); }   // 12 fps is plenty for a face and light on phones/VR
   a.selRing.visible = a === selected;
   if (a === selected) a.selRing.material.color.set(sceneT.dark ? '#FFFFFF' : '#15212A');
-  a.label.visible = showLabels && (a.onRoof || viewMode !== 'roof');   // on the roof, hide tags of people working below the deck
+  // On the roof, hide tags of people working below the deck. In VR the tags are the only way to read status, so show them.
+  a.label.visible = (showLabels || renderer.xr.isPresenting) && (a.onRoof || viewMode !== 'roof');
   if (a.approval && !a.approval.live && simTime > a.approval.deadline) a.approval.resolve('auto');
   if (a.char && g.visible) poseCharacter(a);
 }

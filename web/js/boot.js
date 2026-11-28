@@ -80,6 +80,7 @@ function step(dt) {
   screenT += dt; if (screensDirty || screenT > .5) { drawScreens(screensDirty); screensDirty = false; screenT = 0; }
   let n = 0; for (const a of agents) if (a.labelDirty && n < 4) { drawLabel(a); n++; }
   if (!renderer.xr.isPresenting) { keyPan(dt); updateCam(dt); updateShell(); }
+  else vrStep();
   uiT += dt;
   if (uiT > .15) { uiT = 0; if (uiDirty) renderUI(); if (detailDirty) renderDetail(); }
   if (selected && selected.approval) { const ap = selected.approval, tEl = $('#d-perm-timer');

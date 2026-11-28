@@ -26,6 +26,7 @@ Building from source, other platforms and troubleshooting are in **[INSTALL.md](
 - **Characters:** robots or pets, with a face that shows what each agent is doing. [More](docs/features.md#characters)
 - **Your own models:** swap the furniture, or the agents themselves, for your own 3D models. [More](docs/features.md#model-packs)
 - **Reactions:** bubbles and confetti for passing and failing commands, and desks that remember merges. [More](docs/features.md#reactions-and-desk-memories)
+- **VR (beta):** walk through the office in a Meta Quest, jump around, change floors and see who needs you. Built without a headset: if you have one, help make it better. [More](docs/vr.md)
 
 **Act on what needs you**
 
@@ -94,7 +95,7 @@ claude --plugin-dir ./plugin              # try the hooks in one session without
 1. ~~Live sessions from the desktop app and terminal~~
 2. ~~Approve or deny permission requests from the office, desktop notifications~~
 3. ~~Desktop app with a menu-bar icon, model packs and code signing~~
-4. Phone and VR over your local network (HTTPS for WebXR)
+4. Phone and VR. VR is in beta with a Meta Quest on a USB cable ([VR](docs/vr.md)). Next: the phone, answering permission requests in VR and VR without a cable.
 5. Give agents tasks from the office (sessions started through the Agent SDK)
 
 ## License

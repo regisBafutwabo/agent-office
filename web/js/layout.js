@@ -1,17 +1,3 @@
-/* ---------- VR ---------- */
-$('#vr-btn').onclick = async () => {
-  if (!navigator.xr) { toast('This browser has no WebXR. Open the office in your headset browser to walk around in VR.'); return; }
-  try {
-    const ok = await navigator.xr.isSessionSupported('immersive-vr');
-    if (!ok) { toast('No headset found here. On Quest or Vision Pro, open this page in the headset browser.'); return; }
-    const session = await navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor'] });
-    renderer.xr.enabled = true; renderer.xr.setReferenceSpaceType('local-floor');
-    await renderer.xr.setSession(session);
-    rig.position.set(2.5, 0, 0.5); rig.rotation.y = 0; camera.position.set(0, 0, 0); camera.rotation.set(0, 0, 0);
-    session.addEventListener('end', () => { renderer.xr.enabled = false; rig.position.set(0, 0, 0); layout(); });
-  } catch (err) { toast('VR is blocked inside this preview. It will open from the local build on your network.'); }
-};
-
 /* ---------- layout ---------- */
 // Collapsible rail + side panel. Per-viewer convenience, so it's kept in localStorage.
 const appEl = $('#app'), liftEl = $('#lift');

@@ -107,6 +107,7 @@ button{font:inherit;color:inherit}
 .topbar .seg button[aria-pressed="true"]{background:var(--panel-3);box-shadow:none}
 .vr-btn,.music-btn,.wall-btn{height:auto;padding:0 14px;border-radius:var(--r-lg);background:var(--glass);font-weight:500}
 .vr-btn:hover,.music-btn:hover,.wall-btn:hover{background:var(--panel-2)}
+.vr-btn small{color:var(--muted);font-size:var(--fs-caption);font-weight:400}
 .bell-btn{height:auto;padding:0 12px;border-radius:var(--r-lg);background:var(--glass);display:inline-flex;align-items:center;gap:6px}
 .bell-btn:hover,.bell-btn[aria-expanded="true"]{background:var(--panel-2)}
 .bell-count{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--s-wait);color:#1b1b1b;font:600 var(--fs-caption)/18px var(--font-b);text-align:center}
