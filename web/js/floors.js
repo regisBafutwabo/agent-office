@@ -81,7 +81,7 @@ const worldPos = a => a.g.getWorldPosition(tmpV3);
 const TOOL_ICON = { 'claude-code': 'com.anthropic.claudefordesktop', codex: 'com.openai.codex', cursor: 'com.todesktop.230313mzl4w4u92',
   windsurf: 'com.exafunction.windsurf', copilot: 'com.microsoft.VSCode', cline: 'com.microsoft.VSCode', ollama: 'com.electron.ollama' };
 const TOOL_LETTER = { 'claude-code': 'C', codex: 'X', cursor: 'Cu', gemini: 'G', copilot: 'Co', factory: 'F', qwen: 'Q', goose: 'Go',
-  kiro: 'K', windsurf: 'W', cline: 'Cl', opencode: 'O', amp: 'A', ollama: 'Ol' };
+  kiro: 'K', windsurf: 'W', cline: 'Cl', opencode: 'O', amp: 'A', ollama: 'Ol', antigravity: 'Ag' };
 const LOCAL_OFFICE = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(location.host);
 const iconState = {}, iconImg = {};
 function iconFor(bundle) {

@@ -198,7 +198,7 @@ Each model is fitted into the space of the piece it replaces, so seats, desks an
 
 ## Other coding agents
 
-Codex CLI, Cursor, Gemini CLI, GitHub Copilot CLI, Qwen Code, Factory Droid, Goose, Kiro, Windsurf, Cline, OpenCode and Amp report to the office through `adapters/hook.sh`.
+Codex CLI, Cursor, Antigravity, Gemini CLI, GitHub Copilot CLI, Qwen Code, Factory Droid, Goose, Kiro, Windsurf, Cline, OpenCode and Amp report to the office through `adapters/hook.sh`.
 
 - The desktop app connects Codex and Cursor in one click (**Connect agents** in the menu bar or in Customize).
 - Setup for the others is in [adapters.md](adapters.md).

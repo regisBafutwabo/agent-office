@@ -11,8 +11,11 @@ const TOOL_ALIASES = {
   glob: 'Glob', list_directory: 'Glob', list_files: 'Glob', file_search: 'Glob', ls: 'Glob',
   web_fetch: 'WebFetch', fetch: 'WebFetch', google_web_search: 'WebSearch', web_search: 'WebSearch',
   task: 'Task', agent: 'Task', subagent: 'Task', spawn_agent: 'Task',
+  // Antigravity
+  run_command: 'Bash', view_file: 'Read', view_file_outline: 'Read', replace_file_content: 'Edit', multi_replace_file_content: 'Edit',
+  grep_search: 'Grep', find_by_name: 'Glob', list_dir: 'Glob', read_url_content: 'WebFetch', search_web: 'WebSearch', invoke_subagent: 'Task',
 };
-export const AGENTS = ['claude-code', 'codex', 'cursor', 'gemini', 'copilot', 'factory', 'qwen', 'goose', 'kiro', 'windsurf', 'cline', 'opencode', 'amp'];
+export const AGENTS = ['claude-code', 'codex', 'cursor', 'gemini', 'copilot', 'factory', 'qwen', 'goose', 'kiro', 'windsurf', 'cline', 'opencode', 'amp', 'antigravity'];
 
 export function claudeTool(name) {
   if (!name || name.startsWith('mcp__')) return name;
@@ -58,6 +61,7 @@ const ADAPTERS = {
   codex: p => claudeLike(p, { Interrupt: 'Stop' }),
   qwen: p => claudeLike(p),
   factory: p => claudeLike(p),
+  antigravity: p => antigravity(p),
   gemini: p => {
     const name = { BeforeAgent: 'UserPromptSubmit', AfterAgent: 'Stop', BeforeTool: 'PreToolUse', AfterTool: 'PostToolUse',
       PreCompress: 'PreCompact', SessionStart: 'SessionStart', SessionEnd: 'SessionEnd', Notification: 'Notification' }[p.hook_event_name];
@@ -123,6 +127,37 @@ const ADAPTERS = {
  * @param {string} [event] event name, for tools whose payload doesn't carry one
  * @returns a Claude-shaped payload with a namespaced session id, or null to ignore
  */
+// Antigravity (docs/adapters.md): camelCase payloads, one conversation per agent. Its hooks only go where the office can
+// answer "no opinion" ({}), so a tool is reported once it ran. A subagent is a conversation of its own that names no
+// parent: it starts with no prompt right after an invoke_subagent call in the same folder, so that call is its parent's.
+const agSpawned = new Map(), agParent = new Map();      // folder → [{ parent, at }]; conversation → its parent's
+const AG_PAIR_MS = 60_000;
+const pascalToSnake = o => Object.fromEntries(Object.entries(o || {}).map(([k, v]) => [k.replace(/(?<=[a-z0-9])([A-Z])/g, '_$1').toLowerCase(), v]));
+function antigravity(p) {
+  const id = p.conversationId, cwd = p.cwd || (p.workspacePaths || [])[0] || '', now = Date.now();
+  if (!id) return null;
+  if (agParent.size > 200) agParent.delete(agParent.keys().next().value);
+  let parent = agParent.get(id);
+  if (!parent && p.hookEventName === 'SessionStart' && !p.lastUserInput) {
+    const list = (agSpawned.get(cwd) || []).filter(x => now - x.at < AG_PAIR_MS), hit = list.shift();
+    agSpawned.set(cwd, list);
+    if (hit) { parent = hit.parent; agParent.set(id, parent); }
+  }
+  const sub = parent ? { session_id: parent, agent_id: id, agent_type: 'subagent' } : { session_id: id };
+  switch (p.hookEventName) {
+    case 'SessionStart': return reshape(p, parent ? 'SubagentStart' : 'SessionStart', { ...sub, cwd });
+    case 'PreInvocation':                                   // the first model call of a turn: a new prompt
+      return !parent && p.invocationNum === 0 && p.lastUserInput ? reshape(p, 'UserPromptSubmit', { ...sub, cwd, prompt: p.lastUserInput }) : null;
+    case 'PostToolUse': {
+      const call = p.toolCall || {}, args = pascalToSnake(call.args), tool = claudeTool(call.name || '');
+      if (tool === 'Task') { args.description ??= args.prompt; args.subagent_type ??= args.type_name || args.role; (agSpawned.get(cwd) || agSpawned.set(cwd, []).get(cwd)).push({ parent: id, at: now }); }
+      return reshape(p, p.error ? 'PostToolUseFailure' : 'PreToolUse', { ...sub, cwd, tool_name: call.name || '', tool_input: args, ...(p.error ? { error: p.error } : {}) });
+    }
+    case 'Stop': return reshape(p, parent ? 'SubagentStop' : 'Stop', { ...sub, cwd });
+    default: return null;
+  }
+}
+
 export function normalize(agent, payload, event) {
   const out = (ADAPTERS[agent] || claudeLike)(payload || {}, event);
   if (!out || !out.session_id) return null;

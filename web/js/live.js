@@ -3,7 +3,7 @@ const params = new URLSearchParams(location.search);
 const FAST = params.has('fast');                                   // shorter idle timers, handy when testing
 const ENTRY = { desktop:'Desktop app', terminal:'Terminal', sdk:'SDK', 't3-code':'T3 Code', unknown:'Claude Code' };
 const AGENT_NAMES = { codex:'Codex', cursor:'Cursor', gemini:'Gemini CLI', copilot:'Copilot', factory:'Droid', qwen:'Qwen Code',
-  goose:'Goose', kiro:'Kiro', windsurf:'Windsurf', cline:'Cline', opencode:'OpenCode', amp:'Amp', ollama:'Ollama' };
+  goose:'Goose', kiro:'Kiro', windsurf:'Windsurf', cline:'Cline', opencode:'OpenCode', amp:'Amp', ollama:'Ollama', antigravity:'Antigravity' };
 // Apps the desktop app can bring forward (matches focus.rs / focus.js).
 const HOST_APPS = { 'com.apple.Terminal': 'Terminal', 'com.googlecode.iterm2': 'iTerm', 'dev.warp.Warp-Stable': 'Warp', 'com.mitchellh.ghostty': 'Ghostty',
   'net.kovidgoyal.kitty': 'kitty', 'com.github.wez.wezterm': 'WezTerm', 'org.alacritty': 'Alacritty', 'com.todesktop.230313mzl4w4u92': 'Cursor',

@@ -17,12 +17,12 @@ const CODEX_EVENTS: &[&str] = &["SessionStart", "UserPromptSubmit", "PreToolUse"
 const CURSOR_EVENTS: &[&str] = &["sessionStart", "beforeSubmitPrompt", "preToolUse", "postToolUse", "subagentStart", "subagentStop", "stop", "sessionEnd"];
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub enum Tool { Claude, Codex, Cursor }
+pub enum Tool { Claude, Codex, Cursor, Antigravity }
 
 impl Tool {
-    pub const ALL: [Tool; 3] = [Tool::Claude, Tool::Codex, Tool::Cursor];
-    pub fn id(self) -> &'static str { match self { Tool::Claude => "claude-code", Tool::Codex => "codex", Tool::Cursor => "cursor" } }
-    pub fn name(self) -> &'static str { match self { Tool::Claude => "Claude Code", Tool::Codex => "Codex", Tool::Cursor => "Cursor" } }
+    pub const ALL: [Tool; 4] = [Tool::Claude, Tool::Codex, Tool::Cursor, Tool::Antigravity];
+    pub fn id(self) -> &'static str { match self { Tool::Claude => "claude-code", Tool::Codex => "codex", Tool::Cursor => "cursor", Tool::Antigravity => "antigravity" } }
+    pub fn name(self) -> &'static str { match self { Tool::Claude => "Claude Code", Tool::Codex => "Codex", Tool::Cursor => "Cursor", Tool::Antigravity => "Antigravity" } }
     pub fn from_id(id: &str) -> Option<Tool> { Tool::ALL.into_iter().find(|t| t.id() == id) }
 }
 
@@ -38,6 +38,18 @@ pub fn support_dir() -> PathBuf { crate::auth::data_dir() }
 fn hook_script() -> PathBuf { support_dir().join("hook.sh") }
 fn codex_hooks() -> PathBuf { home().join(".codex/hooks.json") }
 fn cursor_hooks() -> PathBuf { home().join(".cursor/hooks.json") }
+/// Antigravity reads hooks.json from its customization root: ~/.gemini/config, or the copy T3 Code runs it with
+/// (--gemini-dir ~/.t3/userdata/providers/antigravity/<id>/). Every one that exists gets the office's hooks.
+fn antigravity_hooks() -> Vec<PathBuf> {
+    let mut out = vec![];
+    if home().join(".gemini").is_dir() { out.push(home().join(".gemini/config/hooks.json")); }
+    if let Ok(dirs) = std::fs::read_dir(home().join(".t3/userdata/providers/antigravity")) {
+        let mut t3: Vec<PathBuf> = dirs.flatten().map(|d| d.path().join("config")).filter(|c| c.is_dir()).map(|c| c.join("hooks.json")).collect();
+        t3.sort();
+        out.extend(t3);
+    }
+    out
+}
 
 // "Connected" means events really reach the office. A hook that points at a script that's gone (the repo was moved
 // or deleted) or a plugin from before the hook key fails silently, so those need repair, and Connect repairs them.
@@ -51,6 +63,14 @@ pub fn status(tool: Tool) -> Status {
                 _ if find_claude().is_some() => Status::NotConnected,
                 _ => Status::NotInstalled,
             }
+        }
+        Tool::Antigravity => {
+            let files = antigravity_hooks();
+            if files.is_empty() { return Status::NotInstalled; }
+            let states: Vec<Status> = files.iter().map(|f| antigravity_state(&std::fs::read_to_string(f).unwrap_or_default(), |p| p.is_file())).collect();
+            if states.contains(&Status::NeedsRepair) { Status::NeedsRepair }
+            else if states.iter().all(|s| *s == Status::Connected) { Status::Connected }
+            else { Status::NotConnected }
         }
         Tool::Codex | Tool::Cursor => {
             let file = if tool == Tool::Codex { codex_hooks() } else { cursor_hooks() };
@@ -103,6 +123,7 @@ pub fn connect(tool: Tool) -> Result<String, String> {
         Tool::Claude => connect_claude(),
         Tool::Codex => connect_hooks_file(&codex_hooks(), Tool::Codex),
         Tool::Cursor => connect_hooks_file(&cursor_hooks(), Tool::Cursor),
+        Tool::Antigravity => connect_antigravity(),
     }
 }
 
@@ -240,9 +261,50 @@ fn connect_hooks_file(file: &Path, tool: Tool) -> Result<String, String> {
     })
 }
 
-/// Is this an Agent Office hook command for `agent`? Matches the app's own script and a clone of the repo.
+/// Is this an Agent Office hook command for `agent`? Matches the app's own script and a clone of the repo, with the
+/// agent as the script's first argument (Antigravity's hooks add the event after it).
 fn is_office_command(cmd: &str, agent: &str) -> bool {
-    cmd.contains("hook.sh") && (cmd.contains("Agent Office") || cmd.contains("adapters/hook.sh")) && cmd.trim_end().ends_with(&format!(" {agent}"))
+    let after = match cmd.trim().strip_prefix('"') { Some(rest) => rest.split_once('"').map(|(_, a)| a), None => cmd.trim().split_once(' ').map(|(_, a)| a) };
+    cmd.contains("hook.sh") && (cmd.contains("Agent Office") || cmd.contains("adapters/hook.sh")) && after.is_some_and(|a| a.split_whitespace().next() == Some(agent))
+}
+
+/// Antigravity's hooks, under the name "agent-office". Only events the office can answer with "no opinion": a
+/// PreToolUse hook must decide allow/deny/ask, which would change what the agent does, so tools are reported after.
+fn antigravity_hooks_json(script: &Path) -> Value {
+    let cmd = |event: &str| json!({ "type": "command", "command": format!("\"{}\" antigravity {event}", script.display()), "timeout": 3 });
+    json!({
+        "SessionStart": [cmd("SessionStart")],
+        "PreInvocation": [cmd("PreInvocation")],
+        "PostToolUse": [{ "matcher": "*", "hooks": [cmd("PostToolUse")] }],
+        "Stop": [cmd("Stop")],
+    })
+}
+
+fn antigravity_state(text: &str, exists: impl Fn(&Path) -> bool) -> Status {
+    let office = serde_json::from_str::<Value>(text).ok().and_then(|v| v.get("agent-office").cloned()).unwrap_or(Value::Null);
+    hooks_state(&office.to_string(), "antigravity", exists)
+}
+
+/// Adds the office's named hook to an Antigravity hooks.json, keeping every other named hook as it was.
+pub fn merge_antigravity(existing: Option<&str>, script: &Path) -> Result<String, String> {
+    let mut root: Value = match existing.map(str::trim).filter(|t| !t.is_empty()) {
+        Some(t) => serde_json::from_str(t).map_err(|_| "Your Antigravity hooks.json isn't valid JSON, so it was left alone. Fix it or add the hooks by hand (see docs/adapters.md).".to_string())?,
+        None => json!({}),
+    };
+    let obj = root.as_object_mut().ok_or("Antigravity's hooks.json doesn't hold a JSON object, so it was left alone.")?;
+    obj.insert("agent-office".into(), antigravity_hooks_json(script));
+    serde_json::to_string_pretty(&root).map(|s| s + "\n").map_err(|e| e.to_string())
+}
+
+fn connect_antigravity() -> Result<String, String> {
+    write_file(&hook_script(), HOOK_SH, true)?;
+    for file in antigravity_hooks() {
+        let existing = std::fs::read_to_string(&file).ok();
+        let merged = merge_antigravity(existing.as_deref(), &hook_script())?;
+        if let Some(original) = &existing { write_file(&file.with_extension("json.agent-office-backup"), original, false)?; }
+        write_file(&file, &merged, false)?;
+    }
+    Ok("Antigravity is connected. New conversations show up in the office.".into())
 }
 
 fn commands(v: &Value) -> Vec<String> {
@@ -329,6 +391,21 @@ mod tests {
         // Connect replaces the dead hook with the app's own script, so the repair sticks.
         let fixed = merge_hooks(Some(old), Tool::Codex, Path::new(SCRIPT)).unwrap();
         assert_eq!(hooks_state(&fixed, "codex", |p| p == Path::new(SCRIPT)), Status::Connected);
+    }
+
+    #[test]
+    fn antigravity_gets_a_named_hook_and_keeps_the_others() {
+        let before = r#"{ "lint-checker": { "PostToolUse": [{ "matcher": "run_command", "hooks": [{ "command": "./lint.sh" }] }] } }"#;
+        assert_eq!(antigravity_state(before, |_| true), Status::NotConnected);
+        let after = merge_antigravity(Some(before), Path::new(SCRIPT)).unwrap();
+        let v: Value = serde_json::from_str(&after).unwrap();
+        assert_eq!(v["lint-checker"]["PostToolUse"][0]["hooks"][0]["command"], "./lint.sh");
+        assert_eq!(v["agent-office"]["Stop"][0]["command"], format!("\"{SCRIPT}\" antigravity Stop"));
+        assert_eq!(v["agent-office"]["PostToolUse"][0]["matcher"], "*");
+        assert!(v["agent-office"].get("PreToolUse").is_none());   // it would have to decide allow/deny/ask
+        assert_eq!(antigravity_state(&after, |p| p == Path::new(SCRIPT)), Status::Connected);
+        assert_eq!(antigravity_state(&after, |_| false), Status::NeedsRepair);
+        assert!(merge_antigravity(Some("{ nope"), Path::new(SCRIPT)).is_err());
     }
 
     #[test]
