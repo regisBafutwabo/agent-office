@@ -56,6 +56,8 @@ syncCrewButtons();
 if (!uiPrefs.guideDone && !uiPrefs.crew) openWelcome();
 else if (!Object.hasOwn(CITIES, uiPrefs.city)) { tourAfterCity = !uiPrefs.guideDone || params.has('tour'); $('#city-picker').showModal(); $('#city-choices [aria-pressed="true"]')?.focus(); }
 else if (!uiPrefs.guideDone || params.has('tour')) startGuide(Number.isInteger(uiPrefs.guideStep) ? uiPrefs.guideStep : 0);
+// ?tour asks for the tour once; left in the address, every reload would start it again after it was skipped or finished.
+if (params.has('tour')) { const q = new URLSearchParams(location.search); q.delete('tour'); history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash); }
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { agents.forEach(a => a.labelDirty = true); floorLabels.forEach(l => l.draw()); screensDirty = true; drawNeon(); floors.forEach(f => drawSign(f, true)); });
 
 setGroupBy(groupBy());   // here, not in ui.js: uiPrefs comes from layout.js, and a timer there could fire before it loaded
