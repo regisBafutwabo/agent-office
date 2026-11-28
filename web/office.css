@@ -105,8 +105,8 @@ button{font:inherit;color:inherit}
 .topbar .seg{align-self:stretch;align-items:stretch;flex-wrap:nowrap;padding:4px;border-radius:var(--r-lg);background:var(--glass)}
 .topbar .seg button{height:auto;padding:0 12px;border-radius:var(--r-md);font-size:var(--fs-body-lg)}
 .topbar .seg button[aria-pressed="true"]{background:var(--panel-3);box-shadow:none}
-.vr-btn,.music-btn,.wall-btn{height:auto;padding:0 14px;border-radius:var(--r-lg);background:var(--glass);font-weight:500}
-.vr-btn:hover,.music-btn:hover,.wall-btn:hover{background:var(--panel-2)}
+.vr-btn,.music-btn,.wall-btn,.pip-btn{height:auto;padding:0 14px;border-radius:var(--r-lg);background:var(--glass);font-weight:500}
+.vr-btn:hover,.music-btn:hover,.wall-btn:hover,.pip-btn:hover{background:var(--panel-2)}
 .bell-btn{height:auto;padding:0 12px;border-radius:var(--r-lg);background:var(--glass);display:inline-flex;align-items:center;gap:6px}
 .bell-btn:hover,.bell-btn[aria-expanded="true"]{background:var(--panel-2)}
 .bell-count{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--s-wait);color:#1b1b1b;font:600 var(--fs-caption)/18px var(--font-b);text-align:center}
@@ -423,6 +423,10 @@ body.live .speed-top, body.live .demo-only{display:none}
 .wall-tile .wt{display:flex;flex-direction:column;min-width:0;font:400 var(--fs-body)/16px var(--font-b);color:var(--muted)}
 .wall-tile .wt b{font:600 var(--fs-title)/22px var(--font-b);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #app.wall .wall-exit{position:absolute;top:16px;right:16px}
+/* the mini office (?mini): a small window that floats over other apps, so only the building shows */
+#app.mini-office>:not(#stage){display:none !important}
+/* the browser's picture-in-picture plays the 3D view as a video; the video itself stays out of sight */
+.pip-source{position:fixed;width:1px;height:1px;opacity:0;pointer-events:none}
 .toasts{position:absolute;top:var(--top);right:calc(var(--panel-w) + 32px);display:flex;flex-direction:column;gap:8px;z-index:7;align-items:flex-end;pointer-events:none;max-width:min(460px,calc(100% - var(--panel-w) - 48px))}
 #app.panel-off .toasts{top:112px}
 #app.has-needs .toasts{top:calc(var(--top) + var(--needs-h,0px) + 8px)}
@@ -451,8 +455,8 @@ body.live .speed-top, body.live .demo-only{display:none}
   .topbar{gap:6px}
   .brand p{display:none}
   .topbar .seg button{padding:0 10px}
-  .vr-btn,.music-btn{width:40px;padding:0}
-  .vr-btn span,.music-btn span{display:none}
+  .vr-btn,.music-btn,.pip-btn{width:40px;padding:0}
+  .vr-btn span,.music-btn span,.pip-btn span{display:none}
   .panel{top:auto;left:0;right:0;bottom:0;width:auto;height:44%;border-radius:var(--r-lg) var(--r-lg) 0 0;border-left:0;border-right:0;border-bottom:0}
   .panel.collapsed{height:auto}
   .panel.collapsed .tabpane{display:none}

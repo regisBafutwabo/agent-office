@@ -53,7 +53,9 @@ if (Object.hasOwn(CITIES, uiPrefs.city)) setCity(uiPrefs.city);
 setView('3d'); Object.assign(cam, { theta: goal.theta, phi: goal.phi, radius: goal.radius }); cam.target.copy(goal.target); applyCam();
 if (MODE === 'demo' || !/^https?:$/.test(location.protocol)) startDemo(); else officeAuth.ready.then(connectLive);
 syncCrewButtons();
-if (!uiPrefs.guideDone && !uiPrefs.crew) openWelcome();
+// The mini office only watches: no welcome, city picker or tour in a window this small. The big office asks those.
+if (MINI) { appEl.classList.add('mini-office'); goBuilding(); layout(); }
+else if (!uiPrefs.guideDone && !uiPrefs.crew) openWelcome();
 else if (!Object.hasOwn(CITIES, uiPrefs.city)) { tourAfterCity = !uiPrefs.guideDone || params.has('tour'); $('#city-picker').showModal(); $('#city-choices [aria-pressed="true"]')?.focus(); }
 else if (!uiPrefs.guideDone || params.has('tour')) startGuide(Number.isInteger(uiPrefs.guideStep) ? uiPrefs.guideStep : 0);
 // ?tour asks for the tour once; left in the address, every reload would start it again after it was skipped or finished.
@@ -87,11 +89,12 @@ function step(dt) {
     if (tEl.textContent !== txt) tEl.textContent = txt; }
 }
 let hiddenFrames = 0;
-renderer.setAnimationLoop(() => {
+function officeFrame() {
   const now = performance.now(), dt = Math.min(.05, (now - last) / 1000); last = now;
   if (!window.agentOffice.held) step(dt);
   if (!review.open || ++hiddenFrames % 30 === 0) renderer.render(scene, camera);   // the review window covers the office: a frame now and then is enough
-});
+}
+renderer.setAnimationLoop(officeFrame);
 // Advance simulation independently of the frame loop, even in a background tab.
 // Set `held = true` to keep the clock still between manual steps.
 window.agentOffice.advance = async seconds => {

@@ -255,7 +255,8 @@ function roam(a) {
 }
 
 // Tell the bridge whether this office is on screen: it only holds permission requests while someone is watching.
-function sendPresence() { if (live.ws && live.ws.readyState === 1) live.ws.send(JSON.stringify({ type: 'presence', visible: document.visibilityState === 'visible' })); }
+// The mini office has no room for the Allow and Deny buttons, so it never counts as watching.
+function sendPresence() { if (live.ws && live.ws.readyState === 1) live.ws.send(JSON.stringify({ type: 'presence', visible: !MINI && document.visibilityState === 'visible' })); }
 document.addEventListener('visibilitychange', sendPresence);
 function approvalOwner(ap) { const a = live.byId.get(ap.sessionId); return a && (ap.agentId ? a.subs.get(ap.agentId) : a); }
 function onApproval(ap, fresh) {

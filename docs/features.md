@@ -58,6 +58,7 @@ Agents from every tool show up together: the Claude app, the terminal, T3 Code, 
 - **Needs you:** a strip at the top lists every agent waiting on you, oldest first, with its tool and project. Answer a held permission request with **Allow** or **Deny**, or jump to the agent's app with **Open**.
 - **By tool:** group the agent list by project (one floor each) or by the tool each agent runs in.
 - **Wall mode:** the **Wall** button goes full screen with only the building, the "needs you" strip and a big status light per agent. Use it on a spare monitor or a TV. Press Esc to leave.
+- **Float:** the **Float** button keeps a small office on top of your other windows, like a video in picture-in-picture. In the Mac app, it opens the mini office. You can also open it from the Agent Office icon near the clock: choose **Mini Office (Stays on Top)**. In Chrome, Edge or Safari, the 3D view floats in the browser's picture-in-picture window. The small office shows only the building. To answer a permission request, use the full office.
 
 ## Approving from the office
 

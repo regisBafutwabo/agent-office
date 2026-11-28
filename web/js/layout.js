@@ -61,7 +61,8 @@ function layout() {
   const w = stage.clientWidth, h = stage.clientHeight; if (!w || !h) return;
   renderer.setSize(w, h, false); camera.aspect = w / h;
   let ox = 0, oy = 0;
-  if (isMobile()) {
+  if (MINI) {}   // nothing covers the building in the mini office, so it stays centred
+  else if (isMobile()) {
     const st = stage.getBoundingClientRect(), pr = panel.getBoundingClientRect(), folded = panel.classList.contains('collapsed'), hb = $('#panel-hide');
     hb.setAttribute('aria-label', folded ? 'Show the panel' : 'Fold the panel down'); hb.title = hb.getAttribute('aria-label');
     if (detail.hidden) oy = Math.max(0, pr.height / 2 - 24);

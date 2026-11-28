@@ -45,6 +45,7 @@ Building from source, other platforms and troubleshooting are in **[INSTALL.md](
 - **Rooftop DJ:** after dark the rooftop parties, to your Spotify or Apple Music if you like. [More](docs/features.md#rooftop-dj)
 - **Model packs:** replace furniture or agents with your own glTF models. [More](docs/features.md#model-packs)
 - **Wall mode:** a full-screen status board for a spare monitor. [More](docs/features.md#everything-that-needs-you)
+- **Float:** a small office that stays on top of your other windows, like picture-in-picture. [More](docs/features.md#everything-that-needs-you)
 
 ## Desktop app (macOS)
 

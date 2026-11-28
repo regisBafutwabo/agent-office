@@ -14,6 +14,8 @@ function mix(a, b, t) {
 }
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const isMobile = () => matchMedia('(max-width:760px)').matches;
+// The mini office: a small window that floats over other apps and shows only the building (?mini, opened by the Mac app).
+const MINI = new URLSearchParams(location.search).has('mini');
 function part(geo, mat, parent, x = 0, y = 0, z = 0, shadow = true) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = shadow; m.receiveShadow = shadow; parent.add(m); return m; }
 function roundedBox(w, h, d, r, bevel = .04) {
   const s = new THREE.Shape(), x = -w / 2, y = -h / 2;

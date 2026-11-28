@@ -25,7 +25,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use tokio::sync::{broadcast, oneshot};
 
@@ -115,6 +115,7 @@ pub fn router(port: u16, creds: Credentials, on_change: OnChange) -> Router {
         .route("/api/setup/{tool}", post(setup_connect))
         .route("/api/face/{session}/{mood}", post(save_face))
         .route("/api/update", get(update_status).post(update_install))
+        .route("/api/mini", get(|| async { StatusCode::NO_CONTENT }).post(mini_open))
         .route("/ws", get(ws))
         .route("/vendor/three.min.js", get(three))
         .route("/vendor/GLTFLoader.js", get(|| async { ([(header::CONTENT_TYPE, "text/javascript")], GLTF_LOADER) }))
@@ -423,6 +424,15 @@ async fn update_status() -> Json<Value> {
 /// "Restart to update" on the office page: the same install as the menu-bar menu's.
 async fn update_install() -> StatusCode {
     if tokio::task::spawn_blocking(crate::update::install_waiting).await.unwrap_or(false) { StatusCode::ACCEPTED } else { StatusCode::CONFLICT }
+}
+
+/// Opens the mini office, the small window that stays on top of other apps. The app sets it when it starts;
+/// the Node bridge has no such window, so its office floats the 3D view with the browser's picture-in-picture instead.
+pub static OPEN_MINI: OnceLock<Box<dyn Fn() + Send + Sync>> = OnceLock::new();
+
+/// The office page's "Float" button. GET (204) tells the page this office can open the window.
+async fn mini_open() -> StatusCode {
+    match OPEN_MINI.get() { Some(open) => { open(); StatusCode::ACCEPTED } None => StatusCode::CONFLICT }
 }
 
 async fn setup_status() -> Json<Value> {
@@ -791,7 +801,7 @@ mod tests {
             let ev = r#"{"hook_event_name":"SessionStart","session_id":"keys","cwd":"/tmp"}"#;
             let status = |m: &str, p: &str, h: &[(&str, &str)], b: &str| request(port, m, p, h, b.as_bytes()).0;
             let bearer = |k: &str| format!("Bearer {k}");
-            for p in ["/api/state", "/api/changes?session=keys", "/api/changes/diff?session=keys&path=a", "/api/packs", "/api/packs/folder", "/api/setup", "/api/auth", "/api/update"] {
+            for p in ["/api/state", "/api/changes?session=keys", "/api/changes/diff?session=keys&path=a", "/api/packs", "/api/packs/folder", "/api/setup", "/api/auth", "/api/update", "/api/mini"] {
                 assert_eq!(status("GET", p, &[], ""), 401, "{p}");
                 assert_eq!(status("GET", p, &[("Authorization", &bearer(HOOK))], ""), 401, "{p}");
                 assert_eq!(status("GET", p, &[("X-Agent-Office-Token", HOOK)], ""), 401, "{p}");
@@ -800,12 +810,16 @@ mod tests {
             assert_eq!(status("POST", "/api/setup/codex", &[], ""), 401);
             assert_eq!(status("POST", "/api/setup/codex", &[("X-Agent-Office-Token", HOOK)], ""), 401);
             assert_eq!(status("POST", "/api/update", &[("X-Agent-Office-Token", HOOK)], ""), 401);
+            assert_eq!(status("POST", "/api/mini", &[("X-Agent-Office-Token", HOOK)], ""), 401);
             assert_eq!(status("POST", "/api/packs/open", &[("X-Agent-Office-Token", HOOK)], ""), 401);
             // Nothing downloaded in a test: the page's install button has nothing to install.
             assert_eq!(page(port, "POST", "/api/update", "").0, 409);
             let (code, update) = page(port, "GET", "/api/update", "");
             assert_eq!(code, 200);
             assert!(update.contains("\"version\":null"), "{update}");
+            // The page can ask for the mini office; with no app around in a test there is no window to open.
+            assert_eq!(page(port, "GET", "/api/mini", "").0, 204);
+            assert_eq!(page(port, "POST", "/api/mini", "").0, 409);
             assert_eq!(status("POST", "/api/log", &[], "x"), 401);
             assert_eq!(status("POST", "/api/face/keys/done", &[], "x"), 401);
             assert_eq!(status("POST", "/hook", &[], ev), 401);

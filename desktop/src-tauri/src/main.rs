@@ -31,6 +31,7 @@ use tauri_plugin_opener::OpenerExt;
 const PORT: u16 = 4747;
 const TRAY_ID: &str = "main";
 const WINDOW_ID: &str = "office";
+const MINI_ID: &str = "mini";
 
 fn office_url() -> String {
     std::env::var("AGENT_OFFICE_PORT").ok().and_then(|p| p.parse::<u16>().ok()).map_or(format!("http://localhost:{PORT}/"), |p| format!("http://localhost:{p}/"))
@@ -97,6 +98,28 @@ fn open_office(app: &AppHandle) {
             });
         }
         Err(err) => eprintln!("Could not open the office window: {err}"),
+    }
+}
+
+/// The mini office: a small window that stays on top of other apps and shows only the building, like a video's
+/// picture-in-picture. It doesn't need a Dock icon, so the app stays menu-bar-only while it is the only window.
+fn open_mini(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window(MINI_ID) {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+        return;
+    }
+    let url = format!("{}?mini#k={}", office_url(), credentials().ui).parse().expect("mini office URL is valid");
+    if let Err(err) = WebviewWindowBuilder::new(app, MINI_ID, WebviewUrl::External(url))
+        .title("Agent Office")
+        .inner_size(420.0, 300.0)
+        .min_inner_size(240.0, 160.0)
+        .always_on_top(true)
+        .visible_on_all_workspaces(true)
+        .build()
+    {
+        eprintln!("Could not open the mini office: {err}");
     }
 }
 
@@ -208,6 +231,7 @@ fn main() {
 
             let status = MenuItem::with_id(app, "status", "No agent sessions yet", false, None::<&str>)?;
             let open = MenuItem::with_id(app, "open", "Open Agent Office", true, None::<&str>)?;
+            let mini = MenuItem::with_id(app, "mini", "Mini Office (Stays on Top)", true, None::<&str>)?;
             let browser = MenuItem::with_id(app, "browser", "Open in browser", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Agent Office", true, None::<&str>)?;
             let check_updates = MenuItem::with_id(app, "check-updates", "Check for Updates…", true, None::<&str>)?;
@@ -218,7 +242,7 @@ fn main() {
                 .collect::<Result<Vec<_>, _>>()?;
             let connect_refs: Vec<&dyn tauri::menu::IsMenuItem<Wry>> = connect_items.iter().map(|i| i as &dyn tauri::menu::IsMenuItem<Wry>).collect();
             let connect = Submenu::with_items(app, "Connect agents", true, &connect_refs)?;
-            let menu = Menu::with_items(app, &[&status, &PredefinedMenuItem::separator(app)?, &open, &browser, &connect, &PredefinedMenuItem::separator(app)?, &check_updates, &quit])?;
+            let menu = Menu::with_items(app, &[&status, &PredefinedMenuItem::separator(app)?, &open, &mini, &browser, &connect, &PredefinedMenuItem::separator(app)?, &check_updates, &quit])?;
             // The app menu (shown while the office window is open) gets it too, under About like any Mac app.
             #[cfg(target_os = "macos")]
             {
@@ -243,6 +267,12 @@ fn main() {
             let ready = update::Ready::default();
             let check_now = update::CheckNow::default();
             update::serve_to_page(app.handle(), &ready);
+            // The page's Float button. Windows are made on the main thread; the request comes from the server's.
+            let mini_app = app.handle().clone();
+            let _ = server::OPEN_MINI.set(Box::new(move || {
+                let app = mini_app.clone();
+                let _ = mini_app.run_on_main_thread(move || open_mini(&app));
+            }));
             tauri::async_runtime::spawn(update::watch(app.handle().clone(), menu.clone(), update_item, update_separator, ready.clone(), check_now.clone()));
 
             TrayIconBuilder::with_id(TRAY_ID)
@@ -253,6 +283,7 @@ fn main() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(move |app, event| match event.id.as_ref() {
                     "open" => open_office(app),
+                    "mini" => open_mini(app),
                     "update" => update::install(app, &ready),
                     // Clicks in the app menu arrive here too: Tauri hands every menu's events to every listener.
                     "check-updates" => check_now.notify_one(),
