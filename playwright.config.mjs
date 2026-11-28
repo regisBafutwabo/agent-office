@@ -14,7 +14,8 @@ export default defineConfig({
   workers: 1,
   // On CI, try a failed test once more and keep a trace of that retry, so a failure can be opened in the trace viewer.
   retries: ci ? 1 : 0,
-  reporter: ci ? 'github' : 'list',
+  // On CI, list each test with its time as well, so a slow one shows in the log.
+  reporter: ci ? [['github'], ['list']] : 'list',
   use: {
     browserName: 'chromium', viewport: { width: 1280, height: 800 },
     trace: ci ? 'on-first-retry' : 'off',
