@@ -25,7 +25,10 @@ Every session you run becomes an agent with a desk on its project's floor.
 - **Working:** it walks to the library after three or more file reads in a row, to the lounge for web research, and to the war room in plan mode.
 - **Needing you:** it raises a hand and its floor pulses amber.
 - **Done:** it takes a break after 45 seconds, then drifts between the lounge, the coffee bar, the basketball machines, the arcade and the rooftop.
+- **Café chats:** agents on a break sometimes meet at the café counter and chat. The one talking moves its hands, and the others nod.
+- **Called back:** send a prompt to an agent on a break and it sprints back to its desk in a cloud of dust and slides into its chair. From the rooftop it sprints to the lift first.
 - **Subagents:** they show up as smaller teammates. When one finishes, it stays at its desk while its main agent walks over to review the work, then lets it go. Subagents already at work when you open the office come back with their main agent.
+- **Teams across tools:** when an agent in T3 Code hands a task to another agent, in the same tool or another one, that agent sits with it as its subagent. It wears its own tool's badge and reports back when its task is done. If the agent that asked isn't in the office, it gets a desk of its own.
 
 The placement rules live in `web/js/live.js` (search for "Placement rules").
 
