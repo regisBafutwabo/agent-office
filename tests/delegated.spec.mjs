@@ -46,3 +46,11 @@ test('a task handed on again joins the same team', async ({ page, office }) => {
   await expect.poll(async () => (await subs(page)).map(x => [x.name, x.parent]).sort()).toEqual([['Plan the review', 'Lead the review'], ['Read the docs', 'Lead the review']]);
   expect(await mains(page)).toEqual(['Lead the review']);
 });
+
+test("a tool with no app of its own keeps its letter badge under T3 Code, not T3 Code's logo", async ({ page, office }) => {
+  const t3 = { 'X-Agent-Office-Agent': 'antigravity', 'X-Agent-Office-App': 'com.t3tools.t3code' };
+  await office.hook({ conversationId: 'g1', cwd, hookEventName: 'SessionStart', lastUserInput: 'Count' }, t3);
+  await office.hook({ conversationId: 'g1', cwd, hookEventName: 'PreInvocation', invocationNum: 0, lastUserInput: 'Count the lines' }, t3);
+  await open(page, office);
+  await expect(row(page, 'Count the lines').locator('.av-app')).toHaveText('Ag');
+});

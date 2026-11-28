@@ -96,8 +96,9 @@ function iconFor(bundle) {
   return iconState[bundle] === 'ok' ? iconImg[bundle] : null;
 }
 const toolOf = a => a.agentName || (a.parent && a.parent.agentName) || 'claude-code';   // a subagent handed over by T3 Code has a tool of its own
-// The tool's own logo (Claude, Codex, Cursor…), else the app it runs in (Terminal, iTerm…).
-const agentIcon = a => iconFor(TOOL_ICON[toolOf(a)]) || iconFor((a.parent || a).hostApp);
+// The tool's own logo (Claude, Codex, Cursor…), else the app it runs in (Terminal, iTerm…). T3 Code runs many tools, so
+// its logo says nothing about which one: a tool with no app of its own (Antigravity there) keeps its letter badge.
+const agentIcon = a => { const host = (a.parent || a).hostApp; return iconFor(TOOL_ICON[toolOf(a)]) || (host !== 'com.t3tools.t3code' ? iconFor(host) : null); };
 function appBadge(a, cls = 'app-ico') {
   const img = agentIcon(a);
   return img ? `<img class="${cls}" src="${img.src}" alt="">` : `<span class="${cls} mono">${esc(TOOL_LETTER[toolOf(a)] || '?')}</span>`;
