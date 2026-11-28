@@ -79,7 +79,7 @@ Details are in [How it works](docs/how-it-works.md). To report a problem, see [S
 
 ## Development
 
-Contributors: branch from `develop` and open your pull request against `develop`. It is merged into `main` for each release. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full steps.
+Contributors: branch from `main` and open your pull request against `main`. If you use an AI coding agent, it reads the project's rules from [AGENTS.md](AGENTS.md). See [CONTRIBUTING.md](CONTRIBUTING.md) for the full steps.
 
 ```bash
 npm test                                  # bridge and city bake unit tests
