@@ -4,9 +4,13 @@
 // about 20 s, opening on a permission request, with the repo link on the end card.
 // With --pitch it records the status-board cut (dist/trailer-pitch.mp4): square 1080 px, about 28 s, for people who
 // run several agents at once. It shows who needs you, the early warnings and Connect agents, and skips the fun.
+// With --fun it records the fun cut (dist/trailer-fun.mp4): square 1080 px, about 38 s, for people bored of watching
+// an agent work in a terminal. It shows office life (the lift, the library, reactions, interns, breaks, the sprint
+// back to the desk, the rooftop party) and has no end card: the post carries the link.
 //
 //   npm i --no-save playwright-core && npx playwright install chromium-headless-shell
-//   node scripts/record-trailer.mjs [--social | --pitch]     # needs ffmpeg on PATH (or FFMPEG=…)
+//   node scripts/record-trailer.mjs [--social | --pitch | --fun]     # needs ffmpeg on PATH (or FFMPEG=…)
+//   TRAILER_EVERY=15 node scripts/record-trailer.mjs --fun           # a quick draft: keeps one frame in 15
 //
 // The video stays out of git: drag it into a GitHub comment and put the user-attachments link in the README.
 //
@@ -22,7 +26,8 @@ import { createServer } from 'node:net';
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../..');
 const FPS = 30, FFMPEG = process.env.FFMPEG || 'ffmpeg';
-const OUT = join(ROOT, 'dist'), CUT = process.argv.includes('--pitch') ? 'pitch' : process.argv.includes('--social') ? 'social' : 'readme', SQUARE = CUT !== 'readme';
+const OUT = join(ROOT, 'dist'), CUT = ['fun', 'pitch', 'social'].find(c => process.argv.includes('--' + c)) || 'readme', SQUARE = CUT !== 'readme';
+const EVERY = Math.max(1, Math.round(+process.env.TRAILER_EVERY) || 1);   // drafts: the office still runs every frame, so the scenes play out the same
 let chromium;
 try { ({ chromium } = await import('playwright-core')); }
 catch { console.error('Needs playwright-core: npm i --no-save playwright-core && npx playwright install chromium-headless-shell'); process.exit(1); }
@@ -30,7 +35,7 @@ catch { console.error('Needs playwright-core: npm i --no-save playwright-core &&
 /* Runs inside the office page (through eval in its closure), so it can use the page's own functions and state.
    Everything waits on the office's simulated clock (wait), which the recorder advances frame by frame. */
 function director(cut) {
-  const pitch = cut === 'pitch', social = cut !== 'readme';   // social: the square layout both phone cuts share
+  const pitch = cut === 'pitch', fun = cut === 'fun', social = cut !== 'readme';   // social: the square layout the phone cuts share
   renderer.setAnimationLoop(null);                 // the recorder draws each frame itself
   const ticks = [];
   const css = document.createElement('style');
@@ -57,7 +62,8 @@ function director(cut) {
     .tr-end .line b{color:#FAC05E;font-weight:700}
     .detail{left:12px!important;top:12px!important;bottom:auto!important;max-height:none!important;zoom:1.45}
     .detail .d-tabs,.detail #d-chat,.detail #d-log,.detail #d-mem,.detail #d-chg,.detail #d-note,.detail #d-close,.lift,.city-credit{display:none!important}
-    .panel{top:12px!important;right:12px!important;bottom:auto!important;height:330px;zoom:1.6}` : ''}`;
+    .panel{top:12px!important;right:12px!important;bottom:auto!important;height:330px;zoom:1.6}` : ''}
+    ${fun ? `.toasts,.lift{display:none!important} .tr-cap{font-size:44px}` : ''}`;
   document.head.appendChild(css);
   const cap = document.createElement('div'); cap.className = 'tr-cap'; document.body.appendChild(cap);
   const cursor = document.createElement('div'); cursor.className = 'tr-cursor';
@@ -109,18 +115,36 @@ function director(cut) {
 
   const F = floors[0], [ada, max] = ['Ada', 'Max'].map(n => agents.find(a => a.name === n));
   const atDesk = (a, label) => { a.busy = true; a.pose = 'type'; setState(a, 'working', label); };
+  // Give an agent a desk and put it there. near() is the free desk closest to Ada's.
+  const near = () => F.deskSeats.filter(s => !s.by && !s.owner).sort((p, q) => Math.hypot(p.x - ada.home.x, p.z - ada.home.z) - Math.hypot(q.x - ada.home.x, q.z - ada.home.z))[0];
+  const sit = (a, home) => { if (a.home) { a.home.by = null; a.home.owner = null; } home.by = a.id; home.owner = a; a.home = a.spot = home; a.where = 'Own desk';
+    a.g.position.set(home.x, 0, home.z); a.yaw = a.yawT = yawOf(home.face); a.appear = 1; deskDirty = true; };
+  // One floor for the whole video: the demo's agents from other floors move in beside Ada and Max (seats: where, else near Ada).
+  const moveIn = (names, seats = []) => { const crew = names.map((n, i) => { const old = agents.find(a => a.name === n), home = seats[i] || near();
+      const a = createAgent({ name: n, kind: 'main', color: old.color, home, project: ada.project, floor: F, look: old.look }); sit(a, home); return a; });
+    agents.filter(a => a.kind === 'main' && a.floor !== F).forEach(a => { a.home.by = a.home.owner = null; removeAgent(a); }); return crew; };
+  // A pose that looks at some agents, with them moved down and right on screen (in metres), clear of the overlays.
+  const frame = (list, theta, phi, radius, down = 0, right = 0) => { const t = V(0, 0); list.forEach(a => { t.x += a.home.x / list.length; t.z += a.home.z / list.length; });
+    t.x -= Math.sin(theta) * down + Math.cos(theta) * right; t.z -= Math.cos(theta) * down - Math.sin(theta) * right; return { theta, phi, radius, target: t }; };
+  const jump = pose => { stopTweens(); Object.assign(goal, { theta: pose.theta, phi: pose.phi, radius: pose.radius }); goal.target.copy(pose.target);
+    Object.assign(cam, { theta: goal.theta, phi: goal.phi, radius: goal.radius }); cam.target.copy(goal.target); };
+  // The rooftop after dark: put agents on the terrace, on the dance floor while it has room (it only opens at night).
+  const toRoof = list => { const night0 = nightT; nightT = 1;
+    for (const a of list) { a.busy = false; setState(a, 'idle', 'Chilling on the roof'); roofGroup.add(a.g); a.onRoof = true; a.spot = ROOF_LIFT; a.appear = 1;
+      const s = roofFree().filter(s => s.type === 'dance')[0] || pickRoof(); a.g.position.set(s.x + .01, ROOF_Y, s.z + .01); a.spot = null; s.by = a.id; a.spot = s; a.pose = poseFor(a); }
+    nightT = night0; };
 
-  window.__frame = async dt => {
+  window.__frame = async (dt, draw = true) => {
     __vclock.t += dt * 1000;
     for (const f of ticks.slice()) f(dt);
     step(dt);
     for (let k = 0; k < 10; k++) await null;
-    renderer.render(scene, camera);
+    if (draw) renderer.render(scene, camera);
   };
   window.__ready = () => !!(document.fonts && document.fonts.status === 'loaded');
   window.__rec = true;                             // false while setting a scene up: frames still run, none are kept
 
-  window.__director = pitch ? pitchCut : social ? socialCut : async () => {
+  window.__director = pitch ? pitchCut : fun ? funCut : social ? socialCut : async () => {
     // Set the stage: everyone at work, a few edits for the review board, Max still in the lift.
     setPanelOpen(false); setLiftOpen(false);
     agents.forEach(a => atDesk(a, 'Working'));
@@ -189,10 +213,7 @@ function director(cut) {
     // 6. Dusk falls, the roof party starts.
     caption('After dark, the rooftop party starts');
     showLabels = true;
-    const roofers = agents.filter(a => a.kind === 'main' && a !== max), night0 = nightT; nightT = 1;
-    for (const a of roofers) { a.busy = false; setState(a, 'idle', 'Chilling on the roof'); roofGroup.add(a.g); a.onRoof = true; a.spot = ROOF_LIFT; a.appear = 1;
-      const s = roofFree().filter(s => s.type === 'dance')[0] || pickRoof(); a.g.position.set(s.x + .01, ROOF_Y, s.z + .01); a.spot = null; s.by = a.id; a.spot = s; a.pose = poseFor(a); }
-    nightT = night0;
+    toRoof(agents.filter(a => a.kind === 'main' && a !== max));
     let hour = 18.3; clockHours = () => hour; applyScene('auto');
     stopTweens(); goRoofView(); goal.radius *= .8; goal.theta = .2; updateCam(0); Object.assign(cam, { theta: goal.theta, phi: goal.phi, radius: goal.radius }); cam.target.copy(goal.target);
     const dusk = dt => { hour = Math.min(20.2, hour + dt * .9); applyScene('auto'); if (hour >= 20.2) ticks.splice(ticks.indexOf(dusk), 1); };
@@ -265,10 +286,7 @@ function director(cut) {
 
     // 5. Dusk on the roof, briefly.
     caption('And after dark, a rooftop party');
-    const roofers = agents.filter(a => a.kind === 'main' && a !== max), night0 = nightT; nightT = 1;
-    for (const a of roofers) { a.busy = false; setState(a, 'idle', 'Chilling on the roof'); roofGroup.add(a.g); a.onRoof = true; a.spot = ROOF_LIFT; a.appear = 1;
-      const s = roofFree().filter(s => s.type === 'dance')[0] || pickRoof(); a.g.position.set(s.x + .01, ROOF_Y, s.z + .01); a.spot = null; s.by = a.id; a.spot = s; a.pose = poseFor(a); }
-    nightT = night0;
+    toRoof(agents.filter(a => a.kind === 'main' && a !== max));
     let hour = 19.4; clockHours = () => hour; applyScene('auto');
     stopTweens(); goRoofView(); goal.radius *= .75; goal.theta = .2; updateCam(0); Object.assign(cam, { theta: goal.theta, phi: goal.phi, radius: goal.radius }); cam.target.copy(goal.target);
     const dusk = dt => { hour = Math.min(20.4, hour + dt * .6); applyScene('auto'); if (hour >= 20.4) ticks.splice(ticks.indexOf(dusk), 1); };
@@ -290,27 +308,17 @@ function director(cut) {
       ticks.push(() => { for (const d of due.filter(d => d.at <= __vclock.t)) { due.splice(due.indexOf(d), 1); d.run(); } }); }
     setPanelOpen(false); setLiftOpen(false);
     // Four agents on one floor, each from another tool, as a real office shows them: the demo's own crew, moved in together.
-    const near = () => F.deskSeats.filter(s => !s.by && !s.owner).sort((p, q) => Math.hypot(p.x - ada.home.x, p.z - ada.home.z) - Math.hypot(q.x - ada.home.x, q.z - ada.home.z))[0];
-    const sit = (a, home) => { if (a.home) { a.home.by = null; a.home.owner = null; } home.by = a.id; home.owner = a; a.home = a.spot = home; a.where = 'Own desk';
-      a.g.position.set(home.x, 0, home.z); a.yaw = a.yawT = yawOf(home.face); a.appear = 1; deskDirty = true; };
     sit(max, near());
-    const [kit, nova] = ['Kit', 'Nova'].map(n => { const old = agents.find(a => a.name === n), home = near();
-      const a = createAgent({ name: n, kind: 'main', color: old.color, home, project: ada.project, floor: F, look: old.look }); sit(a, home); return a; });
-    agents.filter(a => a.kind === 'main' && a.floor !== F).forEach(a => { a.home.by = a.home.owner = null; removeAgent(a); });
+    const [kit, nova] = moveIn(['Kit', 'Nova']);
     const crew = [ada, max, kit, nova];
     [{}, { agentName: 'codex' }, { agentName: 'cursor' }, { entrypoint: 't3-code' }].forEach((tool, i) => Object.assign(crew[i], { live: true, cwd: '~/code/' + ada.project.key, subs: new Map() }, tool));
     [[ada, 'Edit src/api/tasks.ts'], [max, 'Edit src/store/settings.ts'], [kit, 'Bash npm run lint'], [nova, 'Read src/auth/session.ts']].forEach(([a, label]) => atDesk(a, label));
     setContext(ada, { used: 148000, max: 200000 }, true); setContext(nova, { used: 64000, max: 200000 }, true);
-    // A pose that looks at some agents, with them moved down and right on screen (in metres), clear of the overlays.
-    const frame = (list, theta, phi, radius, down = 0, right = 0) => { const t = V(0, 0); list.forEach(a => { t.x += a.home.x / list.length; t.z += a.home.z / list.length; });
-      t.x -= Math.sin(theta) * down + Math.cos(theta) * right; t.z -= Math.cos(theta) * down - Math.sin(theta) * right; return { theta, phi, radius, target: t }; };
-    const cut = pose => { stopTweens(); Object.assign(goal, { theta: pose.theta, phi: pose.phi, radius: pose.radius }); goal.target.copy(pose.target);
-      Object.assign(cam, { theta: goal.theta, phi: goal.phi, radius: goal.radius }); cam.target.copy(goal.target); };
     // Set up off camera: fly to the floor, load the tool badges, then frame the whole crew.
     window.__rec = false;
     goToFloor(0); crew.forEach(a => appBadge(a));
     await wait(1.2);
-    cut(frame(crew, .3, .8, 12.5, 1.9));
+    jump(frame(crew, .3, .8, 12.5, 1.9));
     caption(`Running ${crew.length} agents?<br><b>One is waiting on you.</b>`);
     await wait(.7);
     window.__rec = true;
@@ -375,6 +383,146 @@ function director(cut) {
     await wait(4.0);
     window.__done = true;
   }
+
+  // The fun cut: an office is more fun to watch than a terminal. Office life from the lift to the rooftop party, with
+  // one short "needs you" beat, and no end card: it ends on the party with the last caption.
+  async function funCut() {
+    setPanelOpen(false); setLiftOpen(false);
+    // Six agents on one floor. Reno's desk faces away from the camera, so his skid into the chair shows.
+    // at(): a pose that looks at a point, with it moved `down` the screen (in metres) to leave room for bubbles above.
+    const seat = i => F.deskSeats[i];
+    const at = (x, z, theta, phi, radius, down = 0) => ({ theta, phi, radius, target: V(x - Math.sin(theta) * down, z - Math.cos(theta) * down) });
+    sit(ada, seat(0)); sit(max, seat(1));
+    const [kit, nova, iris, reno] = moveIn(['Kit', 'Nova', 'Iris', 'Reno'], [seat(2), seat(9), seat(3), seat(14)]);
+    const crew = [ada, max, kit, nova, iris, reno];
+    [[ada, 'Edit src/lists/ListView.tsx'], [kit, 'Read src/api/share.ts'], [nova, 'Edit src/api/share.ts'], [iris, 'Bash npm run lint'], [reno, 'Edit src/lists/useLists.ts']].forEach(([a, label]) => atDesk(a, label));
+    // A jump cut: a walk goes on from `left` metres before its end, so a long trip across the floor takes two short shots.
+    const skipTo = (a, left) => { let over = pathLeft(a) - left; const p = a.g.position;
+      while (over > 0 && a.path.length) { const v = a.path[0], d = Math.hypot(v.x - p.x, v.y - p.z);
+        if (d > over) { p.x += (v.x - p.x) * over / d; p.z += (v.y - p.z) * over / d; break; }
+        p.x = v.x; p.z = v.y; over -= d; if (a.path.length > 1) a.path.shift(); else break; } };
+    // Done with its task: off to a break spot, as the demo's own agents go.
+    const toBreak = (a, s) => { a.busy = false; a.pose = 'idle'; a.cafe = s.type === 'stool' ? s : null; setState(a, 'done', `Heading to the ${PLACE[s.type].toLowerCase()}`);
+      return walkTo(a, s).then(() => { a.pose = poseFor(a); setState(a, 'idle', IDLE_ACTIVITY[s.type]); }); };
+    const free = type => F.SPOTS[type].filter(s => !s.by);
+    window.__rec = false;
+    goToFloor(0);
+    await wait(1.0);
+    jump(at(9.6, -1.6, -.75, 1.0, 12));
+    caption('Bored of watching your agents<br>in a terminal?');
+    await wait(.5);
+    window.__rec = true;
+
+    // 1. The hook. Max rides up in the lift and walks to his desk, where the others are at work.
+    max.g.position.set(DOOR.x, 0, DOOR.z); max.spot = DOOR; max.appear = 0; max.yaw = max.yawT = -Math.PI / 2; max.busy = true; setState(max, 'working', 'Walking in');
+    emit(max, 'SessionStart', '~/Documents/' + max.project.key);
+    walkTo(max, max.home).then(() => atDesk(max, 'Edit src/auth/session.ts'));
+    camTo(at(8.4, -1.8, -.7, 1.0, 11), 2.6);
+    await wait(2.6);
+    skipTo(max, 4);
+    jump(frame([ada, max, kit], .3, .9, 13, 2)); camTo(frame([ada, max, kit], .34, .9, 12, 2), 2.4);
+    caption('Watch them work instead.');
+    await wait(2.4);
+
+    // 2. Working life. Kit has files to read and walks to the library.
+    caption('Lots to read? Off to the <b>library</b>.');
+    setState(kit, 'working', '→ Library: Read');
+    walkTo(kit, free('library').sort((p, q) => Math.abs(p.x - kit.home.x) - Math.abs(q.x - kit.home.x))[0]).then(() => { kit.pose = 'read'; setState(kit, 'working', 'Read src/api/share.ts'); });
+    camTo(at(-6.4, -6.6, .3, .95, 9, 1.5), 1.2);
+    await wait(2.6);
+
+    // A long test run: a thought cloud counts the seconds. It fails (soot), then at last it passes (confetti).
+    caption('Long test run? They sweat it out.');
+    camTo(frame([ada, max], .25, .95, 9, 2.6, 1.5), 1.0);
+    ada.run = { at: Date.now() - 27400 }; setState(ada, 'working', 'Bash npm test');
+    await wait(2.3);
+    caption('Tests fail…');
+    ada.run = null; react(ada, { kind: 'soot' }, Date.now(), 'npm test'); ada.pose = 'think'; setState(ada, 'thinking', 'npm test failed, rethinking');
+    await wait(1.8);
+    caption('…then pass. <b>Finally!</b>');
+    ada.pose = 'type'; react(ada, { kind: 'unstuck', fails: 3 }, Date.now(), 'npm test'); setState(ada, 'working', 'npm test passed');
+    await wait(2.5);
+
+    // 3. Subagents: two interns walk in and sit beside Nova. When one is done, Nova walks over to review its work.
+    // Meanwhile the agents that finished head off on a break.
+    caption('Subagents show up as <b>interns</b>');
+    const subs = [[seat(8), 'Map how sharing works', 3.6], [seat(10), 'Find the flaky test', 5.6]].map(([home, task, left]) => {
+      const sub = createAgent({ name: 'Explore', kind: 'sub', subType: 'Explore', color: mix(nova.color, '#ffffff', .35), home, parent: nova, project: nova.project, floor: F });
+      home.by = sub.id; sub.spot = DOOR; sub.g.position.set(DOOR.x, 0, DOOR.z); sub.yaw = sub.yawT = -Math.PI / 2; sub.busy = true;
+      emit(sub, 'SubagentStart', task); setState(sub, 'working', 'Walking in');
+      walkTo(sub, home).then(() => { sub.pose = 'type'; setState(sub, 'working', 'Grep "shareList"'); }); skipTo(sub, left); return sub; });
+    nova.pose = 'think'; setState(nova, 'working', 'Waiting on Explore subagent');
+    jump(at(-9.2, 1.15, .3, .95, 11, 2.4)); camTo(at(-9.8, 1.15, .26, .95, 10, 2.4), 5);
+    const stools = free('stool').sort((p, q) => p.x - q.x);
+    toBreak(iris, stools[0]); toBreak(max, stools[1]); toBreak(kit, stools[2]); toBreak(reno, free('coffee')[0]);
+    await wait(2.5);
+    caption('Done? The boss comes over to <b>review</b>.');
+    const [intern] = subs;
+    intern.busy = false; intern.pose = 'idle'; setState(intern, 'done', `Done · ${nova.name} is coming over`); emit(intern, 'SubagentStop', `Returned findings to ${nova.name}`);
+    setState(nova, 'thinking', 'Reviewing “Map how sharing works”');
+    walkTo(nova, besideSpot(intern.home)).then(() => { nova.pose = 'think'; nova.where = `Beside ${intern.name}`; setState(intern, 'done', `${nova.name} is reviewing the work`); });
+    toBreak(ada, free('hoops')[0]);
+    await wait(2.7);
+
+    // 4. Breaks: coffee and a chat at the café counter, then the basketball machine and the arcade.
+    caption('Done for now? <b>Coffee and gossip.</b>');
+    skipTo(iris, 0); skipTo(max, .5); skipTo(kit, 3); skipTo(reno, 0);
+    setState(intern, 'done', `Let go by ${nova.name}`); intern.gone = true; intern.home.by = null;
+    walkTo(intern, DOOR).then(() => { intern.leaving = true; return wait(.7); }).then(() => removeAgent(intern));
+    toBreak(nova, free('arcade')[0]);
+    showLabels = false;                                        // from here to the desk again: the tags would cover the chat and the run
+    jump(at(9.9, -5.2, -.5, 1.0, 9.4, 2)); camTo(at(9.9, -5.2, -.4, 1.0, 8.8, 2), 2.5);
+    await wait(2.5);
+    caption('Or hoops. Or the arcade.');
+    skipTo(ada, 0); skipTo(nova, 0);
+    jump(at(-5.6, 7.3, 1.6, .9, 11.5)); camTo(at(-5.9, 7.3, 1.55, .9, 10.8), 2.1);
+    await wait(2.1);
+
+    // 5. Called back from a break: a new prompt comes in, and Reno sprints from the coffee bar to his desk and skids
+    // into the chair. The camera stays on him. It starts on the side that the café's neon sign doesn't cover, moves
+    // round so the focus booths don't hide him, then swings back to see the lean from the side and the skid.
+    caption('Call one back…');
+    let TH = -.5; const chase = dt => { goal.theta = TH; const p = reno.g.position, k = 1 - Math.exp(-dt * 10);
+      goal.target.x += (p.x - Math.sin(TH) * 1.6 - goal.target.x) * k; goal.target.z += (p.z - Math.cos(TH) * 1.6 - goal.target.z) * k; };
+    jump(at(reno.g.position.x, reno.g.position.z, TH, .95, 9, 1.6)); ticks.push(chase);
+    await wait(1.0);
+    { const idleAt = reno.spot;                                // the same steps as a real prompt (UserPromptSubmit in events.js)
+      emit(reno, 'UserPromptSubmit', '"Fix the flaky login test" · from you');
+      applyStatus(reno, 'thinking', 'Fix the flaky login test'); place(reno, reno.home, true); sprintBack(reno, idleAt); }
+    { let t = 0; const swing = dt => { t += dt; TH = -.5 - .5 * ease(clamp((t - .3) / .9, 0, 1)) + 1.5 * ease(clamp((t - 1.9) / 1, 0, 1)); if (t > 2.9) ticks.splice(ticks.indexOf(swing), 1); }; ticks.push(swing); }
+    await wait(.8);
+    caption('…it <b>sprints</b> to its desk');
+    for (let k = 0; k < 60 && reno.spot !== reno.home; k++) await wait(.1);
+    atDesk(reno, 'Read tests/login.test.ts');
+    await wait(.9);
+    ticks.splice(ticks.indexOf(chase), 1); showLabels = true;
+
+    // 6. The one status beat: a hand goes up and the "needs you" strip names him. Seen from the other side, for his face.
+    caption('Need you? <b>A hand goes up.</b>');
+    subs[1].label.position.y = 99;                             // from behind the desks its name tag would fill the foreground
+    jump(at(reno.home.x, reno.home.z, 2.75, .95, 8.5, 2)); camTo(at(reno.home.x, reno.home.z, 2.85, .95, 7.8, 2), 2.5);
+    reno.pose = 'raise'; setState(reno, 'waiting', 'Wants to run git push origin fix/login');
+    emit(reno, 'Notification', 'Permission needed · Bash git push origin fix/login');
+    askPermission(reno, 'Bash', 'git push origin fix/login').then(() => { reno.pose = 'type'; setState(reno, 'working', 'Bash git push origin fix/login'); });
+    await wait(2.5);
+
+    // 7. Night on the rooftop: the DJ plays, the crew dances and the city is lit. The video ends here.
+    decide(reno, 'allow');
+    caption('After dark: the <b>rooftop party</b>');
+    showLabels = false;                                        // six name tags would cover the dance floor
+    crew.forEach(a => { a.path = []; a.arrive = null; a.sprint = null; a.cafe = null; a.bubKind = null; if (a.spot && a.spot.by === a.id && a.spot !== a.home) a.spot.by = null; });
+    toRoof(crew);
+    let hour = 19.5; clockHours = () => hour; applyScene('auto');
+    const dusk = dt => { hour = Math.min(20.3, hour + dt * .5); applyScene('auto'); if (hour >= 20.3) ticks.splice(ticks.indexOf(dusk), 1); };
+    ticks.push(dusk);
+    stopTweens(); goRoofView(); Object.assign(goal, { theta: .55, phi: 1.2, radius: 14 }); goal.target.set(-1.3, 0, -1.6); updateCam(0);
+    Object.assign(cam, { theta: goal.theta, phi: goal.phi, radius: goal.radius }); cam.target.copy(goal.target);
+    orbit = .04;
+    await wait(2.4);
+    caption('Your agents, <b>finally fun to watch.</b>');
+    await wait(3.2);
+    window.__done = true;
+  }
 }
 
 const port = await new Promise(res => { const s = createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
@@ -411,20 +559,20 @@ try {
   await page.evaluate(() => { window.__director().catch(e => { console.error(e); window.__done = true; }); });
   let n = 0;
   for (let k = 0; k < FPS * 90 && !(await page.evaluate(() => window.__done)); k++) {
-    await page.evaluate(dt => window.__frame(dt), 1 / FPS);
-    if (!(await page.evaluate(() => window.__rec))) continue;
+    await page.evaluate(([dt, draw]) => window.__frame(dt, draw), [1 / FPS, k % EVERY === 0]);
+    if (!(await page.evaluate(() => window.__rec)) || k % EVERY) continue;
     await page.screenshot({ path: join(frames, `f${String(n).padStart(5, '0')}.png`) });
     if (n % 60 === 0) process.stdout.write(`\rframe ${n}`);
     n++;
   }
-  console.log(`\r${n} frames, ${(n / FPS).toFixed(1)} s`);
+  console.log(`\r${n} frames, ${(n * EVERY / FPS).toFixed(1)} s`);
 } finally {
   await browser?.close(); server.kill();
 }
 
 mkdirSync(OUT, { recursive: true });
 const ff = (...a) => execFileSync(FFMPEG, ['-loglevel', 'error', '-y', ...a], { stdio: 'inherit' });
-const seq = ['-framerate', String(FPS), '-i', join(frames, 'f%05d.png')];
+const seq = ['-framerate', String(FPS / EVERY), '-i', join(frames, 'f%05d.png')];
 // README: 720p, since it shows under 900 px wide and the city's lit windows make 1080p twice the size.
 // Social: 1080 square, which X and Reddit show full width on a phone.
 const name = CUT === 'readme' ? 'trailer.mp4' : `trailer-${CUT}.mp4`;
