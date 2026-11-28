@@ -5,6 +5,9 @@ const start = async (office, id, cwd, prompt) => {
   await office.hook({ hook_event_name: 'UserPromptSubmit', session_id: id, cwd, prompt });
 };
 const where = page => page.evaluate(() => ({ view: viewMode, floor: curFloor && curFloor.key, flying: !!flight }));
+// With reduced motion the camera goes straight to the agent instead of flying there. CI draws about one frame every
+// 0.7 s, so the flight alone outlasts the wait; what matters here is where the camera ends up.
+test.use({ reducedMotion: 'reduce' });
 
 test('Follow takes the camera to the agent when it is not in view', async ({ page, office }) => {
   await start(office, 'f1', '/tmp/e2e-follow-shop', 'Restyle the cart');
