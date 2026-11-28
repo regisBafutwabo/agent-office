@@ -32,6 +32,9 @@ const STATUS = {
   idle:     { label: 'Idle',     hex: '#8A979C' },
 };
 const PALETTE = ['#3FA7D6','#F25F5C','#59CD90','#FAC05E','#A78BFA','#EE6C9F','#2EC4B6','#F79D65'];
+// Spoken names for the swatches in Customize, so a screen reader says "coral", not a hex code.
+const COLOR_NAMES = { '#3FA7D6': 'sky blue', '#F25F5C': 'coral', '#59CD90': 'mint', '#FAC05E': 'marigold', '#A78BFA': 'lavender', '#EE6C9F': 'pink', '#2EC4B6': 'teal', '#F79D65': 'peach',
+  '#15212A': 'ink', '#F4F1EA': 'cream', '#FFB400': 'amber', '#2B59C3': 'cobalt', '#E4572E': 'vermilion', '#98A4AA': 'slate', '#6CB26B': 'leaf green', '#B16AD9': 'violet', '#FF7EB6': 'bubblegum' };
 const PROJECTS = [
   { key:'listly', agent:'Ada', color:'#3FA7D6',
     prompts:['Add drag-and-drop reordering to the list view','Fix due-date timezone bug','Write tests for the recurring task scheduler','Add dark mode to the settings page'],

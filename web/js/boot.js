@@ -26,7 +26,7 @@ function startDemo() {
     demoDesks.set(p.key, i % 2 ? remember(d, 'unstuck', now - 3 * DAY, 4) : d);
   });
   curFloor = floors[floors.length - 1]; yOffTarget = yOff = -curFloor.i * FLOOR_H; rebuildTower(); refreshFloorVisuals();
-  buildCustomize(); renderJSON(); setModeLine(); goBuilding();
+  buildCustomize(); setModeLine(); goBuilding();
   agents.filter(a => a.kind === 'main').forEach(mainLoop);
 }
 
@@ -47,7 +47,8 @@ window.agentOffice = { agents, SPOTS, DOOR, camera };   // for debugging from th
 curFloor = makeFloor('lobby', 'Your first project', true); rebuildTower();
 setLiftOpen(uiPrefs.lift !== false); if (uiPrefs.panel === false) setPanelOpen(false);
 showDetailTab(uiPrefs.detailTab === 'activity' ? 'activity' : 'chat');
-applyScene(uiPrefs.theme in SCENES ? uiPrefs.theme : 'auto'); buildCustomize(); renderJSON(); layout(); loadPacks();
+setShowLabels(uiPrefs.labels !== false); setGridVisible(uiPrefs.grid === true);
+applyScene(uiPrefs.theme in SCENES ? uiPrefs.theme : 'auto'); buildCustomize(); layout(); loadPacks();
 if (Object.hasOwn(CITIES, uiPrefs.city)) setCity(uiPrefs.city);
 setView('3d'); Object.assign(cam, { theta: goal.theta, phi: goal.phi, radius: goal.radius }); cam.target.copy(goal.target); applyCam();
 if (MODE === 'demo' || !/^https?:$/.test(location.protocol)) startDemo(); else officeAuth.ready.then(connectLive);

@@ -190,6 +190,8 @@ button{font:inherit;color:inherit}
 .pack-empty{margin:8px 8px 0;font:400 12px/18px var(--font-b);color:var(--muted)}
 .pack-empty code{font:500 11px/16px var(--font-m);word-break:break-all}
 details.cust-agent{border:0;padding:0;border-radius:var(--r-md)}
+/* details slots its content through a UA shadow root, so it would inherit content-box and the inputs overflow */
+details.cust-agent>*{box-sizing:border-box}
 details.cust-agent[open]{background:var(--panel-2)}
 details.cust-agent summary{display:flex;align-items:center;gap:10px;min-height:48px;padding:8px;cursor:pointer;list-style:none;border-radius:var(--r-md)}
 details.cust-agent summary::-webkit-details-marker{display:none}
@@ -205,6 +207,8 @@ details.cust-agent[open] summary::after{transform:rotate(180deg)}
 .cust-body .field{grid-column:1/-1;display:grid;grid-template-columns:72px minmax(0,1fr);gap:12px;align-items:center;font:500 12px/16px var(--font-b);color:var(--ink-2)}
 .cust-body .field input,.cust-body .field select{width:100%;min-width:0}
 .cust-body .lbl{font:500 12px/16px var(--font-b);color:var(--ink-2);margin:0}
+.cust-body .field-hint{grid-column:2/-1;margin:-4px 0 0;font:400 12px/16px var(--font-b);color:var(--muted)}
+.cust-body .field-hint:empty{display:none}
 .cust-actions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
 .swatches{display:flex;gap:6px;flex-wrap:wrap}
 .swatches button{width:20px;height:20px;border-radius:var(--r-sm);border:0;background:var(--c);cursor:pointer;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 16%,transparent)}
@@ -219,7 +223,6 @@ details.cust-agent[open] summary::after{transform:rotate(180deg)}
 .toggles input{accent-color:var(--accent);width:16px;height:16px;margin:0;flex:none}
 .cust .seg{margin:0 8px}
 .cust-row{display:flex;padding:0 8px}
-pre.json{margin:0;padding:12px;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-md);font:400 11px/16px var(--font-m);overflow:auto;max-height:240px;color:var(--ink)}
 .note{margin:8px 8px 0;font:400 12px/16px var(--font-b);color:var(--muted)}
 @media (min-width:761px){ .cust .demo-only{display:none} }
 

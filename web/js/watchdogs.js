@@ -106,7 +106,7 @@ function liveMain(s, instant) {
   live.byId.set(s.id, a);
   applyStatus(a, s.status || 'idle', s.activity || 'Session started');
   sendFaces(a);
-  buildCustomize(); renderJSON(); setModeLine();
+  buildCustomize(); setModeLine();
   return a;
 }
 function liveSub(a, id, type, instant, task) {
@@ -132,7 +132,7 @@ async function leaveOffice(a, note) {
   a.nextSpot = null; await Promise.race([walkTo(a, DOOR), wait(30)]); if (off()) return;   // capped: another walk may take over
   a.leaving = true; await wait(.7);
   removeAgent(a);
-  if (a.kind === 'main') { if (live.byId.get(a.sessionId) === a) live.byId.delete(a.sessionId); buildCustomize(); renderJSON(); }
+  if (a.kind === 'main') { if (live.byId.get(a.sessionId) === a) live.byId.delete(a.sessionId); buildCustomize(); }
   else if (a.parent) for (const [k, v] of a.parent.subs) if (v === a) a.parent.subs.delete(k);
   setModeLine();
 }

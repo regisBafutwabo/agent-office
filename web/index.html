@@ -88,6 +88,10 @@
     </div>
     <div class="tabpane" id="tab-feed" hidden><ul class="feed" id="feed"></ul></div>
     <div class="tabpane cust" id="tab-custom" hidden>
+      <h3>Agents</h3>
+      <div class="seg" id="crew-setting" role="group" aria-label="Agent characters"><button data-crew="pets">Pets</button><button data-crew="robots">Robots</button></div>
+      <div id="cust-agents"></div>
+      <p class="note" id="cust-empty" hidden>Your agents appear here when a coding session starts. Name them and pick their look.</p>
       <h3>Office theme</h3>
       <div class="themes" id="themes"></div>
       <h3>City</h3>
@@ -102,13 +106,6 @@
         <label class="field pack-field">Model pack <select id="pack-select"><option value="">Built-in</option></select></label>
         <p class="pack-empty" id="pack-empty" hidden>Add model packs to <code>~/Library/Application Support/Agent Office/packs</code>, then reopen the office.</p>
       </div>
-      <h3>Agents</h3>
-      <div class="seg" id="crew-setting" role="group" aria-label="Agent characters"><button data-crew="pets">Pets</button><button data-crew="robots">Robots</button></div>
-      <div id="cust-agents"></div>
-      <h3>Getting started</h3>
-      <button class="btn" id="replay-guide">Replay the office tour</button>
-      <h3 id="connect-title" hidden>Connect agents</h3>
-      <div class="connect-list" id="connect-list" hidden></div>
       <h3>Display</h3>
       <div class="toggles">
         <label><input type="checkbox" id="opt-labels" checked> Show name tags</label>
@@ -118,9 +115,16 @@
       <h3>Sounds</h3>
       <div class="toggles">
         <label><input type="checkbox" id="opt-sound" checked> Chime when an agent finishes or needs you</label>
-        <label title="Off: the office keeps and shows file names only, never the lines an agent changed."><input type="checkbox" id="opt-code" checked> Show code in agent cards and reviews</label>
       </div>
       <p class="note">Every agent hums its own little tune when it's done, so you can tell who finished without looking. When one needs you, it knocks.</p>
+      <h3>Privacy</h3>
+      <div class="toggles">
+        <label title="Off: the office keeps and shows file names only, never the lines an agent changed."><input type="checkbox" id="opt-code" checked> Show code in agent cards and reviews</label>
+      </div>
+      <h3 id="connect-title" hidden>Connect agents</h3>
+      <div class="connect-list" id="connect-list" hidden></div>
+      <h3>Getting started</h3>
+      <button class="btn" id="replay-guide">Replay the office tour</button>
       <h3 class="demo-only">Demo speed</h3>
       <div class="seg demo-only" role="group" aria-label="Demo speed">
         <button data-speed="0" aria-pressed="false">Pause</button>
@@ -129,9 +133,6 @@
       </div>
       <h3>Mode</h3>
       <div class="cust-row"><a class="btn sm" id="mode-switch" href="?demo">Switch to demo</a></div>
-      <h3>Config <code>office.json</code></h3>
-      <pre class="json" id="json"></pre>
-      <p class="note">Your choices are saved to this file in the real build, so the same office loads on your PC, phone and headset.</p>
     </div>
   </aside>
 

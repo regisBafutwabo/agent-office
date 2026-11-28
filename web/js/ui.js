@@ -367,6 +367,7 @@ $('#sf-bridge').onclick = () => {
 $('#sf-skyline').onclick = () => {
   setFollow(false); goRoofView(); camera.fov = 55; camera.updateProjectionMatrix(); goal.phi = 1.54; goal.theta = -.14; goal.radius = 55;
 };
+const TYPED_NAME_MAX = 18, TYPED_NAME_FULL = `Names can be up to ${TYPED_NAME_MAX} characters.`;
 function buildCustomize() {
   const autoCard = `<button class="theme-card" data-key="auto" aria-pressed="${sceneKey === 'auto'}" title="Follows your clock: daylight from 8 to 17, golden hour at dawn and dusk, night from 20"><span class="sw">${['loft', 'golden', 'night'].map(k => `<i style="background:${SCENES[k].skyTop}"></i>`).join('')}</span>Auto (your time)</button>`;
   $('#themes').innerHTML = autoCard + Object.entries(SCENES).map(([k, T]) => `<button class="theme-card" data-key="${k}" aria-pressed="${k === sceneKey}"><span class="sw"><i style="background:${T.floor}"></i><i style="background:${T.fabric}"></i><i style="background:${T.fabric2}"></i><i style="background:${T.felt1}"></i></span>${T.label}</button>`).join('');
@@ -375,17 +376,20 @@ function buildCustomize() {
   const mains = agents.filter(a => a.kind === 'main'), box$ = $('#cust-agents');
   const open = new Set([...box$.querySelectorAll('details[open]')].map(d => d.dataset.id));
   const seg = (a, key, options) => `<div class="mini-seg">${Object.entries(options).map(([k, v]) => `<button type="button" data-look="${key}" data-v="${k}" aria-pressed="${a.look[key] === k}">${typeof v === 'string' ? v : v.label}</button>`).join('')}</div>`;
-  const sw = (a, key, colors, cur) => `<div class="swatches">${colors.map(c => `<button type="button" style="--c:${c}" data-look="${key}" data-v="${c}" aria-label="${key} ${c}" aria-pressed="${c === cur}"></button>`).join('')}</div>`;
+  const sw = (a, key, label, colors, cur) => `<div class="swatches" role="group" aria-label="${label}">${colors.map(c => { const n = COLOR_NAMES[c.toUpperCase()] || c; return `<button type="button" style="--c:${c}" data-look="${key}" data-v="${c}" aria-label="${n}" title="${n}" aria-pressed="${c === cur}"></button>`; }).join('')}</div>`;
+  $('#cust-empty').hidden = mains.length > 0;
   box$.innerHTML = mains.map(a => `<details class="cust-agent" data-id="${a.id}"${open.has(a.id) ? ' open' : ''}>
       <summary><span class="av" style="--c:${a.color}">${faceImg(a)}${a.live ? appBadge(a, 'av-app') : ''}</span><span class="cust-name"><b>${esc(a.name)}</b><span class="proj">~/${esc(a.project.key)} · floor ${floorNum(a.floor)}</span></span></summary>
       <div class="cust-body">
-        <label class="field">Name <input type="text" id="name-${a.id}" data-field="name" value="${esc(a.name)}" maxlength="18"></label>
+        <label class="field">Name <input type="text" id="name-${a.id}" data-field="name" value="${esc(a.name)}" maxlength="${TYPED_NAME_MAX}" aria-describedby="name-hint-${a.id}"></label>
+        <p class="field-hint" id="name-hint-${a.id}" aria-live="polite"></p>
         <label class="field">Works at <select id="pref-${a.id}" data-field="pref">${Object.entries(PREFS).map(([k, v]) => `<option value="${k}"${k === a.pref ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+        <p class="field-hint">Takes effect from its next task.</p>
         <span class="lbl">Body</span>${seg(a, 'body', BODIES)}
         ${uiPrefs.crew === 'pets' ? `<span class="lbl">Animal</span>${seg(a, 'species', ANIMALS)}` : `<span class="lbl">Face</span>${seg(a, 'face', FACE_STYLES)}`}
-        <span class="lbl">Color</span>${sw(a, 'color', PALETTE, a.color)}
-        <span class="lbl">Trim</span>${sw(a, 'trim', TRIM_COLORS, a.look.trim)}
-        <span class="lbl">Accessory color</span>${sw(a, 'accent', ACCENT_COLORS, a.look.accent)}
+        <span class="lbl">Color</span>${sw(a, 'color', 'Color', PALETTE, a.color)}
+        <span class="lbl">Trim</span>${sw(a, 'trim', 'Trim', TRIM_COLORS, a.look.trim)}
+        <span class="lbl">Accessory color</span>${sw(a, 'accent', 'Accessory color', ACCENT_COLORS, a.look.accent)}
         <span class="lbl">Accessories</span><div class="acc-chips">${Object.entries(ACCESSORIES).map(([k, v]) => `<button type="button" data-look="accessories" data-v="${k}" aria-pressed="${a.look.accessories.includes(k)}">${v}</button>`).join('')}</div>
         <div class="cust-actions"><button type="button" class="btn sm" data-act="random">Randomize look</button><button type="button" class="btn sm" data-act="tune">Play done tune</button></div>
       </div></details>`).join('');
@@ -410,24 +414,17 @@ $('#cust-agents').addEventListener('input', e => {
   const a = agents.find(x => x.id === e.target.closest('details').dataset.id); if (!a) return;
   a.customName = !!e.target.value.trim();
   a.name = e.target.value.trim() || chatName(a.title) || a.project.agent; a.labelDirty = true; uiDirty = true; detailDirty = true;
-  const d = e.target.closest('details'); d.querySelector('.av').textContent = a.name[0]; d.querySelector('.cust-name b').textContent = a.name;
-  renderJSON(); saveAgentPrefs(a);
+  const d = e.target.closest('details'); d.querySelector('.av').innerHTML = faceImg(a) + (a.live ? appBadge(a, 'av-app') : ''); d.querySelector('.cust-name b').textContent = a.name;
+  d.querySelector('.field-hint[aria-live]').textContent = e.target.value.length >= TYPED_NAME_MAX ? TYPED_NAME_FULL : '';
+  saveAgentPrefs(a);
 });
 $('#cust-agents').addEventListener('change', e => {
   if (e.target.dataset.field !== 'pref') return;
   const a = agents.find(x => x.id === e.target.closest('details').dataset.id); if (!a) return;
-  a.pref = e.target.value; renderJSON(); saveAgentPrefs(a); toast(`${a.name} will work at: ${PREFS[a.pref].toLowerCase()} (from the next task)`);
+  a.pref = e.target.value; saveAgentPrefs(a); toast(`${a.name} will work at: ${PREFS[a.pref].toLowerCase()} from its next task`);
 });
-$('#opt-labels').onchange = e => { showLabels = e.target.checked; renderJSON(); };
-$('#opt-grid').onchange = e => grid.visible = e.target.checked;
+function setShowLabels(v) { showLabels = v; $('#opt-labels').checked = v; }
+function setGridVisible(v) { grid.visible = v; $('#opt-grid').checked = v; }
+$('#opt-labels').onchange = e => { setShowLabels(e.target.checked); uiPrefs.labels = e.target.checked; saveUi(); };
+$('#opt-grid').onchange = e => { setGridVisible(e.target.checked); uiPrefs.grid = e.target.checked; saveUi(); };
 $('#opt-follow').onchange = e => { setFollow(e.target.checked); };
-function renderJSON() {
-  const mains = agents.filter(a => a.kind === 'main');
-  const o = { theme: sceneKey, floors: floors.slice().reverse().map(f => ({ floor: floorNum(f), project: f.key })),
-    agents: mains.map(a => ({ project: a.cwd || '~/Documents/' + a.project.key, name: a.name, color: a.color, floor: floorNum(a.floor), homeDesk: `bench-${a.floor.deskSeats.indexOf(a.home) + 1}`, worksAt: a.pref,
-      character: { body: a.look.body, face: a.look.face, trim: a.look.trim, accent: a.look.accent, accessories: a.look.accessories } })),
-    zones: { workbenches: 16, lounge: ['sofa', 'lounge chairs', 'poufs'], cafe: 'counter stools', focusBooths: 2, hotDesk: 4, warRoom: 'Plan subagents', library: 'Explore subagents', gameCorner: ['basketball machines', 'beanbags'] },
-    screens: { 'war-room/terminal': 'Bash output', 'war-room/board': 'files being edited' },
-    nameTags: showLabels };
-  $('#json').textContent = JSON.stringify(o, null, 2);
-}
