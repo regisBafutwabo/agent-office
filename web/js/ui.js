@@ -310,7 +310,22 @@ $('#d-form').addEventListener('submit', e => {
   selected.pending.push(text); inp.value = ''; if (selected.wake) selected.wake();
   toast(`Queued for ${selected.name}: “${text}”`); uiDirty = true; detailDirty = true;
 });
-function setFollow(v) { follow = v; $('#d-follow').setAttribute('aria-pressed', v); $('#opt-follow').checked = v; }
+// Following only steers the camera across the floor in view, so it first goes to where the agent is: its floor or the roof.
+const placeOf = a => a.onRoof ? 'roof' : a.floor;
+const agentInView = a => a.onRoof ? viewMode === 'roof' : a.floor === curFloor && viewMode === 'floor';
+let followPlace = null;
+function setFollow(v) {
+  follow = v; $('#d-follow').setAttribute('aria-pressed', v); $('#opt-follow').checked = v;
+  followPlace = v && selected ? placeOf(selected) : null;
+  if (v && selected && !flight && !agentInView(selected)) select(selected, true);
+}
+// While following, go along when the agent takes the lift to the roof or back down.
+function followToNewPlace() {
+  if (!follow || !selected || flight) return;
+  const place = placeOf(selected); if (place === followPlace) return;
+  followPlace = place;
+  if (!agentInView(selected)) select(selected, true);
+}
 $('#d-follow').onclick = () => setFollow(!follow);
 $('#d-open').onclick = () => selected && openHost(selected);
 $('#d-spawn').onclick = async () => {

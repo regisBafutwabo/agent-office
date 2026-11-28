@@ -449,6 +449,7 @@ function updateCam(dt) {
   if (viewMode === 'building') goal.target.y = yOff + (floors.length - 1) * FLOOR_H / 2 + 1.7;
   else if (viewMode === 'roof') goal.target.y = yOff + (floors.length - 1) * FLOOR_H + ROOF_Y;
   else if (viewMode !== 'screen') goal.target.y = 0;
+  if (viewMode !== 'screen') followToNewPlace();
   if (follow && selected && !flight && viewMode !== 'screen') { const p = worldPos(selected); goal.target.x += (p.x - goal.target.x) * (1 - Math.exp(-dt * 4)); goal.target.z += (p.z - goal.target.z) * (1 - Math.exp(-dt * 4)); }
   const k = reduced ? 1 : 1 - Math.exp(-dt * 8);
   cam.theta += (goal.theta - cam.theta) * k; cam.phi += (goal.phi - cam.phi) * k; cam.radius += (goal.radius - cam.radius) * k;
