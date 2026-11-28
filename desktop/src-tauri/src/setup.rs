@@ -214,7 +214,14 @@ fn connect_claude() -> Result<String, String> {
     }
     if let Err(err) = run_claude(&claude, &["plugin", "install", PLUGIN_ID]) {
         if !err.to_lowercase().contains("already") { return Err(format!("Couldn't install the Agent Office plugin: {err}")); }
+    }
+    // "install" leaves an older copy that's already installed as it is, so update it too.
+    let state = || std::fs::read_to_string(home().join(".claude/plugins/installed_plugins.json")).map(|t| plugin_state(&t)).unwrap_or(PluginState::Missing);
+    if state() != PluginState::Working {
         run_claude(&claude, &["plugin", "update", PLUGIN_ID]).map_err(|e| format!("Couldn't update the Agent Office plugin: {e}"))?;
+    }
+    if state() != PluginState::Working {
+        return Err("The Agent Office plugin is still out of date. Run: claude plugin update agent-office@agent-office, then start a new session.".into());
     }
     Ok("Claude Code is connected. Start a new session and it walks into the office.".into())
 }
