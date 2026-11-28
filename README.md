@@ -26,7 +26,7 @@ Building from source, other platforms and troubleshooting are in **[INSTALL.md](
 - **Characters:** robots or pets, with a face that shows what each agent is doing. [More](docs/features.md#characters)
 - **Your own models:** swap the furniture, or the agents themselves, for your own 3D models. [More](docs/features.md#model-packs)
 - **Reactions:** bubbles and confetti for passing and failing commands, and desks that remember merges. [More](docs/features.md#reactions-and-desk-memories)
-- **VR (beta):** walk through the office in a Meta Quest. Not yet tested on a real headset. [More](docs/vr.md)
+- **VR (beta):** walk through the office in a Meta Quest, jump around, change floors and see who needs you. Built without a headset: if you have one, help make it better. [More](docs/vr.md)
 
 **Act on what needs you**
 

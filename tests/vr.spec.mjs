@@ -189,14 +189,14 @@ test('the left controller carries a "Needs you" panel that lists waiting agents 
     __xr.left.gamepad.hapticActuators = [{ pulse: async () => { __xr.buzz++; } }];
   });
   const panel = () => page.evaluate(() => { vrPanel.userData.at = -1e9; vrStep(); return { on: vrPads.some(p => p.children.includes(vrPanel)), text: vrPanel.userData.text }; });
-  expect(await panel()).toEqual({ on: true, text: expect.stringMatching(/^Nothing needs you/) });
+  expect(await panel()).toEqual({ on: true, text: expect.stringMatching(/^Floor \d+ · .+\nNothing needs you/) });
   const height = () => page.evaluate(() => vrPanel.userData.m.scale.y);
   const slim = await height();
   expect(await page.evaluate(() => __xr.buzz)).toBe(0);
 
   await page.evaluate(() => { const a = agents.find(a => a.kind === 'main'); setState(a, 'waiting', 'Needs permission: Bash'); });
   const p = await panel();
-  expect(p.text).toMatch(/^1 agent needs you/);
+  expect(p.text).toMatch(/\n1 agent needs you/);
   expect(p.text).toContain('Needs permission: Bash');
   expect(await height()).toBeGreaterThan(slim);   // the panel grows to show the row
   expect(await page.evaluate(() => __xr.buzz)).toBe(1);
@@ -204,7 +204,7 @@ test('the left controller carries a "Needs you" panel that lists waiting agents 
   expect(await page.evaluate(() => __xr.buzz)).toBe(1);   // one buzz for each new agent, not one each time it looks
 
   await page.evaluate(() => { const a = agents.find(a => a.kind === 'main'); setState(a, 'working', 'Running Bash'); });
-  expect((await panel()).text).toMatch(/^Nothing needs you/);
+  expect((await panel()).text).toMatch(/\nNothing needs you/);
   expect(await height()).toBe(slim);
 });
 
@@ -223,4 +223,170 @@ test('a nearer name tag draws on top of a farther one', async ({ page, office })
   });
   expect(r.near.d).toBeLessThan(r.far.d);
   expect(r.near.o).toBeGreaterThan(r.far.o);
+});
+
+test('push a thumbstick down or up to change floors behind a short fade, and keep your spot', async ({ page, office }) => {
+  await office.hook({ hook_event_name: 'SessionStart', session_id: 'vr1', cwd: '/tmp/e2e-vr' });
+  await office.hook({ hook_event_name: 'SessionStart', session_id: 'vr2', cwd: '/tmp/e2e-vr2' });
+  await enterWithPad(page, office);
+  await expect.poll(() => page.evaluate(() => floors.length)).toBeGreaterThanOrEqual(2);
+  const push = y => page.evaluate(y => { __xr.pad.gamepad.axes[3] = y; vrStep(); }, y);
+  const state = () => page.evaluate(() => ({ floor: curFloor.i, settled: yOff === yOffTarget, dark: vrShade.visible, x: rig.position.x, z: rig.position.z, turn: rig.rotation.y }));
+  await page.evaluate(() => goToFloor(floors.length - 1));
+  const s0 = await state();
+
+  await page.evaluate(() => { __xr.pad.gamepad.axes[2] = .4; });   // a push down and a little to the side changes floor only
+  await push(.9);
+  expect(await state()).toMatchObject({ floor: s0.floor, dark: true });   // fading to black first
+  await page.waitForTimeout(250); await push(.9);                         // holding the stick does not go further
+  const s1 = await state();
+  expect(s1).toMatchObject({ floor: s0.floor - 1, settled: true, x: s0.x, z: s0.z, turn: s0.turn });
+  await page.waitForTimeout(300); await push(0);
+  expect(await state()).toMatchObject({ floor: s0.floor - 1, dark: false });
+  expect(await page.evaluate(() => { vrPanel.userData.at = -1e9; vrStep(); return vrPanel.userData.text.split('\n')[0]; }))
+    .toBe(await page.evaluate(() => `Floor ${floorNum(curFloor)} · ${curFloor.name}`));
+
+  await push(-.9);   // and up again
+  await page.waitForTimeout(250); await push(0);
+  expect((await state()).floor).toBe(s0.floor);
+});
+
+test('on the rooftop a push up only taps the controller', async ({ page, office }) => {
+  await enterWithPad(page, office);
+  await page.evaluate(() => { vrArrive('roof'); __xr.buzz = 0; __xr.pad.gamepad.hapticActuators = [{ pulse: async () => { __xr.buzz++; } }]; });
+  await page.evaluate(() => { __xr.pad.gamepad.axes[3] = -.9; vrStep(); });
+  expect(await page.evaluate(() => ({ roof: viewMode === 'roof', dark: vrShade.visible, buzz: __xr.buzz }))).toEqual({ roof: true, dark: false, buzz: 1 });
+});
+
+// Point the right controller at the lift button or a row of the floor list, from in front of it.
+const aimAt = (page, what) => page.evaluate(what => {
+  let target;
+  if (what === 'lift') target = vrLiftBtn.getWorldPosition(new THREE.Vector3());
+  else {   // a row of the floor list, by its key
+    const u = vrMenu.userData, r = u.rows.find(r => r.key === what), uvy = 1 - (r.y0 + r.y1) / 2 / u.H;
+    target = u.m.localToWorld(new THREE.Vector3(0, (uvy - .5) * VR_MENU_H, 0));
+  }
+  // Stand back along the side it faces (its +Z), a little lower, as a person would.
+  const obj = what === 'lift' ? vrLiftBtn : vrMenu.userData.m, facing = new THREE.Vector3(0, 0, 1).applyQuaternion(obj.getWorldQuaternion(new THREE.Quaternion()));
+  const eye = target.clone().addScaledVector(facing, what === 'lift' ? 1.5 : .6).add(new THREE.Vector3(0, -.2, 0));
+  rig.updateMatrixWorld(true);
+  const m = new THREE.Matrix4().lookAt(eye, target, new THREE.Vector3(0, 1, 0)).setPosition(eye);
+  renderer.xr.getController(0).matrix.copy(new THREE.Matrix4().copy(rig.matrixWorld).invert().multiply(m));
+  vrStep();
+  return __xr.pad && renderer.xr.getController(0).userData.ui;
+}, what);
+const click = page => page.evaluate(() => { __xr.session.press('selectstart', __xr.pad); vrStep(); __xr.session.press('selectend', __xr.pad); vrStep(); });
+
+test('the Floors button by the lift opens a list of floors, and picking one takes you there', async ({ page, office }) => {
+  await office.hook({ hook_event_name: 'SessionStart', session_id: 'vr1', cwd: '/tmp/e2e-vr' });
+  await office.hook({ hook_event_name: 'SessionStart', session_id: 'vr2', cwd: '/tmp/e2e-vr2' });
+  await enterWithPad(page, office);
+  await expect.poll(() => page.evaluate(() => floors.length)).toBeGreaterThanOrEqual(2);
+  await page.evaluate(() => goToFloor(floors.length - 1));
+  expect(await page.evaluate(() => vrLiftBtn.visible)).toBe(true);
+
+  expect(await aimAt(page, 'lift')).toBe('lift');
+  const rig0 = await page.evaluate(() => rig.position.toArray());
+  await click(page);
+  expect(await page.evaluate(() => vrMenu.visible)).toBe(true);
+  expect(await page.evaluate(() => rig.position.toArray())).toEqual(rig0);   // pressing the button is not a jump
+
+  const to = await page.evaluate(() => curFloor.i - 1);
+  expect(await aimAt(page, 'floor:' + to)).toBe('floor:' + to);
+  await click(page);
+  expect(await page.evaluate(() => ({ menu: vrMenu.visible, dark: vrShade.visible }))).toEqual({ menu: false, dark: true });
+  await page.waitForTimeout(250);
+  expect(await page.evaluate(() => { vrStep(); return curFloor.i; })).toBe(to);
+});
+
+test('the floor list marks where you are and where someone needs you, and Close closes it', async ({ page, office }) => {
+  await office.hook({ hook_event_name: 'SessionStart', session_id: 'vr1', cwd: '/tmp/e2e-vr' });
+  await office.hook({ hook_event_name: 'SessionStart', session_id: 'vr2', cwd: '/tmp/e2e-vr2' });
+  await enterWithPad(page, office);
+  await expect.poll(() => page.evaluate(() => agents.filter(a => a.kind === 'main' && a.floor).length)).toBe(2);
+  // Stand on one agent's floor, and let the other agent wait for you.
+  await page.evaluate(() => { const [a, b] = agents.filter(a => a.kind === 'main'); goToFloor(a.floor.i); setState(b, 'waiting', 'Needs permission: Bash'); });
+  await aimAt(page, 'lift'); await click(page);
+  const r = await page.evaluate(() => {
+    const [a, b] = agents.filter(a => a.kind === 'main'), note = f => vrMenu.userData.rows.find(r => r.key === 'floor:' + f.i).note;
+    return { here: note(a.floor), waiting: note(b.floor), last: vrMenu.userData.rows.at(-1).key };
+  });
+  expect(r).toEqual({ here: 'You are here', waiting: '1 needs you', last: 'close' });
+  expect(await aimAt(page, 'close')).toBe('close');
+  await click(page);
+  expect(await page.evaluate(() => vrMenu.visible)).toBe(false);
+});
+
+test('the lift button shows only in VR', async ({ page, office }) => {
+  await enterWithPad(page, office);
+  expect(await page.evaluate(() => vrLiftBtn.visible)).toBe(true);
+  await page.evaluate(() => { vrPress('lift'); __xr.session.end(); });
+  await expect.poll(() => page.evaluate(() => renderer.xr.isPresenting)).toBe(false);
+  expect(await page.evaluate(() => ({ btn: vrLiftBtn.visible, menu: vrMenu.visible }))).toEqual({ btn: false, menu: false });
+});
+
+test('the floor list opens close in front of you, facing you', async ({ page, office }) => {
+  await enterWithPad(page, office);
+  await page.evaluate(() => vrTurn(Math.PI / 3));   // not facing the way you started
+  await aimAt(page, 'lift'); await click(page);
+  const r = await page.evaluate(() => {
+    const head = camera.getWorldPosition(new THREE.Vector3()), look = camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize();
+    const at = vrMenu.userData.m.getWorldPosition(new THREE.Vector3()), facing = new THREE.Vector3(0, 0, 1).applyQuaternion(vrMenu.getWorldQuaternion(new THREE.Quaternion()));
+    const to = at.clone().sub(head).setY(0);
+    return { dist: to.length(), ahead: to.normalize().dot(look), toward: facing.dot(look), below: head.y - at.y };
+  });
+  expect(r.dist).toBeGreaterThan(.6); expect(r.dist).toBeLessThan(1.2);   // within reach of the eyes, not across the room
+  expect(r.ahead).toBeGreaterThan(.95);                                     // straight ahead
+  expect(r.toward).toBeLessThan(-.95);                                      // its face turned to you
+  expect(r.below).toBeGreaterThan(0); expect(r.below).toBeLessThan(.5);    // a little below eye height
+});
+
+test('up from the top floor is the rooftop: you step out of its lift onto the deck, and down takes you back', async ({ page, office }) => {
+  await enterWithPad(page, office);
+  await page.evaluate(() => goToFloor(floors.length - 1));
+  const go = async y => { await page.evaluate(y => { __xr.pad.gamepad.axes[3] = y; vrStep(); }, y); await page.waitForTimeout(500); await page.evaluate(() => { __xr.pad.gamepad.axes[3] = 0; vrStep(); }); };   // past the whole fade
+  const where = () => page.evaluate(() => { const h = camera.getWorldPosition(new THREE.Vector3()); vrPanel.userData.at = -1e9; vrStep();
+    return { roof: viewMode === 'roof', deck: roofGroup.visible, feet: rig.position.y, ground: vrGround(), x: h.x, z: h.z, btn: vrLiftBtn.position.y - rig.position.y, here: vrPanel.userData.text.split('\n')[0] }; });
+
+  await go(-.9);
+  const up = await where();
+  expect(up).toMatchObject({ roof: true, deck: true, here: 'Rooftop' });
+  expect(up.feet).toBeGreaterThan(3); expect(up.feet).toBeCloseTo(up.ground, 5);   // standing on the deck, not inside the top floor
+  expect(up.x).toBeCloseTo(11.6, 5); expect(up.z).toBeCloseTo(-1.8, 5);            // at the lift
+  expect(up.btn).toBeCloseTo(1.3, 5);                                              // the Floors button came up too
+  // Jumps land on the deck, using the deck's own grid.
+  expect(await page.evaluate(() => { const g = vrGround(), h = vrFloorHit(new THREE.Vector3(8, g + 1.2, -1.8), new THREE.Vector3(-1, -1, 0).normalize()); return h && h.x; })).toBeCloseTo(6.8, 5);
+
+  await go(.9);
+  const down = await where();
+  expect(down).toMatchObject({ roof: false, deck: false, feet: 0 });
+  expect(down.here).toMatch(/^Floor /);
+  expect(down.x).toBeCloseTo(11.6, 5); expect(down.z).toBeCloseTo(-1.8, 5);
+});
+
+test('the floor list starts with the rooftop', async ({ page, office }) => {
+  await enterWithPad(page, office);
+  await aimAt(page, 'lift'); await click(page);
+  expect(await page.evaluate(() => vrMenu.userData.rows[0].key)).toBe('roof');
+  expect(await aimAt(page, 'roof')).toBe('roof');
+  await click(page);
+  await page.waitForTimeout(250);
+  expect(await page.evaluate(() => { vrStep(); return viewMode; })).toBe('roof');
+});
+
+test('with the list open, a row behind the Floors button still gets the press', async ({ page, office }) => {
+  await enterWithPad(page, office);
+  await aimAt(page, 'lift'); await click(page);
+  // Move the list so that its Rooftop row sits right behind the button, as when it opens into the lift wall.
+  await page.evaluate(() => {
+    const b = vrLiftBtn.getWorldPosition(new THREE.Vector3()), u = vrMenu.userData, r = u.rows[0];
+    vrMenu.rotation.copy(vrLiftBtn.rotation);
+    const down = (r.y0 + r.y1) / 2 / u.H * VR_MENU_H * u.m.scale.y;   // metres from the list's top edge to that row
+    vrMenu.position.set(b.x + .2, b.y + down, b.z);                      // 20 cm behind the button, inside the wall, row level with it
+    vrDrawMenu();
+  });
+  expect(await aimAt(page, 'roof')).toBe('roof');
+  await click(page);
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => { vrStep(); return viewMode; })).toBe('roof');
 });

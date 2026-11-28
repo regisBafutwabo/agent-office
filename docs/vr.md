@@ -7,14 +7,18 @@ You can walk through the office in a VR headset. This feature is in beta. Nobody
 - [Try VR without a headset](#try-vr-without-a-headset)
 - [Messages and what to do](#messages-and-what-to-do)
 - [Tell us what happened](#tell-us-what-happened)
+- [Help make VR better](#help-make-vr-better)
 
 ## What works
 
 - **Enter VR** puts you in the aisle of the floor that you look at.
 - You see the agents work at their desks. The name tag over each agent shows its status and what it does. In VR the name tags always show, also if you turned them off. Far tags are larger, so you can read them.
-- To see which agents need you, look at your left controller. A small panel above it shows the agents that wait for you, on all floors. When a new agent starts to wait, the controllers vibrate.
+- To see which agents need you, look at your left controller. A small panel above it shows the floor that you are on, and the agents that wait for you, on all floors. When a new agent starts to wait, the controllers vibrate.
 - To jump to a different spot, point a controller at the floor. Hold the trigger. A ring shows where you will go. Release the trigger to go there.
 - To turn 30 degrees, push a thumbstick to the left or to the right. Push it again to turn more.
+- To go to a different floor, go to the lift. Point a controller at the **Floors** button on the wall to the right of the lift doors. Push the trigger. A list of the floors opens in front of you. Point at a floor and push the trigger. The view goes black for a moment, then you are on that floor. The list shows the floor that you are on, and the floors where an agent needs you. **Rooftop** is at the top of the list.
+- To go one floor up without the lift, push a thumbstick forward. To go one floor down, pull it back. The view goes black for a moment, then you are on the other floor, in the same spot. Up from the top floor is the rooftop. On the rooftop or at the bottom floor, the controller gives a short tap.
+- When you go to the rooftop or come down from it, you arrive at the lift.
 - To leave VR, use the menu button of the headset.
 
 You can jump up to 10 m. You cannot jump into furniture or through the walls. If no ring shows, point at a different part of the floor.
@@ -65,7 +69,8 @@ The [Immersive Web Emulator](https://github.com/meta-quest/immersive-web-emulato
 5. Move the fake headset and controllers in the **WebXR** tab.
 6. To jump, point the right controller at the floor. Hold its trigger button in the **WebXR** tab, then release it.
 7. To turn, move the thumbstick of a controller in the **WebXR** tab to the left or to the right.
-8. To see the "Needs you" panel, turn the left controller in the **WebXR** tab toward the headset.
+8. To change floors, point the right controller at the **Floors** button beside the lift. Push its trigger, then point at a floor and push the trigger again. Or move the thumbstick forward or back.
+9. To see the "Needs you" panel, turn the left controller in the **WebXR** tab toward the headset.
 
 The emulator uses the graphics card of your computer. A headset is much slower. Thus the emulator cannot tell you if the office is fast enough in a headset.
 
@@ -87,3 +92,14 @@ The emulator uses the graphics card of your computer. A headset is much slower. 
 - If the view was smooth or not.
 - If you felt sick.
 - Which text was too small to read.
+
+## Help make VR better
+
+VR is in beta. We built it without a headset. If you have a VR headset, you can help to make it better. Pull requests are welcome. For example:
+
+- Make the office fast enough on a real headset.
+- Make the text easy to read.
+- Make movement and turns comfortable.
+- Make VR work on other headsets, such as Apple Vision Pro.
+
+Read [CONTRIBUTING.md](../CONTRIBUTING.md) before you start. In your pull request, tell us which headset you tested on.
