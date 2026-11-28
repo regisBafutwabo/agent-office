@@ -39,10 +39,17 @@ jobs:
         working-directory: desktop
       - run: npm test
 
-  browser:
-    name: Office page in a browser (Playwright)
+  # The office in a browser, split across parallel shards: CI draws in software (about a frame every 0.7 s), and 41+
+  # tests in one job ran past its time limit. Each shard is its own job; the job below keeps the one name the
+  # "Protect main" ruleset requires.
+  browser-shard:
+    name: Office page in a browser (shard ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -53,14 +60,28 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - run: npm run test:e2e -- --shard=${{ matrix.shard }}/3
       # Screenshots, traces and error context of the tests that failed, to download from the run's summary.
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-results
+          name: playwright-results-${{ matrix.shard }}
           path: test-results/
           retention-days: 14
+
+  browser:
+    name: Office page in a browser (Playwright)
+    needs: browser-shard
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every shard passed
+        env:
+          RESULT: ${{ needs.browser-shard.result }}
+        run: |
+          echo "Shards: $RESULT"
+          test "$RESULT" = success
 
   secrets:
     name: Secret scan (gitleaks)
