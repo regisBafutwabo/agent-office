@@ -2,7 +2,7 @@
 
 Thank you for your help. This guide tells you how to send a change.
 
-> **Important:** Send all pull requests to the `develop` branch. Do not send them to `main`.
+> **Important:** Send all pull requests to the `main` branch.
 
 ## 1. Before you start
 
@@ -57,19 +57,17 @@ To work on the desktop app, install Rust. Then see [Build the Mac app](INSTALL.m
 
 ## 3. Make a branch
 
-1. Get the latest `develop` branch:
+1. Get the latest `main` branch:
 
    ```bash
    git fetch upstream
-   git checkout -b <branch-name> upstream/develop
+   git checkout -b <branch-name> upstream/main
    ```
 
 2. Give the branch a short name that tells what it does. Examples:
    - `fix/stuck-subagents`
    - `docs/install-steps`
-   - `feature/<short-name>`
-
-Do not start your branch from `main`.
+   - `feat/<short-name>`
 
 ## 4. Make your change
 
@@ -142,12 +140,13 @@ git commit
    ```
 
 2. On GitHub, open a pull request.
-3. Set the **base** branch to **`develop`**. Do not use `main`.
+3. Set the **base** branch to **`main`**.
 4. Fill in the pull request template:
    - Why
    - What changed
    - Screenshots, before and after, for visual changes
    - How you tested it
+   - Whether an AI agent helped, and which one
 5. Wait for a review. The maintainer must approve each change.
 6. If the reviewer asks for changes, push new commits to the same branch.
 
@@ -161,7 +160,15 @@ Write all documents in [ASD-STE100 Simplified Technical English](https://www.asd
 - Use simple words. Use one word for one meaning.
 - Use the same term for the same thing every time.
 
-## 9. Security and privacy
+## 9. AI coding agents
+
+You can use AI coding agents. [AGENTS.md](AGENTS.md) gives them the rules of this project. Most agents read it automatically. Claude Code reads it through `CLAUDE.md`.
+
+- You are responsible for each line that you send, also for lines that an agent wrote.
+- In the pull request, say which agent helped.
+- An AI attribution line in a commit, such as `Co-Authored-By`, is optional.
+
+## 10. Security and privacy
 
 - The office must listen only on `127.0.0.1` by default.
 - Do not send user data out of the computer.
