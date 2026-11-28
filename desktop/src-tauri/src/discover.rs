@@ -40,8 +40,10 @@ pub struct Found {
     pub messages: Vec<Message>,
     /// The log itself says the turn is over, so it overrides hooks still saying "thinking" (see Store::adopt).
     pub ended: bool,
-    /// Subagents its logs show still at work (Claude Code only).
+    /// Subagents its logs show still at work (Claude Code and Cursor).
     pub subs: Vec<FoundSub>,
+    /// The T3 Code thread of the agent that handed it this task (see delegated_by).
+    pub delegated_by: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -211,9 +213,20 @@ fn claude(home: &Path, now: u64, out: &mut Vec<Found>, archived: &HashSet<String
             let (status, activity) = if subs.is_empty() { settle(status, activity, at, now) } else { ("working".into(), "Waiting on a subagent".into()) };
             let at = subs.iter().map(|x| x.at).fold(at, u64::max);
             let t = read_tail(&log).unwrap_or_default();
-            out.push(Found { agent: "claude-code".into(), id, cwd: root.to_string_lossy().into(), project: None, entrypoint, at, status, activity, title: t.title, messages: t.messages, ended: false, subs });
+            out.push(Found { agent: "claude-code".into(), id, cwd: root.to_string_lossy().into(), project: None, entrypoint, at, status, activity, title: t.title, messages: t.messages, ended: false, subs, delegated_by: None });
         }
     }
+}
+
+/// The first thing you asked a Codex thread: its user_message event, or else the first user message that isn't
+/// the AGENTS.md or environment block Codex adds before it (T3 Code's threads have only those).
+fn codex_prompt(lines: &[Value]) -> Option<String> {
+    if let Some(m) = lines.iter().find(|o| o["type"] == "event_msg" && o["payload"]["type"] == "user_message").and_then(|o| o["payload"]["message"].as_str()) {
+        return Some(m.to_string());
+    }
+    lines.iter().filter(|o| o["type"] == "response_item" && o["payload"]["type"] == "message" && o["payload"]["role"] == "user")
+        .filter_map(|o| o["payload"]["content"].as_array().map(|c| c.iter().filter_map(|x| x["text"].as_str()).collect::<Vec<_>>().join("\n")))
+        .find(|t| { let t = t.trim_start(); !t.is_empty() && !t.starts_with('#') && !t.starts_with('<') })
 }
 
 fn codex(home: &Path, now: u64, out: &mut Vec<Found>) {
@@ -241,8 +254,10 @@ fn codex(home: &Path, now: u64, out: &mut Vec<Found>) {
             };
             let (status, activity) = settle(status, activity, at, now);
             let ended = last.as_deref().is_some_and(|t| t != "task_started");
+            let prompt = codex_prompt(&head(&log, 80));
             out.push(Found { agent: "codex".into(), id: format!("codex:{id}"), cwd: meta["cwd"].as_str().unwrap_or("").into(), project: None,
-                             entrypoint: meta["originator"].as_str().map(String::from), at, status, activity, title: None, messages: vec![], ended, subs: vec![] });
+                             entrypoint: meta["originator"].as_str().map(String::from), at, status, activity, title: prompt.as_deref().and_then(prompt_title),
+                             messages: vec![], ended, subs: vec![], delegated_by: prompt.as_deref().and_then(delegated_by) });
         }
     }
 }
@@ -258,6 +273,14 @@ fn between<'a>(text: &'a str, tag: &str) -> Option<&'a str> {
 pub fn from_t3(text: &str) -> bool {
     text.contains("<t3_code_orchestration_instructions>")
 }
+/// The T3 Code thread that handed this task to the agent, from the line T3 Code puts before it:
+/// [T3 Code: the agent in T3 thread "<thread id>" sent this message, not the user.]
+pub fn delegated_by(text: &str) -> Option<String> {
+    let (_, rest) = text.split_once("[T3 Code: the agent in T3 thread \"")?;
+    let id = rest.split('"').next()?;
+    crate::focus::valid_t3_thread(id).then(|| id.to_string())
+}
+
 /// A prompt, as a chat name: your words only. T3 Code wraps a task it hands to another agent in its own lines
 /// ("[T3 Code: the agent in T3 thread … sent this message, not the user.]", "Act as the research sub-agent for this task.").
 pub fn prompt_title(text: &str) -> Option<String> {
@@ -284,6 +307,16 @@ fn cursor_done(last: Option<&Value>, at: u64, now: u64) -> bool {
     text_only && now.saturating_sub(at) >= CURSOR_QUIET_MS
 }
 
+/// Cursor keeps a transcript per subagent in <chat>/subagents/; the ones still at work, named after their task.
+fn cursor_subs(chat: &Path, now: u64) -> Vec<FoundSub> {
+    recent_logs(&chat.join("subagents"), now).into_iter().filter_map(|(log, at)| {
+        if cursor_done(tail(&log).last(), at, now) { return None; }
+        let id = log.file_stem()?.to_string_lossy().to_string();
+        let task = head(&log, 1).into_iter().next().filter(|o| o["role"] == "user").as_ref().and_then(cursor_prompt);
+        Some(FoundSub { id, kind: "subagent".into(), task, at })
+    }).collect()
+}
+
 fn cursor(home: &Path, now: u64, out: &mut Vec<Found>) {
     for proj in dirs(&home.join(".cursor/projects")) {
         let folder = proj.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
@@ -297,7 +330,9 @@ fn cursor(home: &Path, now: u64, out: &mut Vec<Found>) {
                 let first = head(&log, 1).into_iter().next().filter(|o| o["role"] == "user");
                 let title = first.as_ref().and_then(cursor_prompt);
                 let entrypoint = first.as_ref().and_then(cursor_text).filter(|t| from_t3(t)).map(|_| "t3-code".to_string());
-                out.push(Found { agent: "cursor".into(), id: format!("cursor:{id}"), cwd, project: None, entrypoint, at, status, activity, title, messages: vec![], ended: done, subs: vec![] });
+                let delegated = first.as_ref().and_then(cursor_text).and_then(delegated_by);
+                let subs = if done { vec![] } else { cursor_subs(&chat, now) };
+                out.push(Found { agent: "cursor".into(), id: format!("cursor:{id}"), cwd, project: None, entrypoint, at, status, activity, title, messages: vec![], ended: done, subs, delegated_by: delegated });
             }
         }
     }
@@ -415,6 +450,41 @@ mod tests {
         assert!(!cursor_done(Some(&working), 0, CURSOR_QUIET_MS * 10));    // a tool call is still running
         assert!(!cursor_done(Some(&json!({ "role": "user", "message": { "content": [{ "type": "text", "text": "hi" }] } })), 0, CURSOR_QUIET_MS));
         assert!(!cursor_done(None, 0, CURSOR_QUIET_MS));
+    }
+
+    #[test]
+    fn a_task_t3_code_hands_over_names_the_thread_it_came_from() {
+        let line = |id: &str| format!("[T3 Code: the agent in T3 thread \"{id}\" sent this message, not the user.]\n\nDo it.");
+        assert_eq!(delegated_by(&line("18f504af-284e-4ee6-823f-f44f9cb7dd8c")).as_deref(), Some("18f504af-284e-4ee6-823f-f44f9cb7dd8c"));
+        assert_eq!(delegated_by(&line("thread:delegated-task:command%3Amcp%3Aab")).as_deref(), Some("thread:delegated-task:command%3Amcp%3Aab"));
+        assert_eq!(delegated_by(&line("../etc/passwd")), None);
+        assert_eq!(delegated_by("a prompt you typed"), None);
+    }
+
+    #[test]
+    fn codex_threads_t3_code_starts_are_named_after_the_task() {
+        let home = tmp("codex-t3");
+        let day = home.join(".codex/sessions/2026/10/02");
+        let msg = |role: &str, text: &str| json!({ "type": "response_item", "payload": { "type": "message", "role": role, "content": [{ "type": "input_text", "text": text }] } });
+        write(&day.join("rollout-x.jsonl"), &[json!({ "type": "session_meta", "payload": { "id": "x1", "session_id": "x1", "cwd": "/repo", "originator": "T3 Code", "thread_source": "subagent" } }),
+            msg("developer", "You are Codex"), msg("user", "# AGENTS.md instructions for /repo"), msg("user", "<environment_context>/repo</environment_context>"),
+            msg("user", "[T3 Code: the agent in T3 thread \"18f504af-284e-4ee6-823f-f44f9cb7dd8c\" sent this message, not the user.]\n\nAct as the research sub-agent for this task.\n\nCount the lines."),
+            json!({ "type": "event_msg", "payload": { "type": "task_started" } })]);
+        let f = &scan(&home, now_ms())[0];
+        assert_eq!((f.title.as_deref(), f.delegated_by.as_deref()), (Some("Count the lines."), Some("18f504af-284e-4ee6-823f-f44f9cb7dd8c")));
+    }
+
+    #[test]
+    fn cursor_subagents_still_at_work_are_found_in_the_subagents_folder() {
+        let home = tmp("cursor-subs");
+        let chat = home.join(".cursor/projects/Users-me-shop/agent-transcripts/c3");
+        let user = |text: &str| json!({ "role": "user", "message": { "content": [{ "type": "text", "text": text }] } });
+        let tool = json!({ "role": "assistant", "message": { "content": [{ "type": "text", "text": "Looking" }, { "type": "tool_use" }] } });
+        write(&chat.join("c3.jsonl"), &[user("<user_query>\nship it\n</user_query>"), tool.clone()]);
+        write(&chat.join("subagents/s1.jsonl"), &[user("<user_query>\nCount the lines\n</user_query>"), tool]);
+        write(&chat.join("subagents/s2.jsonl"), &[user("finished one"), json!({ "type": "turn_ended" })]);
+        let f = &scan(&home, now_ms())[0];
+        assert_eq!(f.subs.iter().map(|x| (x.id.as_str(), x.kind.as_str(), x.task.as_deref())).collect::<Vec<_>>(), vec![("s1", "subagent", Some("Count the lines"))]);
     }
 
     #[test]

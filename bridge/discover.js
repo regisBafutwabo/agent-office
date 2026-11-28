@@ -139,8 +139,9 @@ function codex(home, now, out) {
       const last = tail(file).reverse().map(o => o.payload?.type).find(t => ['task_started', 'task_complete', 'turn_aborted'].includes(t));
       const [status, activity] = settle(...(!last ? ['idle', 'Session started'] : last === 'task_started' ? ['thinking', 'Thinking'] : ['done', 'Finished']), at, now);
       // ended: the log itself says the turn is over, so it overrides hooks still saying "thinking" (see Store.adopt).
-      out.push({ agent: 'codex', id: `codex:${id}`, cwd: meta.cwd || '', entrypoint: meta.originator || null, at, status, activity, title: null, messages: [],
-                 ended: !!last && last !== 'task_started' });
+      const prompt = codexPrompt(head(file, 80));
+      out.push({ agent: 'codex', id: `codex:${id}`, cwd: meta.cwd || '', entrypoint: meta.originator || null, at, status, activity, title: prompt ? promptTitle(prompt) : null, messages: [],
+                 ended: !!last && last !== 'task_started', delegatedBy: delegatedBy(prompt) });
     }
   }
 }
@@ -150,6 +151,14 @@ function codex(home, now, out) {
 const cursorText = o => Array.isArray(o?.message?.content) && o.message.content.find(x => typeof x?.text === 'string')?.text || '';
 const between = (text, tag) => text.includes(`<${tag}>`) ? text.split(`<${tag}>`)[1].split(`</${tag}>`)[0] : null;
 export const fromT3 = text => text.includes('<t3_code_orchestration_instructions>');
+// The T3 Code thread that handed this task to the agent, from the line T3 Code puts before it:
+// [T3 Code: the agent in T3 thread "<thread id>" sent this message, not the user.]
+const T3_THREAD = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|thread:[A-Za-z0-9%._:-]{1,300})$/i;   // as focus.js validT3Thread
+export function delegatedBy(text) {
+  const id = String(text ?? '').split('[T3 Code: the agent in T3 thread "')[1]?.split('"')[0];
+  return id && T3_THREAD.test(id) ? id : null;
+}
+
 // A prompt, as a chat name: your words only. T3 Code wraps a task it hands to another agent in its own lines
 // ("[T3 Code: the agent in T3 thread … sent this message, not the user.]", "Act as the research sub-agent for this task.").
 const T3_LINE = /^\s*(\[T3 Code:[^\]]*\]|Act as the [\w -]+ for this task\.?)\s*$/;
@@ -173,6 +182,26 @@ export function cursorDone(last, at, now) {
   return textOnly && now - at >= CURSOR_QUIET_MS;
 }
 
+// The first thing you asked a Codex thread: its user_message event, or else the first user message that isn't
+// the AGENTS.md or environment block Codex adds before it (T3 Code's threads have only those).
+function codexPrompt(lines) {
+  const ev = lines.find(o => o.type === 'event_msg' && o.payload?.type === 'user_message')?.payload?.message;
+  if (typeof ev === 'string') return ev;
+  return lines.filter(o => o.type === 'response_item' && o.payload?.type === 'message' && o.payload?.role === 'user')
+    .map(o => (Array.isArray(o.payload.content) ? o.payload.content : []).map(x => x?.text).filter(t => typeof t === 'string').join('\n'))
+    .find(t => { t = t.trimStart(); return t && !t.startsWith('#') && !t.startsWith('<'); }) || null;
+}
+// Cursor keeps a transcript per subagent in <chat>/subagents/; the ones still at work, named after their task.
+function cursorSubs(chat, now) {
+  const subs = [];
+  for (const { file, at } of recentLogs(path.join(chat, 'subagents'), now)) {
+    if (cursorDone(tail(file).at(-1), at, now)) continue;
+    const first = head(file, 1)[0];
+    subs.push({ id: path.basename(file, '.jsonl'), type: 'subagent', task: first?.role === 'user' ? cursorPrompt(first) : null, at });
+  }
+  return subs;
+}
+
 function cursor(home, now, out) {
   for (const proj of dirs(path.join(home, '.cursor', 'projects'))) {
     const folder = path.basename(proj); let cwd;
@@ -183,7 +212,7 @@ function cursor(home, now, out) {
         const [status, activity] = settle(done ? 'done' : 'thinking', done ? 'Finished' : 'Thinking', at, now);
         const first = head(file, 1)[0], user = first?.role === 'user';
         out.push({ agent: 'cursor', id: `cursor:${path.basename(file, '.jsonl')}`, cwd, entrypoint: user && fromT3(cursorText(first)) ? 't3-code' : null, at, status, activity,
-                   title: user ? cursorPrompt(first) : null, messages: [], ended: done });
+                   title: user ? cursorPrompt(first) : null, messages: [], ended: done, subs: done ? [] : cursorSubs(chat, now), delegatedBy: user ? delegatedBy(cursorText(first)) : null });
       }
     }
   }

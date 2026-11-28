@@ -211,6 +211,8 @@ pub struct Session {
     pub chat: Option<String>,
     /// The T3 Code thread (T3CODE_THREAD_ID), so "Open chat" lands on that thread in T3 Code.
     pub t3_thread: Option<String>,
+    /// The T3 Code thread of the agent that handed this session its task: the office shows it as that agent's subagent.
+    pub delegated_by: Option<String>,
     /// The chat's title (from its transcript), or its first prompt until it has one.
     pub title: Option<String>,
     /// A merge ran since the last prompt (see is_merge).
@@ -395,6 +397,7 @@ impl Store {
             Some(i) => {
                 let s = &mut self.sessions[i];
                 s.last_event_at = s.last_event_at.max(f.at);
+                if s.delegated_by.is_none() { s.delegated_by = f.delegated_by.clone(); }
                 let title = f.title.or(s.transcript_title.take());
                 let messages = if f.messages.is_empty() { s.messages.clone() } else { f.messages };
                 let changed = s.status != f.status || s.activity != f.activity || s.messages != messages || s.title != title;
@@ -410,7 +413,7 @@ impl Store {
                 self.sessions.push(Session {
                     id: f.id, agent: f.agent, cwd: f.cwd, home, project, entrypoint: entrypoint_label(f.entrypoint.as_deref()), started_at: f.at, last_event_at: f.at,
                     status: f.status, activity: f.activity, permission_mode: "default".into(), subagents: vec![], tool: None,
-                    app: None, term: None, tty: None, chat: None, t3_thread: None, title: f.title.clone(), merged: false, messages: f.messages, context: None,
+                    app: None, term: None, tty: None, chat: None, t3_thread: None, delegated_by: f.delegated_by.clone(), title: f.title.clone(), merged: false, messages: f.messages, context: None,
                     transcript_title: f.title, first_prompt: None, transcript_checked_at: 0, pending_tasks: vec![], from_log: true,
                 });
                 (self.sessions.len() - 1, true)
@@ -421,7 +424,8 @@ impl Store {
             "type": "SessionFound", "sessionId": s.id, "at": now_ms(), "agentId": null, "agentType": null,
             "message": if new { Value::from("Already running") } else { Value::Null },
             "session": { "id": s.id, "agent": s.agent, "cwd": s.cwd, "home": s.home, "project": s.project, "title": s.title, "merged": s.merged, "entrypoint": s.entrypoint,
-                         "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": s.app, "term": s.term, "chat": s.chat, "t3Thread": s.t3_thread, "messages": s.messages },
+                         "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": s.app, "term": s.term, "chat": s.chat, "t3Thread": s.t3_thread,
+                         "delegatedBy": s.delegated_by, "messages": s.messages },
         });
         if let Some(id) = replaces { event["replacesSessionId"] = id.into(); }
         if new {                                   // only the arrival goes in the feed, not every refresh
@@ -480,7 +484,7 @@ impl Store {
                     id: sid.into(), agent: agent.into(), cwd, home, project, entrypoint: entrypoint_label(entrypoint), started_at: now, last_event_at: now,
                     status: "idle".into(), activity: "Session started".into(),
                     permission_mode: if pm.is_empty() { "default".into() } else { pm.into() }, subagents: vec![], tool: None,
-                    app: None, term: None, tty: None, chat: None, t3_thread: None,
+                    app: None, term: None, tty: None, chat: None, t3_thread: None, delegated_by: None,
                     title: None, merged: false, messages: vec![], context: None, transcript_title: None, first_prompt: None, transcript_checked_at: 0, pending_tasks: vec![],
                     from_log: false,
                 });
@@ -506,12 +510,13 @@ impl Store {
             if let Some(t) = origin.term.filter(|t| !t.is_empty()) { s.term = Some(t.into()); }
             if let Some(t) = origin.tty.filter(|t| crate::focus::valid_tty(t)) { s.tty = Some(t.into()); }
             if let Some(c) = origin.chat.filter(|c| crate::focus::valid_chat(c)) { s.chat = Some(c.into()); }
-            if let Some(t) = origin.t3_thread.filter(|t| crate::focus::valid_uuid(t)) { s.t3_thread = Some(t.into()); }
+            if let Some(t) = origin.t3_thread.filter(|t| crate::focus::valid_t3_thread(t)) { s.t3_thread = Some(t.into()); }
             // The chat's title and last messages from its transcript; until it has a title, its first prompt stands in.
             let before = s.messages.clone();
             let prompt = str_of(p, "prompt");
             if kind == "UserPromptSubmit" && !prompt.is_empty() {
                 if s.first_prompt.is_none() { s.first_prompt = crate::discover::prompt_title(prompt); }
+                if s.delegated_by.is_none() { s.delegated_by = crate::discover::delegated_by(prompt); }
                 // The hook can fire before the prompt reaches the transcript: show it right away.
                 let text = clip(prompt, MESSAGE_CHARS);
                 if s.messages.last().is_none_or(|m| m.role != "user" || m.text != text) {
@@ -671,7 +676,7 @@ impl Store {
         e.insert("session".into(), json!({
             "id": s.id, "agent": s.agent, "cwd": s.cwd, "home": s.home, "project": s.project, "title": s.title, "merged": s.merged, "entrypoint": s.entrypoint,
             "permissionMode": s.permission_mode, "status": s.status, "activity": s.activity, "app": s.app, "term": s.term, "chat": s.chat, "t3Thread": s.t3_thread,
-            "context": s.context,
+            "delegatedBy": s.delegated_by, "context": s.context,
         }));
         if chat_changed {
             if let Some(Value::Object(o)) = e.get_mut("session") { o.insert("messages".into(), json!(s.messages)); }
@@ -749,7 +754,7 @@ mod tests {
         st.ingest(&json!({ "session_id": "t1", "cwd": "/repo", "hook_event_name": "SessionStart" }), None, None);
         st.ingest(&json!({ "session_id": "real-claude", "cwd": "/repo", "hook_event_name": "SessionStart" }), Some("cli"), None);
         let f = Found { id: "codex:t1".into(), agent: "codex".into(), cwd: "/repo".into(), project: None, entrypoint: None,
-            at: now_ms(), status: "working".into(), activity: "Working".into(), title: None, messages: vec![], ended: false, subs: vec![] };
+            at: now_ms(), status: "working".into(), activity: "Working".into(), title: None, messages: vec![], ended: false, subs: vec![], delegated_by: None };
         assert_eq!(st.adopt(f).unwrap()["replacesSessionId"], "t1");
         assert_eq!(st.sessions.len(), 2);
         assert!(st.sessions.iter().any(|s| s.id == "real-claude"));
@@ -777,7 +782,7 @@ mod tests {
         st.ingest_from(&prompt, None, None, "codex", Origin::default());
         let last = st.sessions[0].last_event_at;
         let log = |at: u64, ended: bool| Found { agent: "codex".into(), id: "codex:t1".into(), cwd: "/repo".into(), project: None, entrypoint: Some("T3 Code".into()),
-            at, status: "done".into(), activity: "Finished".into(), title: None, messages: vec![], ended, subs: vec![] };
+            at, status: "done".into(), activity: "Finished".into(), title: None, messages: vec![], ended, subs: vec![], delegated_by: None };
         // An earlier turn's end, written before this prompt, mustn't cut it short; it only fills in where the session runs.
         let e = st.adopt(log(last - 1000, true)).unwrap();
         assert_eq!((e["session"]["entrypoint"].as_str(), e["session"]["status"].as_str()), (Some("t3-code"), Some("thinking")));
@@ -898,6 +903,17 @@ mod tests {
     }
 
     #[test]
+    fn a_session_t3_code_handed_a_task_to_names_the_thread_that_handed_it_over() {
+        let mut st = Store::default();
+        st.ingest_from(&base(json!({ "hook_event_name": "SessionStart" })), Some("t3-code"), None, "codex", Origin { t3_thread: Some("thread:delegated-task:abc"), ..Origin::default() });
+        let prompt = "[T3 Code: the agent in T3 thread \"18f504af-284e-4ee6-823f-f44f9cb7dd8c\" sent this message, not the user.]\n\nCount the lines.";
+        let e = st.ingest_from(&base(json!({ "hook_event_name": "UserPromptSubmit", "prompt": prompt })), Some("t3-code"), None, "codex", Origin::default()).unwrap();
+        assert_eq!(e["session"]["delegatedBy"], "18f504af-284e-4ee6-823f-f44f9cb7dd8c");
+        assert_eq!(e["session"]["t3Thread"], "thread:delegated-task:abc"); // its own thread, kept so the tasks it hands on find it
+        assert_eq!(e["session"]["title"], "Count the lines.");
+    }
+
+    #[test]
     fn keeps_a_valid_t3_code_thread_and_ignores_a_bad_one() {
         let mut st = Store::default();
         let thread = "fceae35e-a7d0-4d26-b667-aa2413567acf";
@@ -969,7 +985,7 @@ mod tests {
 
     fn found(id: &str, status: &str) -> Found {
         Found { agent: "claude-code".into(), id: id.into(), cwd: "/Users/me/code/shop".into(), project: None, entrypoint: Some("claude-desktop".into()),
-                at: now_ms(), status: status.into(), activity: "Working".into(), title: Some("Fix cart".into()), messages: vec![], ended: false, subs: vec![] }
+                at: now_ms(), status: status.into(), activity: "Working".into(), title: Some("Fix cart".into()), messages: vec![], ended: false, subs: vec![], delegated_by: None }
     }
 
     #[test]

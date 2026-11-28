@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { scan, encode, decode, settle, archivedChats, desktopSessionsDir, FOUND_WINDOW_MS, promptTitle, cursorDone, CURSOR_QUIET_MS } from './discover.js';
+import { scan, encode, decode, settle, archivedChats, desktopSessionsDir, FOUND_WINDOW_MS, promptTitle, cursorDone, CURSOR_QUIET_MS, delegatedBy } from './discover.js';
 
 const tmp = name => fs.mkdtempSync(path.join(os.tmpdir(), `agent-office-discover-${name}-`));
 const write = (file, lines) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, lines.map(l => JSON.stringify(l) + '\n').join('')); };
@@ -111,4 +111,34 @@ test('a Cursor chat without turn_ended is done once it answered and went quiet',
   assert.equal(cursorDone(working, 0, CURSOR_QUIET_MS * 10), false);    // a tool call is still running
   assert.equal(cursorDone({ role: 'user', message: { content: [{ type: 'text', text: 'hi' }] } }, 0, CURSOR_QUIET_MS), false);
   assert.equal(cursorDone(undefined, 0, CURSOR_QUIET_MS), false);
+});
+
+test('a task T3 Code hands over names the thread it came from', () => {
+  const line = id => `[T3 Code: the agent in T3 thread "${id}" sent this message, not the user.]\n\nDo it.`;
+  assert.equal(delegatedBy(line('18f504af-284e-4ee6-823f-f44f9cb7dd8c')), '18f504af-284e-4ee6-823f-f44f9cb7dd8c');
+  assert.equal(delegatedBy(line('thread:delegated-task:command%3Amcp%3Aab')), 'thread:delegated-task:command%3Amcp%3Aab');   // a task handed on again
+  assert.equal(delegatedBy(line('../etc/passwd')), null);
+  assert.equal(delegatedBy('a prompt you typed'), null);
+});
+
+test("Codex threads T3 Code starts are named after the task and know who handed it over", () => {
+  const home = tmp('codex-t3'), day = path.join(home, '.codex', 'sessions', '2026', '10', '02');
+  const msg = (role, text) => ({ type: 'response_item', payload: { type: 'message', role, content: [{ type: 'input_text', text }] } });
+  write(path.join(day, 'rollout-x.jsonl'), [{ type: 'session_meta', payload: { id: 'x1', session_id: 'x1', cwd: '/repo', originator: 'T3 Code', thread_source: 'subagent' } },
+    msg('developer', 'You are Codex'), msg('user', '# AGENTS.md instructions for /repo'), msg('user', '<environment_context>/repo</environment_context>'),
+    msg('user', '[T3 Code: the agent in T3 thread "18f504af-284e-4ee6-823f-f44f9cb7dd8c" sent this message, not the user.]\n\nAct as the research sub-agent for this task.\n\nCount the lines.'),
+    { type: 'event_msg', payload: { type: 'task_started' } }]);
+  const [f] = scan(home);
+  assert.deepEqual([f.title, f.delegatedBy], ['Count the lines.', '18f504af-284e-4ee6-823f-f44f9cb7dd8c']);
+});
+
+test('Cursor subagents still at work are found in the chat’s subagents folder', () => {
+  const home = tmp('cursor-subs'), chat = path.join(home, '.cursor', 'projects', 'Users-me-shop', 'agent-transcripts', 'c3');
+  const user = text => ({ role: 'user', message: { content: [{ type: 'text', text }] } });
+  const tool = { role: 'assistant', message: { content: [{ type: 'text', text: 'Looking' }, { type: 'tool_use' }] } };
+  write(path.join(chat, 'c3.jsonl'), [user('<user_query>\nship it\n</user_query>'), tool]);
+  write(path.join(chat, 'subagents', 's1.jsonl'), [user('<user_query>\nCount the lines\n</user_query>'), tool]);
+  write(path.join(chat, 'subagents', 's2.jsonl'), [user('finished one'), { type: 'turn_ended' }]);
+  const [f] = scan(home);
+  assert.deepEqual(f.subs.map(x => [x.id, x.type, x.task]), [['s1', 'subagent', 'Count the lines']]);
 });

@@ -352,3 +352,12 @@ test('agents in worktrees of one repo share its floor and name, and keep their o
   assert.deepEqual([s.cwd, s.home, s.project], [wt, repo, 'shop']);
   fs.rmSync(tmp, { recursive: true, force: true });
 });
+
+test('a session T3 Code handed a task to names the thread that handed it over', () => {
+  const st = new Store();
+  st.ingest({ hook_event_name: 'SessionStart', session_id: 'd1', cwd: '/repo' }, 't3-code', null, 'codex', { t3Thread: 'thread:delegated-task:abc' });
+  const e = st.ingest({ hook_event_name: 'UserPromptSubmit', session_id: 'd1', cwd: '/repo', prompt: '[T3 Code: the agent in T3 thread "18f504af-284e-4ee6-823f-f44f9cb7dd8c" sent this message, not the user.]\n\nCount the lines.' }, 't3-code', null, 'codex', {});
+  assert.equal(e.session.delegatedBy, '18f504af-284e-4ee6-823f-f44f9cb7dd8c');
+  assert.equal(e.session.t3Thread, 'thread:delegated-task:abc');   // its own thread, kept so the tasks it hands on find it
+  assert.equal(e.session.title, 'Count the lines.');
+});
