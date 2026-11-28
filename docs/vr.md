@@ -12,11 +12,16 @@ You can walk through the office in a VR headset. This feature is in beta. Nobody
 
 - **Enter VR** puts you in the aisle of the floor that you look at.
 - You see the agents work at their desks.
+- To jump to a different spot, point a controller at the floor. Hold the trigger. A ring shows where you will go. Release the trigger to go there.
+- To turn 30 degrees, push a thumbstick to the left or to the right. Push it again to turn more.
 - To leave VR, use the menu button of the headset.
+
+You can jump up to 10 m. You cannot jump into furniture or through the walls. If no ring shows, point at a different part of the floor.
+
+The office does not move you smoothly. Smooth movement makes many people sick in a headset.
 
 These do not work yet:
 
-- You cannot move with the controllers. Walk in your room to move.
 - You cannot see the panels, the toasts or the permission requests. Take off the headset to use them.
 
 To keep the headset fast, the office has no soft shadows in VR.
@@ -56,6 +61,8 @@ The [Immersive Web Emulator](https://github.com/meta-quest/immersive-web-emulato
 3. Open the developer tools. Select the **WebXR** tab.
 4. Select **Enter VR** in the office.
 5. Move the fake headset and controllers in the **WebXR** tab.
+6. To jump, point the right controller at the floor. Hold its trigger button in the **WebXR** tab, then release it.
+7. To turn, move the thumbstick of a controller in the **WebXR** tab to the left or to the right.
 
 The emulator uses the graphics card of your computer. A headset is much slower. Thus the emulator cannot tell you if the office is fast enough in a headset.
 

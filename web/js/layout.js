@@ -1,33 +1,3 @@
-/* ---------- VR ---------- */
-// Experimental: nobody has tried this on a real headset yet, only in an emulator (see docs/vr.md).
-// Headset browsers start VR only on a secure address. The office listens on this computer alone, so a Quest reaches it
-// as localhost over a USB cable (adb reverse), which counts as secure and keeps everything off the network.
-let vrBusy = false;
-$('#vr-btn').onclick = async () => {
-  if (vrBusy || renderer.xr.isPresenting) return;
-  if (!window.isSecureContext) { toast('VR opens only from a localhost address. Connect the headset with a USB cable, then open the office at localhost in its browser.'); return; }
-  if (!navigator.xr) { toast('This browser cannot show VR. Open the office in the browser of your headset.'); return; }
-  vrBusy = true; let session = null;
-  try {
-    if (!await navigator.xr.isSessionSupported('immersive-vr')) { toast('No VR headset found. Connect a Meta Quest with a USB cable, then open the office in its browser.'); return; }
-    session = await navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor'] });
-    renderer.xr.enabled = true; renderer.xr.setReferenceSpaceType('local-floor');
-    // Soft shadows cost too much on a headset: a Quest must draw two eyes at 72 frames a second or more.
-    sun.castShadow = false;
-    session.addEventListener('end', e => {
-      // three.js tidies up only a session it finished starting; for a half-started one its tidy-up throws, so skip it.
-      if (!renderer.xr.isPresenting) e.stopImmediatePropagation();
-      renderer.xr.enabled = false; sun.castShadow = true; rig.position.set(0, 0, 0); rig.rotation.y = 0; layout();
-    });
-    await renderer.xr.setSession(session);
-    // Stand in the aisle of the floor in view. The building moves so that this floor is always at height 0.
-    rig.position.set(2.5, 0, 0.5); rig.rotation.y = 0; camera.position.set(0, 0, 0); camera.rotation.set(0, 0, 0);
-  } catch (_) {
-    if (session) session.end().catch(() => {});   // a session that opened but failed to draw would leave the headset black
-    toast('The headset did not start VR. Put the headset on, then select Enter VR again.');
-  } finally { vrBusy = false; }
-};
-
 /* ---------- layout ---------- */
 // Collapsible rail + side panel. Per-viewer convenience, so it's kept in localStorage.
 const appEl = $('#app'), liftEl = $('#lift');
