@@ -19,8 +19,9 @@ export const test = base.extend({
     await expect.poll(() => log, { timeout: 15_000 }).toContain('#k=');
     const key = log.match(/#k=(\S+)/)[1], url = `http://127.0.0.1:${port}`;
     const hookKey = fs.readFileSync(path.join(data, 'hook-token'), 'utf8').trim().replace(/^X-Agent-Office-Token:\s*/i, '');
-    const hook = async payload => {
-      const r = await fetch(url + '/hook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Agent-Office-Token': hookKey }, body: JSON.stringify(payload) });
+    // headers: what hook scripts add, such as X-Agent-Office-T3-Thread or X-Agent-Office-Agent.
+    const hook = async (payload, headers = {}) => {
+      const r = await fetch(url + '/hook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Agent-Office-Token': hookKey, ...headers }, body: JSON.stringify(payload) });
       expect(r.status).toBe(204);
     };
     await use({ url, key, hook, root, log: () => log });

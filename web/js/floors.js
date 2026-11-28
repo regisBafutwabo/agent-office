@@ -95,7 +95,7 @@ function iconFor(bundle) {
   }
   return iconState[bundle] === 'ok' ? iconImg[bundle] : null;
 }
-const toolOf = a => (a.parent || a).agentName || 'claude-code';
+const toolOf = a => a.agentName || (a.parent && a.parent.agentName) || 'claude-code';   // a subagent handed over by T3 Code has a tool of its own
 // The tool's own logo (Claude, Codex, Cursor…), else the app it runs in (Terminal, iTerm…).
 const agentIcon = a => iconFor(TOOL_ICON[toolOf(a)]) || iconFor((a.parent || a).hostApp);
 function appBadge(a, cls = 'app-ico') {
