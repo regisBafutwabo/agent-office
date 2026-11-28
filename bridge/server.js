@@ -249,7 +249,8 @@ function rescan() {
   const before = [...store.sessions.keys()]; store.prune();
   for (const id of before) if (!store.sessions.has(id)) broadcast({ type: 'event', event: { type: 'SessionEnd', sessionId: id, at: Date.now(), reason: 'No news for a while' } });
 }
-setInterval(rescan, 10_000).unref();
+// AGENT_OFFICE_SCAN_MS only exists so browser tests can keep this timer out of their way.
+setInterval(rescan, Number(process.env.AGENT_OFFICE_SCAN_MS) || 10_000).unref();
 watchMusic(m => { music = m; broadcast({ type: 'music', music }); }, () => [...wss.clients].some(c => c.readyState === 1 && c.music));
 
 server.on('error', err => {
