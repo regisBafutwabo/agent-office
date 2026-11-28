@@ -2,9 +2,11 @@
 // Records the README trailer (dist/trailer.mp4, 720p) from the demo office, in headless Chromium.
 // With --social it records the launch cut instead (dist/trailer-social.mp4): square 1080 px for phone feeds,
 // about 20 s, opening on a permission request, with the repo link on the end card.
+// With --pitch it records the status-board cut (dist/trailer-pitch.mp4): square 1080 px, about 28 s, for people who
+// run several agents at once. It shows who needs you, the early warnings and Connect agents, and skips the fun.
 //
 //   npm i --no-save playwright-core && npx playwright install chromium-headless-shell
-//   node scripts/record-trailer.mjs [--social]     # needs ffmpeg on PATH (or FFMPEG=…)
+//   node scripts/record-trailer.mjs [--social | --pitch]     # needs ffmpeg on PATH (or FFMPEG=…)
 //
 // The video stays out of git: drag it into a GitHub comment and put the user-attachments link in the README.
 //
@@ -20,14 +22,15 @@ import { createServer } from 'node:net';
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../..');
 const FPS = 30, FFMPEG = process.env.FFMPEG || 'ffmpeg';
-const OUT = join(ROOT, 'dist'), SOCIAL = process.argv.includes('--social');
+const OUT = join(ROOT, 'dist'), CUT = process.argv.includes('--pitch') ? 'pitch' : process.argv.includes('--social') ? 'social' : 'readme', SQUARE = CUT !== 'readme';
 let chromium;
 try { ({ chromium } = await import('playwright-core')); }
 catch { console.error('Needs playwright-core: npm i --no-save playwright-core && npx playwright install chromium-headless-shell'); process.exit(1); }
 
 /* Runs inside the office page (through eval in its closure), so it can use the page's own functions and state.
    Everything waits on the office's simulated clock (wait), which the recorder advances frame by frame. */
-function director(social) {
+function director(cut) {
+  const pitch = cut === 'pitch', social = cut !== 'readme';   // social: the square layout both phone cuts share
   renderer.setAnimationLoop(null);                 // the recorder draws each frame itself
   const ticks = [];
   const css = document.createElement('style');
@@ -48,7 +51,13 @@ function director(social) {
     .tops{top:12px!important;left:12px!important;right:12px!important;max-width:none!important;zoom:1.45}
     .toasts{top:auto!important;bottom:118px!important;right:12px!important;zoom:1.45}
     .tr-cap{font-size:42px;bottom:36px;white-space:normal;text-align:center;width:max-content;max-width:94%}
-    .tr-end h2{font-size:64px}` : ''}`;
+    .tr-end h2{font-size:64px}` : ''}
+    ${pitch ? `.tr-end h2{font-size:44px;gap:16px} .tr-end h2 svg{width:54px;height:54px}
+    .tr-end .line{font:700 68px/1.08 "Bricolage Grotesque",system-ui,sans-serif;letter-spacing:-.02em;color:#fff;text-align:center;max-width:90%;margin:6px 0 10px}
+    .tr-end .line b{color:#FAC05E;font-weight:700}
+    .detail{left:12px!important;top:12px!important;bottom:auto!important;max-height:none!important;zoom:1.45}
+    .detail .d-tabs,.detail #d-chat,.detail #d-log,.detail #d-mem,.detail #d-chg,.detail #d-note,.detail #d-close,.lift,.city-credit{display:none!important}
+    .panel{top:12px!important;right:12px!important;bottom:auto!important;height:330px;zoom:1.6}` : ''}`;
   document.head.appendChild(css);
   const cap = document.createElement('div'); cap.className = 'tr-cap'; document.body.appendChild(cap);
   const cursor = document.createElement('div'); cursor.className = 'tr-cursor';
@@ -56,7 +65,7 @@ function director(social) {
   document.body.appendChild(cursor);
   const end = document.createElement('div'); end.className = 'tr-end';
   end.innerHTML = `<h2><svg width="78" height="78" viewBox="0 0 30 30"><rect x="1" y="1" width="28" height="28" rx="8" fill="#F2F5F6"/><rect x="7" y="7" width="6.5" height="6.5" rx="1.8" fill="#3FA7D6"/><rect x="16.5" y="7" width="6.5" height="6.5" rx="1.8" fill="#F25F5C"/><rect x="7" y="16.5" width="6.5" height="6.5" rx="1.8" fill="#59CD90"/><rect x="16.5" y="16.5" width="6.5" height="6.5" rx="1.8" fill="#FAC05E"/></svg>Agent Office</h2>
-    <p>A 3D office where your coding agents work</p><p class="tools">Claude Code · Codex · Cursor · Gemini CLI · and more</p>
+    ${pitch ? '<p class="line">Never miss a <b>blocked agent</b> again</p>' : '<p>A 3D office where your coding agents work</p><p class="tools">Claude Code · Codex · Cursor · Gemini CLI · and more</p>'}
     ${social ? '<p>Free · open source · runs on your Mac</p><p class="url">github.com/regisBafutwabo/agent-office</p>' : ''}`;
   document.body.appendChild(end);
 
@@ -111,7 +120,7 @@ function director(social) {
   window.__ready = () => !!(document.fonts && document.fonts.status === 'loaded');
   window.__rec = true;                             // false while setting a scene up: frames still run, none are kept
 
-  window.__director = social ? socialCut : async () => {
+  window.__director = pitch ? pitchCut : social ? socialCut : async () => {
     // Set the stage: everyone at work, a few edits for the review board, Max still in the lift.
     setPanelOpen(false); setLiftOpen(false);
     agents.forEach(a => atDesk(a, 'Working'));
@@ -270,6 +279,102 @@ function director(social) {
     await wait(3.4);
     window.__done = true;
   }
+
+  // The pitch cut: the office as a status board. Who needs you, an answer from the office, the early warnings,
+  // then how little it takes to set up. No party: every scene is something you'd otherwise have missed.
+  async function pitchCut() {
+    // Toasts close on a real timer, and a frame takes far longer to record than to play: run timers on the office's clock.
+    { const due = []; let ids = 1e6; const clear = window.clearTimeout.bind(window);
+      window.setTimeout = (fn, ms = 0, ...a) => { due.push({ id: ++ids, at: __vclock.t + ms, run: () => fn(...a) }); return ids; };
+      window.clearTimeout = id => { const i = due.findIndex(d => d.id === id); if (i < 0) clear(id); else due.splice(i, 1); };
+      ticks.push(() => { for (const d of due.filter(d => d.at <= __vclock.t)) { due.splice(due.indexOf(d), 1); d.run(); } }); }
+    setPanelOpen(false); setLiftOpen(false);
+    // Four agents on one floor, each from another tool, as a real office shows them: the demo's own crew, moved in together.
+    const near = () => F.deskSeats.filter(s => !s.by && !s.owner).sort((p, q) => Math.hypot(p.x - ada.home.x, p.z - ada.home.z) - Math.hypot(q.x - ada.home.x, q.z - ada.home.z))[0];
+    const sit = (a, home) => { if (a.home) { a.home.by = null; a.home.owner = null; } home.by = a.id; home.owner = a; a.home = a.spot = home; a.where = 'Own desk';
+      a.g.position.set(home.x, 0, home.z); a.yaw = a.yawT = yawOf(home.face); a.appear = 1; deskDirty = true; };
+    sit(max, near());
+    const [kit, nova] = ['Kit', 'Nova'].map(n => { const old = agents.find(a => a.name === n), home = near();
+      const a = createAgent({ name: n, kind: 'main', color: old.color, home, project: ada.project, floor: F, look: old.look }); sit(a, home); return a; });
+    agents.filter(a => a.kind === 'main' && a.floor !== F).forEach(a => { a.home.by = a.home.owner = null; removeAgent(a); });
+    const crew = [ada, max, kit, nova];
+    [{}, { agentName: 'codex' }, { agentName: 'cursor' }, { entrypoint: 't3-code' }].forEach((tool, i) => Object.assign(crew[i], { live: true, cwd: '~/code/' + ada.project.key, subs: new Map() }, tool));
+    [[ada, 'Edit src/api/tasks.ts'], [max, 'Edit src/store/settings.ts'], [kit, 'Bash npm run lint'], [nova, 'Read src/auth/session.ts']].forEach(([a, label]) => atDesk(a, label));
+    setContext(ada, { used: 148000, max: 200000 }, true); setContext(nova, { used: 64000, max: 200000 }, true);
+    // A pose that looks at some agents, with them moved down and right on screen (in metres), clear of the overlays.
+    const frame = (list, theta, phi, radius, down = 0, right = 0) => { const t = V(0, 0); list.forEach(a => { t.x += a.home.x / list.length; t.z += a.home.z / list.length; });
+      t.x -= Math.sin(theta) * down + Math.cos(theta) * right; t.z -= Math.cos(theta) * down - Math.sin(theta) * right; return { theta, phi, radius, target: t }; };
+    const cut = pose => { stopTweens(); Object.assign(goal, { theta: pose.theta, phi: pose.phi, radius: pose.radius }); goal.target.copy(pose.target);
+      Object.assign(cam, { theta: goal.theta, phi: goal.phi, radius: goal.radius }); cam.target.copy(goal.target); };
+    // Set up off camera: fly to the floor, load the tool badges, then frame the whole crew.
+    window.__rec = false;
+    goToFloor(0); crew.forEach(a => appBadge(a));
+    await wait(1.2);
+    cut(frame(crew, .3, .8, 12.5, 1.9));
+    caption(`Running ${crew.length} agents?<br><b>One is waiting on you.</b>`);
+    await wait(.7);
+    window.__rec = true;
+
+    // 1. Four agents at work. One stops: its hand goes up and the "needs you" strip names it.
+    camTo(frame(crew, .42, .86, 11, 1.9), 4.2);
+    await wait(1.3);
+    ada.pose = 'raise'; setState(ada, 'waiting', 'Wants to run git push origin feat/due-dates');
+    emit(ada, 'Notification', 'Permission needed · Bash git push origin feat/due-dates');
+    askPermission(ada, 'Bash', 'git push origin feat/due-dates').then(() => { ada.pose = 'type'; setState(ada, 'working', 'Bash git push origin feat/due-dates'); });
+    await wait(2.7);
+
+    // 2. Answered from the strip: no hunting for the right window.
+    caption('See who needs you.<br><b>Approve it here.</b>');
+    camTo(frame(crew, .48, .88, 9.6, 1.9), 4.0);
+    await wait(1.4);
+    await new Promise(res => { const b = document.querySelector('#needs-list [data-act="allow"]'); if (!b) return res(); clickEl(b, 1.0, () => { decide(ada, 'allow'); res(); }); });
+    await wait(1.5);
+
+    // 3. Early warnings. First, two agents on one file: a red bar joins them and a toast names both.
+    caption('Two agents on <b>one file</b>? You’ll know.');
+    // From high up, looking along the bar: it shows between their name tags.
+    camTo(frame([kit, nova], .3, .62, 8.2, .6), 1.0);
+    await wait(.6);
+    setState(kit, 'working', 'Edit src/auth/session.ts'); noteEdit(kit, 'src/auth/session.ts');
+    await wait(.6);
+    setState(nova, 'working', 'Edit src/auth/session.ts'); noteEdit(nova, 'src/auth/session.ts');
+    await wait(3.2);
+
+    // Then an agent whose test keeps failing while its memory fills: its card says both.
+    $('#toasts').replaceChildren();
+    caption('Going in circles? Memory almost full? <b>You’ll know.</b>');
+    camTo(frame([ada], .42, .9, 7.2, .75, 1.25), 1.0);
+    [max, nova].forEach(a => { a.label.position.y = 99; });   // from here their name tags would cover Ada: lift them out of frame
+    for (let k = 0; k < 3; k++) { await wait(.55); ada.pose = 'think'; setState(ada, 'thinking', 'npm test failed, trying again');
+      noteResult(ada, { tool: 'Bash', summary: 'npm test', failed: true }); }
+    await wait(.5);
+    select(ada);
+    await wait(1.0);
+    setContext(ada, { used: 172000, max: 200000 });
+    await wait(3.0);
+    [max, nova].forEach(a => { a.label.position.y = a.topY + .5; });
+
+    // 4. Plug and play: Connect agents in Customize, as the Mac app shows it, and one click connects a tool.
+    select(null); $('#toasts').replaceChildren();
+    caption('Install. Connect. Keep using <b>Claude Code, Codex, Cursor, T3 Code</b>.');
+    camTo(frame(crew, .55, .8, 13), 1.4);
+    const tools = [['claude-code', 'Claude Code', 'connected'], ['codex', 'Codex', 'connected'], ['cursor', 'Cursor', 'not-connected'], ['antigravity', 'Antigravity', 'not-connected']].map(([id, name, status]) => ({ id, name, status }));
+    // The demo has no Connect list of its own, and redraws it empty with the agent list: let it draw this one.
+    const draw = renderSetup, list = () => { const was = MODE; MODE = 'live'; draw(); MODE = was; };
+    setup.tools = tools; renderSetup = list;
+    list(); setPanelOpen(true); $('#panel .tabs [data-tab="custom"]').click();
+    $('#connect-title').scrollIntoView({ block: 'start' });
+    await wait(.9);
+    for (const id of ['cursor', 'antigravity']) {
+      await new Promise(res => clickEl(document.querySelector(`[data-connect="${id}"]`), .8, () => { tools.find(t => t.id === id).status = 'connected'; list(); res(); }));
+      await wait(.5);
+    }
+    await wait(2.4);
+
+    caption(''); endWant = 1;
+    await wait(4.0);
+    window.__done = true;
+  }
 }
 
 const port = await new Promise(res => { const s = createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
@@ -280,7 +385,7 @@ try {
   await new Promise(r => setTimeout(r, 1500));
   // Headless only, with software WebGL: no window ever opens.
   browser = await chromium.launch({ headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-  const page = await browser.newPage({ bypassCSP: true, viewport: SOCIAL ? { width: 800, height: 800 } : { width: 1200, height: 675 }, deviceScaleFactor: SOCIAL ? 1.35 : 1.6 });
+  const page = await browser.newPage({ bypassCSP: true, viewport: SQUARE ? { width: 800, height: 800 } : { width: 1200, height: 675 }, deviceScaleFactor: SQUARE ? 1.35 : 1.6 });
   page.on('pageerror', e => console.error('page error:', e.message));
   // Let the director reach into the page's scope, and keep the demo agents still until it moves them.
   // boot.js is the last script, so an eval there sees every script's top-level names.
@@ -302,7 +407,7 @@ try {
   await page.goto(`http://127.0.0.1:${port}/?demo`);
   await page.waitForFunction(() => window.__ao && window.agentOffice.agents.length >= 6, null, { timeout: 60000 });
   await page.waitForTimeout(4000);                                  // city tiles and fonts
-  await page.evaluate(src => { __vclock.base = performance.now(); __vclock.on = true; window.__ao(src); }, `(${director})(${SOCIAL})`);
+  await page.evaluate(src => { __vclock.base = performance.now(); __vclock.on = true; window.__ao(src); }, `(${director})(${JSON.stringify(CUT)})`);
   await page.evaluate(() => { window.__director().catch(e => { console.error(e); window.__done = true; }); });
   let n = 0;
   for (let k = 0; k < FPS * 90 && !(await page.evaluate(() => window.__done)); k++) {
@@ -322,7 +427,7 @@ const ff = (...a) => execFileSync(FFMPEG, ['-loglevel', 'error', '-y', ...a], { 
 const seq = ['-framerate', String(FPS), '-i', join(frames, 'f%05d.png')];
 // README: 720p, since it shows under 900 px wide and the city's lit windows make 1080p twice the size.
 // Social: 1080 square, which X and Reddit show full width on a phone.
-const name = SOCIAL ? 'trailer-social.mp4' : 'trailer.mp4';
-ff(...seq, '-vf', SOCIAL ? 'scale=1080:1080:flags=lanczos' : 'scale=1280:-2:flags=lanczos', '-c:v', 'libx264', '-preset', 'slow', '-crf', SOCIAL ? '21' : '24', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', join(OUT, name));
+const name = CUT === 'readme' ? 'trailer.mp4' : `trailer-${CUT}.mp4`;
+ff(...seq, '-vf', SQUARE ? 'scale=1080:1080:flags=lanczos' : 'scale=1280:-2:flags=lanczos', '-c:v', 'libx264', '-preset', 'slow', '-crf', SQUARE ? '21' : '24', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', join(OUT, name));
 console.log(name, (statSync(join(OUT, name)).size / 1048576).toFixed(1), 'MB');
 rmSync(data, { recursive: true, force: true });
