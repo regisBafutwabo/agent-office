@@ -248,20 +248,22 @@ details.cust-agent[open] summary::after{transform:rotate(180deg)}
 .wn-body p{margin:0 0 10px;color:var(--ink-2);font:inherit}
 .wn-body b{color:var(--ink)}
 .wn-body a{color:inherit}
-.crew-choices{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0}
+.crew-choices{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-3);margin:20px 0}
 .crew-choice{padding:20px 12px;border:2px solid var(--line);border-radius:var(--r-lg);background:var(--panel-2);cursor:pointer;text-align:center}
 .crew-choice[aria-pressed="true"]{border-color:var(--accent);background:var(--panel-3)}
 .crew-choice svg{display:block;margin:0 auto 12px;width:88px;height:88px}
 .crew-choice b{display:block;font:700 18px/24px var(--font-d)}
 .crew-choice span{display:block;color:var(--muted);font-size:var(--fs-body);margin-top:4px}
-.guide-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:16px}
+.guide-actions{display:flex;flex-wrap:wrap;gap:var(--sp-2);align-items:center;margin-top:var(--sp-4)}
 .guide-actions .primary{margin-left:auto}
-.guide{position:absolute;z-index:40;left:50%;bottom:24px;transform:translateX(-50%);width:min(380px,calc(100% - 32px));padding:20px;border-radius:var(--r-lg);background:var(--panel);border:1px solid var(--line);box-shadow:var(--e-2)}
+.guide{position:absolute;z-index:40;left:50%;bottom:var(--sp-5);transform:translateX(-50%);width:min(380px,calc(100% - 32px));padding:20px;border-radius:var(--r-lg);background:var(--panel);border:1px solid var(--line);box-shadow:var(--e-2)}
 .guide h2{margin:4px 0 8px;font:700 var(--fs-display)/26px var(--font-d)}
 .guide p{margin:0;color:var(--muted)}
 .guide .guide-step{font-size:var(--fs-caption);text-transform:uppercase;letter-spacing:.08em}
 .guide-target{outline:3px solid var(--accent);outline-offset:4px}
-@media(max-width:760px){.guide{bottom:auto;top:112px;padding:16px;max-height:calc(100% - 176px);overflow:auto}.guide[data-detail="true"]{top:auto;bottom:60px;max-height:40%}.crew-choice{padding:16px 8px}}
+#guide-tools .note{margin-top:var(--sp-3)}
+.touring #empty{display:none}   /* the tour explains the empty office itself, and the two cards overlap on a phone */
+@media(max-width:760px){.guide{bottom:auto;top:112px;padding:var(--sp-4);max-height:calc(100% - 176px);overflow:auto}.guide[data-detail="true"]{top:auto;bottom:60px;max-height:40%}.crew-choice{padding:16px 8px}}
 
 /* detail card */
 .detail{position:absolute;left:16px;bottom:16px;width:360px;max-width:calc(100% - var(--panel-w) - 48px);max-height:calc(56% - 40px);overflow:auto;border-radius:var(--r-lg);padding:16px;z-index:5;display:flex;flex-direction:column;gap:12px}

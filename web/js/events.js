@@ -164,6 +164,7 @@ function onOutdatedHooks(hooks) {
   }
 }
 function onSnapshot(msg) {
+  const first = !live.gotSnapshot;
   onSnapshotHistory(msg);
   if (!live.gotSnapshot) { live.gotSnapshot = true; rosterEl._html = null; uiDirty = true; setTimeout(setModeLine); }
   onOutdatedHooks(msg.outdatedHooks);
@@ -210,6 +211,7 @@ function onSnapshot(msg) {
   for (const ap of msg.approvals || []) onApproval(ap, false);   // requests still waiting for an answer
   setModeLine();
   recapOnSnapshot();
+  if (first) guideOnAgents();
 }
 
 function liveTick(dt) {
