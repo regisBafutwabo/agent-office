@@ -13,7 +13,7 @@ name = "agent-office"
 version = "0.5.11"
 dependencies = [
  "axum",
- "base64 0.22.1",
+ "base64 0.23.1",
  "getrandom 0.4.3",
  "libc",
  "mime_guess",
