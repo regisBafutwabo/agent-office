@@ -23,6 +23,24 @@ This file is for AI coding agents (Claude Code, Codex, Cursor, Copilot and other
 5. **Do not add dependencies, build steps or CDN scripts** unless the maintainer agrees first.
 6. **Keep the security rules.** The office listens only on `127.0.0.1` by default. No user data leaves the computer. Hooks never block or change what an agent does. New `/api/` routes need the page key, like the others.
 
+## Design tokens
+
+The top of `web/office.css` defines the design tokens, for light and dark mode. Use them in the panels, cards, toasts and dialogs:
+
+| For | Use |
+|---|---|
+| Colors | `--ink`, `--ink-2`, `--muted`, `--line`, `--panel`, `--panel-2`, `--panel-3`, `--accent`, and the status colors `--s-*` |
+| Font family | `--font-d` (display), `--font-b` (body), `--font-m` (mono) |
+| Font size | `--fs-*`, the type scale |
+| Padding, margin and gap | `--sp-1` to `--sp-6` (4, 8, 12, 16, 24 and 32px) |
+| Corner radius | `--r-sm`, `--r-md`, `--r-lg`. Each one has a comment that tells where to use it. |
+| Shadows | `--e-1`, `--e-2`, `--e-raise` |
+| Borders | `1px solid var(--line)` |
+
+- Do not write a raw color, font size, spacing or radius value if a token fits. If no token fits, add a token, with its dark-mode value, and do not add a one-off value.
+- `npm test` fails if `web/office.css` gets more raw values than it has now.
+- The 3D scene (furniture, the city, agent colors) is art, not interface. These rules do not apply to it.
+
 ## Check your work
 
 Run all of these. All must pass.
