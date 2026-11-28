@@ -559,16 +559,155 @@ async function setCity(id) {
     }
     if (request !== cityRequest) return false;
     clearCity(); if (data) buildRealCity(data); else { buildGenericCity(); batchGenericCity(); }
-    setCityAtmosphere(id); cityKey = id; uiPrefs.city = id; saveUi(); $('#city-credit').hidden = id === 'generic';
+    setCityAtmosphere(id); refreshSkyLife(id); cityKey = id; uiPrefs.city = id; saveUi(); $('#city-credit').hidden = id === 'generic';
     $('#city-picker').close(); $('#city-status').hidden = true; buildCityChoices(); return true;
   } catch (err) {
     try { if (/^https?:$/.test(location.protocol)) officeAuth.fetch('/api/log', { method: 'POST', body: JSON.stringify({ kind: 'city', id, message: String(err && err.stack || err) }), keepalive: true }).catch(() => {}); } catch (_) {}
     if (request !== cityRequest) return false;
-    clearCity(); buildGenericCity(); batchGenericCity(); cityKey = 'generic'; setCityAtmosphere('generic'); $('#city-credit').hidden = true; buildCityChoices();
+    clearCity(); buildGenericCity(); batchGenericCity(); cityKey = 'generic'; setCityAtmosphere('generic'); refreshSkyLife('generic'); $('#city-credit').hidden = true; buildCityChoices();
     const message = location.protocol === 'file:' ? 'Open the office through its local server to load real cities.' : 'Couldn’t load that city. Showing Generic city.'; toast(message);
     $('#city-status').textContent = message; $('#city-status').hidden = false; return false;
   } finally { clearTimeout(timeout); }
 }
+
+/* ---------- living sky: drifting clouds, blinking roof lights, a passing helicopter ---------- */
+// Built once and shared. A frame turns one mesh, sets a few colors and, while it flies, moves the helicopter:
+// no allocations and at most four extra draw calls. With reduced motion it all holds still.
+// Coarse roof heights, mapped once per city, so the helicopter climbs over towers and lights go on the tallest.
+const HGRID = { cell: 15, n: 100 };
+['top', 'x', 'z'].forEach(k => { HGRID[k] = new Float32Array(HGRID.n * HGRID.n); });
+function hCell(x, z) {
+  const i = Math.floor(x / HGRID.cell + HGRID.n / 2), j = Math.floor(z / HGRID.cell + HGRID.n / 2);
+  return i < 0 || j < 0 || i >= HGRID.n || j >= HGRID.n ? -1 : j * HGRID.n + i;
+}
+function mapRoofs() {
+  HGRID.top.fill(GROUND_Y);
+  skyline.children.forEach(o => { if (!o.isMesh) return; const a = o.geometry.attributes.position.array;
+    for (let k = 0; k < a.length; k += 3) { const c = hCell(a[k], a[k + 2]);
+      if (c >= 0 && a[k + 1] > HGRID.top[c]) { HGRID.top[c] = a[k + 1]; HGRID.x[c] = a[k]; HGRID.z[c] = a[k + 2]; } } });
+}
+// The highest roof in and around the cell, so a rotor never clips the tower next door.
+function roofNear(x, z) {
+  let h = GROUND_Y;
+  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const c = hCell(x + di * HGRID.cell, z + dj * HGRID.cell); if (c >= 0 && HGRID.top[c] > h) h = HGRID.top[c]; }
+  return h;
+}
+const glowDot = canvasTex(32, 32);
+{ const g = glowDot.x.createRadialGradient(16, 16, 0, 16, 16, 16); g.addColorStop(0, '#FFFFFF'); g.addColorStop(.35, 'rgba(255,255,255,.85)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  glowDot.x.fillStyle = g; glowDot.x.fillRect(0, 0, 32, 32); }
+// Real cities have no modelled masts: a few pixels of light on the tallest roofs, the same size near or far.
+const beaconDotMat = new THREE.PointsMaterial({ size: 6, sizeAttenuation: false, map: glowDot.t, transparent: true, depthWrite: false, fog: false });
+const beaconBase = new THREE.Color('#C8453C');
+function lightTallRoofs() {
+  const order = [];
+  for (let c = 0; c < HGRID.top.length; c++) if (HGRID.top[c] > GROUND_Y + 90) order.push(c);
+  order.sort((a, b) => HGRID.top[b] - HGRID.top[a]);
+  const pts = [];
+  for (const c of order) {
+    if (pts.length >= 40 * 3) break;
+    let near = false; for (let k = 0; k < pts.length && !near; k += 3) near = Math.hypot(pts[k] - HGRID.x[c], pts[k + 2] - HGRID.z[c]) < 60;
+    if (!near) pts.push(HGRID.x[c], HGRID.top[c] + 1.5, HGRID.z[c]);
+  }
+  if (!pts.length) return;
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  skyline.add(new THREE.Points(g, beaconDotMat));
+}
+// One soft cloud drawing, flipped and stretched into wisps that hang just over the nearby roofs, below the office:
+// the camera looks down, so higher or farther clouds would sit above the top of the screen.
+const cloudTex = canvasTex(256, 128);
+for (let k = 0; k < 9; k++) {
+  const cx = 40 + k * 22 + rand(-6, 6), cy = 64 + rand(-14, 14), r = rand(24, 44) * (1 - Math.abs(k - 4) / 7);
+  const g = cloudTex.x.createRadialGradient(cx, cy, 0, cx, cy, r); g.addColorStop(0, 'rgba(255,255,255,.9)'); g.addColorStop(.5, 'rgba(255,255,255,.55)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  cloudTex.x.fillStyle = g; cloudTex.x.fillRect(cx - r, cy - r, r * 2, r * 2);
+}
+const cloudMat = new THREE.MeshBasicMaterial({ map: cloudTex.t, transparent: true, depthWrite: false, side: THREE.DoubleSide, opacity: .8 });
+const clouds = (() => {
+  const pos = [], uv = [], index = [];
+  for (let k = 0; k < 16; k++) {
+    const a = (k + Math.random() * .6) / 16 * Math.PI * 2, w = rand(30, 60), r = rand(w / 2 + 22, 110), d = w * rand(.35, .55), y = rand(-20, -8);
+    const t = rand(0, Math.PI), c = Math.cos(t), s = Math.sin(t), cx = Math.cos(a) * r, cz = Math.sin(a) * r, flip = Math.random() < .5, base = pos.length / 3;
+    for (const [u, v] of [[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5]]) {
+      const lx = u * w, lz = v * d; pos.push(cx + lx * c - lz * s, y, cz + lx * s + lz * c); uv.push(flip ? .5 - u : u + .5, v + .5);
+    }
+    index.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(index);
+  const m = new THREE.Mesh(g, cloudMat); m.renderOrder = -1;   // under the office glass, which is transparent too
+  city.add(m); return m;
+})();
+cloudTex.t.anisotropy = 1;   // soft wisps look the same without it, and it is costly on slanted see-through surfaces
+// A computer with no graphics card draws every pixel on the CPU, and these big see-through wisps cost it the most.
+// There the clouds still drift but are not drawn; the lights and the helicopter are only a few pixels.
+const softwareGL = (() => {
+  try { const gl = renderer.getContext(), info = gl.getExtension('WEBGL_debug_renderer_info');
+    return /swiftshader|llvmpipe|software/i.test(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : ''); } catch (_) { return false; }
+})();
+clouds.visible = !softwareGL;
+const heli = new THREE.Group(); heli.rotation.order = 'YXZ'; heli.scale.setScalar(1.6); heli.visible = false; city.add(heli);
+const heliRotor = new THREE.Mesh(mergeCityGeometry([new THREE.BoxGeometry(9.5, .06, .3).toNonIndexed(), new THREE.BoxGeometry(.3, .06, 9.5).toNonIndexed()]),
+  new THREE.MeshBasicMaterial({ color: '#1E2328', transparent: true, opacity: .6, depthWrite: false }));
+const heliLightMat = new THREE.PointsMaterial({ size: 5, sizeAttenuation: false, map: glowDot.t, vertexColors: true, transparent: true, depthWrite: false, fog: false });
+{
+  const parts = [], paint = (geo, color, x, y, z) => { geo = geo.toNonIndexed(); geo.translate(x, y, z); gangnamColor(geo, color); parts.push(geo); };
+  paint(new THREE.BoxGeometry(2.2, 1.9, 4.2), '#D9543C', 0, 0, .4);      // cabin
+  paint(new THREE.BoxGeometry(2, 1, 1.2), '#2B3640', 0, .25, 2.4);       // windscreen
+  paint(new THREE.BoxGeometry(.45, .45, 5), '#D9543C', 0, .35, -4.2);    // tail boom
+  paint(new THREE.BoxGeometry(.18, 1.5, 1), '#D9543C', 0, .9, -6.6);     // fin
+  paint(new THREE.BoxGeometry(.3, .5, .3), '#3A3F45', 0, 1.2, .4);       // mast
+  for (const x of [-1.05, 1.05]) paint(new THREE.BoxGeometry(.12, .12, 4.6), '#3A3F45', x, -1.35, .3);   // skids
+  heli.add(new THREE.Mesh(mergeCityGeometry(parts), new THREE.MeshLambertMaterial({ color: '#FFFFFF', vertexColors: true })));
+  heliRotor.position.set(0, 1.5, .4); heli.add(heliRotor);
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute([0, -1, .4, 0, 1.7, -6.9], 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute([1, .23, .19, 1, 1, 1], 3)); heli.add(new THREE.Points(g, heliLightMat));
+}
+// A flight is a straight line across the view, behind the office; heights are sampled every SKY_STEP metres.
+const SKY_STEP = 12, heliFlight = { on: false, wait: rand(20, 60), t: 0, len: 0, speed: 16, ox: 0, oz: 0, dx: 0, dz: 0, alt: new Float32Array(64) };
+const skyCamDir = new THREE.Vector3(), skyProbe = new THREE.Vector3();
+let skyT = 0;
+function planHeliFlight() {
+  const F = heliFlight, n = 51, half = (n - 1) * SKY_STEP / 2;
+  camera.getWorldDirection(skyCamDir); const fl = Math.hypot(skyCamDir.x, skyCamDir.z) || 1, fx = skyCamDir.x / fl, fz = skyCamDir.z / fl;
+  for (let tries = 0; tries < 16; tries++) {
+    const ahead = rand(40, 80), turn = rand(-.45, .45), side = Math.random() < .5 ? 1 : -1, c = Math.cos(turn), s = Math.sin(turn);
+    const dx = (-fz * c - fx * s) * side, dz = (fx * c - fz * s) * side, ox = fx * ahead - dx * half, oz = fz * ahead - dz * half, cruise = rand(-30, -14);
+    for (let i = 0; i < n; i++) F.alt[i] = Math.max(cruise, roofNear(ox + dx * i * SKY_STEP, oz + dz * i * SKY_STEP) + 14);
+    // climb before a tower and come down after it, never steeper than 1 in 2
+    for (let i = 1; i < n; i++) F.alt[i] = Math.max(F.alt[i], F.alt[i - 1] - SKY_STEP / 2);
+    for (let i = n - 2; i >= 0; i--) F.alt[i] = Math.max(F.alt[i], F.alt[i + 1] - SKY_STEP / 2);
+    // keep only a crossing that passes through the picture, whatever way the camera looks
+    skyProbe.set(ox + dx * half, F.alt[(n - 1) / 2] + city.position.y, oz + dz * half).project(camera);
+    if (skyProbe.z > 1 || Math.abs(skyProbe.x) > .8 || skyProbe.y > .8 || skyProbe.y < -.6) continue;
+    Object.assign(F, { on: true, t: 0, len: (n - 1) * SKY_STEP, ox, oz, dx, dz });
+    heli.rotation.y = Math.atan2(dx, dz); heli.visible = true; return true;
+  }
+  return false;
+}
+function updateSkyLife(dt) {
+  if (reduced) return;
+  skyT += dt; clouds.rotation.y += dt * .015;
+  // obstruction lights fade in and out together, about once every 1.6 s
+  const k = .2 + .8 * Math.max(0, Math.sin(skyT * Math.PI * 2 / 1.6)) ** 2;
+  beaconMat.color.copy(beaconBase).multiplyScalar(k); beaconDotMat.color.copy(beaconBase).multiplyScalar(k);
+  const F = heliFlight;
+  if (!F.on) { if ((F.wait -= dt) <= 0 && !planHeliFlight()) F.wait = rand(20, 40); return; }
+  F.t += dt * F.speed;
+  if (F.t >= F.len) { F.on = false; heli.visible = false; F.wait = rand(60, 150); return; }
+  const f = F.t / SKY_STEP, i = Math.floor(f), rise = F.alt[i + 1] - F.alt[i];
+  heli.position.set(F.ox + F.dx * F.t, F.alt[i] + rise * (f - i) + Math.sin(skyT * 1.3) * .3, F.oz + F.dz * F.t);
+  heli.rotation.x = .1 - rise / SKY_STEP * .4;                       // nose down to cruise, up to climb
+  heliRotor.rotation.y += dt * 40; heliLightMat.color.setScalar(.35 + .65 * (Math.sin(skyT * 7) > .6));
+}
+function tintSkyLife(T) {
+  cloudMat.color.set(mix(mix('#FFFFFF', T.skyMid, .3), '#3B4766', T.cityDark)); cloudMat.opacity = T.dark ? .5 : .9;
+  beaconBase.set(T.dark ? '#FF3B30' : '#C8453C'); beaconMat.color.copy(beaconBase); beaconDotMat.color.copy(beaconBase);
+  beaconDotMat.visible = T.cityLit > 0;                              // no draw call by day
+}
+// After each city is built: map its roofs, light the tall ones and send any helicopter home.
+function refreshSkyLife(id) {
+  mapRoofs(); if (id !== 'generic') lightTallRoofs();
+  heliFlight.on = false; heli.visible = false; heliFlight.wait = rand(15, 40);
+}
+refreshSkyLife('generic');
 
 // floor grid
 const gridMat = new THREE.LineBasicMaterial({ color:'#888', transparent:true, opacity:.22 });

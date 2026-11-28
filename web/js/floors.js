@@ -381,7 +381,7 @@ function applyScene(key) {
   gangnamMats.forEach(m => { m.color.set(mix('#FFFFFF', '#26354C', T.cityDark)); m.emissiveIntensity = T.cityLit; });
   landmarkTrimMat.color.set(mix('#FFFFFF', '#596C83', T.cityDark));
   cityMats.forEach((m, i) => { m.color.set(mix(CITY_TINTS[i], '#1E2636', T.cityDark)); m.emissiveIntensity = T.cityLit; });
-  beaconMat.color.set(T.dark ? '#FF3B30' : '#C8453C'); mats.window.color.set(T.skyMid); fadeGlass.color.set(T.skyMid); fadeFrame.color.set(T.black); shellT = -1;
+  tintSkyLife(T); mats.window.color.set(T.skyMid); fadeGlass.color.set(T.skyMid); fadeFrame.color.set(T.black); shellT = -1;
   ['floor','wall','oak','white','black','fabric','fabric2','leather','felt1','felt2','rug','rug2','cabinet','tile','chair'].forEach(k => mats[k].color.set(T[k]));
   mats.glass.color.set(T.glass);
   hemi.color.set(T.sky); hemi.groundColor.set(T.ground); hemi.intensity = T.hemi; sun.intensity = T.sun; sun.color.set(T.sunColor);
