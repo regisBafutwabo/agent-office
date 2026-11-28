@@ -3,6 +3,10 @@ import path from 'node:path';
 import { test, expect, open, row } from './office.mjs';
 import { encode } from '../bridge/discover.js';
 
+// The bridge's own 10 s scan would find the chat too, and on a slow CI machine it fires right as the test clicks:
+// the empty card leaves and the click waits forever. Push it out of the way so only Check again can find it.
+test.use({ scanMs: 600_000 });
+
 test('an empty office names every tool, not only Claude Code', async ({ page, office }) => {
   await open(page, office);
   await expect(page.locator('#empty')).toBeVisible();

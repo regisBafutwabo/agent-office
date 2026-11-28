@@ -11,9 +11,10 @@ const freePort = () => new Promise(r => { const s = net.createServer().listen(0,
 
 // A bridge of its own per test, with its own keys, so tests never see a real office or each other.
 export const test = base.extend({
-  office: async ({}, use) => {
+  scanMs: [undefined, { option: true }],   // how often the bridge looks for running chats (default 10 s)
+  office: async ({ scanMs }, use) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-office-e2e-')), data = path.join(root, 'data'), port = await freePort();
-    const child = spawn(process.execPath, [SERVER], { env: { ...process.env, HOME: path.join(root, 'home'), AGENT_OFFICE_DATA: data, AGENT_OFFICE_PACKS: path.join(root, 'packs'), AGENT_OFFICE_PORT: String(port), AGENT_OFFICE_HOST: '127.0.0.1' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, [SERVER], { env: { ...process.env, HOME: path.join(root, 'home'), AGENT_OFFICE_DATA: data, AGENT_OFFICE_PACKS: path.join(root, 'packs'), AGENT_OFFICE_PORT: String(port), AGENT_OFFICE_HOST: '127.0.0.1', ...(scanMs ? { AGENT_OFFICE_SCAN_MS: String(scanMs) } : {}) }, stdio: ['ignore', 'pipe', 'pipe'] });
     let log = ''; child.stdout.on('data', d => { log += d; }); child.stderr.on('data', d => { log += d; });
     await expect.poll(() => log, { timeout: 15_000 }).toContain('#k=');
     const key = log.match(/#k=(\S+)/)[1], url = `http://127.0.0.1:${port}`;
