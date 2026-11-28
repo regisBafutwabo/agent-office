@@ -24,6 +24,7 @@ Building from source, other platforms and troubleshooting are in **[INSTALL.md](
 
 - **Agents at work:** each session takes a desk, walks to the library to research and raises a hand when it needs you. Subagents are smaller teammates. [More](docs/features.md#agents-and-subagents)
 - **Characters:** robots or pets, with a face that shows what each agent is doing. [More](docs/features.md#characters)
+- **Your own models:** swap the furniture, or the agents themselves, for your own 3D models. [More](docs/features.md#model-packs)
 - **Reactions:** bubbles and confetti for passing and failing commands, and desks that remember merges. [More](docs/features.md#reactions-and-desk-memories)
 
 **Act on what needs you**

@@ -38,6 +38,19 @@ const TYPES: [(&str, &str); 8] = [("glb", "model/gltf-binary"), ("gltf", "model/
     ("png", "image/png"), ("jpg", "image/jpeg"), ("jpeg", "image/jpeg"), ("webp", "image/webp"), ("ktx2", "image/ktx2")];
 pub const MAX_FILE: u64 = 64 * 1024 * 1024;
 
+/// The folder as Customize shows it: your home as ~, anything else as is. Same as bridge/packs.js.
+pub fn shown(dir: &Path, home: &Path) -> String {
+    match dir.strip_prefix(home) {
+        Ok(rest) if !home.as_os_str().is_empty() => if rest.as_os_str().is_empty() { "~".into() } else { format!("~/{}", rest.display()) },
+        _ => dir.display().to_string(),
+    }
+}
+
+/// "Open packs folder": make it if it's missing, then show it in Finder.
+pub fn open(dir: &Path) -> bool {
+    std::fs::create_dir_all(dir).is_ok() && std::process::Command::new("open").arg(dir).status().is_ok_and(|s| s.success())
+}
+
 /// <id>/<file> (already percent-decoded) → the file on disk and its type, or None when it isn't a model or texture
 /// really inside the packs folder (a symlink out of it included).
 pub fn file(dir: &Path, rel: &str) -> Option<(PathBuf, &'static str)> {
@@ -61,6 +74,14 @@ pub fn file(dir: &Path, rel: &str) -> Option<(PathBuf, &'static str)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_packs_folder_shows_home_as_a_tilde() {
+        let home = Path::new("/Users/ana");
+        assert_eq!(shown(Path::new("/Users/ana/Library/Application Support/Agent Office/packs"), home), "~/Library/Application Support/Agent Office/packs");
+        assert_eq!(shown(Path::new("/Volumes/models/packs"), home), "/Volumes/models/packs");
+        assert_eq!(shown(Path::new("/Users/anabel/packs"), home), "/Users/anabel/packs");
+    }
 
     #[test]
     fn lists_packs_with_a_valid_pack_json_sorted_by_name() {

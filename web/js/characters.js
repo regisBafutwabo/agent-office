@@ -376,7 +376,7 @@ const stateColor = a => a.state === 'idle' ? sceneT.screenOff : STATUS[a.state].
 function setAgentLook(a, patch) {
   a.look = { ...a.look, ...patch }; buildRig(a);
   agents.filter(s => s.parent === a).forEach(s => { s.look = internLook(a, s.color); buildRig(s); });
-  a.labelDirty = true; renderJSON(); saveAgentPrefs(a); sendFaces(a);
+  a.labelDirty = true; saveAgentPrefs(a); sendFaces(a);
 }
 function setState(a, state, activity) {
   if (/failed|Denied/.test(activity || '')) a.faceErrorUntil = a.animT + 4;   // a worried face for a few seconds
@@ -391,7 +391,7 @@ function setAgentColor(a, hex) {
   a.color = hex; buildRig(a);
   if (a.home && a.home.owner === a && a.floor === curFloor) a.home.chairMat.color.set(hex);
   agents.filter(s => s.parent === a).forEach(s => { s.look = internLook(a, mix(hex, '#ffffff', .35)); setAgentColor(s, mix(hex, '#ffffff', .35)); });
-  a.labelDirty = true; uiDirty = true; detailDirty = true; renderJSON(); sendFaces(a);
+  a.labelDirty = true; uiDirty = true; detailDirty = true; sendFaces(a);
 }
 
 /* ---------- events ---------- */

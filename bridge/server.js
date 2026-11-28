@@ -12,7 +12,7 @@ import { focus, appIcon } from './focus.js';
 import { watchMusic } from './music.js';
 import { scan, archivedChats } from './discover.js';
 import { pollOllama } from './ollama.js';
-import { listPacks, packFile, PACK_HEADERS } from './packs.js';
+import { listPacks, packFile, packsFolder, openPacksFolder, PACK_HEADERS } from './packs.js';
 import { changes, fileDiff, rootOf } from './changes.js';
 import { credentials, dataDir, same, hostOk, originOk, bearer, hookToken, wsToken, redeemLoginCode, WS_PROTOCOL } from './auth.js';
 import { outdatedPlugin } from './upgrade.js';
@@ -170,6 +170,7 @@ async function handle(req, res) {
     res.writeHead(204); res.end(); return;
   }
   if (req.method === 'POST' && url.pathname.startsWith('/api/face/')) { req.resume(); res.writeHead(204); res.end(); return; }   // only the desktop app's banners use faces
+  if (req.method === 'POST' && url.pathname === '/api/packs/open') { req.resume(); res.writeHead(openPacksFolder() ? 204 : 500); res.end(); return; }
   if (req.method !== 'GET') return deny(req, res, 405);
   if (url.pathname === '/api/auth') { res.writeHead(204); res.end(); return; }   // the page asks whether its key still works
   if (url.pathname === '/api/state') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(snapshot())); return; }
@@ -183,6 +184,7 @@ async function handle(req, res) {
     if (c.ok) { const others = [...store.sessions.values()].filter(o => o !== s); c.shared = (await Promise.all(others.map(async o => await rootOf(o.cwd) === c.root ? o.id : null))).filter(Boolean); }
     return json(c);
   }
+  if (url.pathname === '/api/packs/folder') { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(packsFolder())); return; }
   if (url.pathname === '/api/packs') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(listPacks())); return; }
   if (url.pathname.startsWith('/packs/')) { const p = packFile(url.pathname); if (!p) { res.writeHead(403); res.end(); return; } return sendFile(res, p.file, { ...PACK_HEADERS, 'Content-Type': p.type }); }
   if (url.pathname.startsWith('/api/app-icon/')) {               // real app icons for floor signs and the agent list

@@ -57,7 +57,7 @@ function retitle(a, title) {
   if (!title || title === a.title) return;
   a.title = title;
   if (a.customName) return;
-  a.name = chatName(title); a.labelDirty = true; uiDirty = true; detailDirty = true; buildCustomize(); renderJSON();
+  a.name = chatName(title); a.labelDirty = true; uiDirty = true; detailDirty = true; buildCustomize();
 }
 
 function setModeLine() {

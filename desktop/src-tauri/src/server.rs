@@ -127,6 +127,14 @@ pub fn router(port: u16, creds: Credentials, on_change: OnChange) -> Router {
         .route("/vendor/GLTFLoader.js", get(|| async { ([(header::CONTENT_TYPE, "text/javascript")], GLTF_LOADER) }))
         .route("/vendor/SkeletonUtils.js", get(|| async { ([(header::CONTENT_TYPE, "text/javascript")], SKELETON_UTILS) }))
         .route("/api/packs", get(|| async { Json(Value::Array(packs::list(&packs::dir()))) }))
+        .route("/api/packs/folder", get(|| async {
+            let home = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
+            ([(header::CACHE_CONTROL, "no-store")], Json(json!({ "dir": packs::shown(&packs::dir(), &home), "canOpen": true })))
+        }))
+        .route("/api/packs/open", post(|| async {
+            let ok = tokio::task::spawn_blocking(|| packs::open(&packs::dir())).await.unwrap_or(false);
+            if ok { StatusCode::NO_CONTENT } else { StatusCode::INTERNAL_SERVER_ERROR }
+        }))
         .route("/packs/{*file}", get(pack_file))
         .fallback(get(asset))
         .layer(middleware::from_fn_with_state(state.clone(), guard))
@@ -791,7 +799,7 @@ mod tests {
             let ev = r#"{"hook_event_name":"SessionStart","session_id":"keys","cwd":"/tmp"}"#;
             let status = |m: &str, p: &str, h: &[(&str, &str)], b: &str| request(port, m, p, h, b.as_bytes()).0;
             let bearer = |k: &str| format!("Bearer {k}");
-            for p in ["/api/state", "/api/changes?session=keys", "/api/changes/diff?session=keys&path=a", "/api/packs", "/api/setup", "/api/auth", "/api/update"] {
+            for p in ["/api/state", "/api/changes?session=keys", "/api/changes/diff?session=keys&path=a", "/api/packs", "/api/packs/folder", "/api/setup", "/api/auth", "/api/update"] {
                 assert_eq!(status("GET", p, &[], ""), 401, "{p}");
                 assert_eq!(status("GET", p, &[("Authorization", &bearer(HOOK))], ""), 401, "{p}");
                 assert_eq!(status("GET", p, &[("X-Agent-Office-Token", HOOK)], ""), 401, "{p}");
@@ -800,6 +808,7 @@ mod tests {
             assert_eq!(status("POST", "/api/setup/codex", &[], ""), 401);
             assert_eq!(status("POST", "/api/setup/codex", &[("X-Agent-Office-Token", HOOK)], ""), 401);
             assert_eq!(status("POST", "/api/update", &[("X-Agent-Office-Token", HOOK)], ""), 401);
+            assert_eq!(status("POST", "/api/packs/open", &[("X-Agent-Office-Token", HOOK)], ""), 401);
             // Nothing downloaded in a test: the page's install button has nothing to install.
             assert_eq!(page(port, "POST", "/api/update", "").0, 409);
             let (code, update) = page(port, "GET", "/api/update", "");

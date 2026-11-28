@@ -177,11 +177,41 @@ function poseCharacter(a) {
 function renderPacks() {
   const sel = $('#pack-select'), cur = uiPrefs.pack || '';
   sel.innerHTML = `<option value="">Built-in</option>` + packList.map(p => `<option value="${esc(p.id)}"${p.id === cur ? ' selected' : ''}>${esc(p.name)}${p.license ? ` (${esc(p.license)})` : ''}</option>`).join('');
-  $('#pack-empty').hidden = packList.length > 0;
 }
+// Opening a folder happens on the computer running the office, so only offer it to a page on that computer.
+const onThisComputer = () => ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+let packDir = '';
+async function loadPackFolder() {
+  try { const r = await officeAuth.fetch('/api/packs/folder'); if (!r.ok) throw 0; const f = await r.json(); packDir = String(f.dir || ''); $('#pack-open').hidden = !(f.canOpen && onThisComputer()); }
+  catch (_) { packDir = ''; $('#pack-open').hidden = true; }                  // an older office: the note keeps its generic wording
+  if (packDir) $('#pack-dir').textContent = packDir;
+  $('#pack-copy').hidden = !packDir;
+}
+async function fetchPacks() { const r = await officeAuth.fetch('/api/packs'); if (!r.ok) throw 0; return r.json(); }
 async function loadPacks() {
-  try { const r = await officeAuth.fetch('/api/packs'); if (!r.ok) throw 0; packList = await r.json(); } catch (_) { $('#pack-setting').hidden = true; return; }
-  renderPacks();
+  try { packList = await fetchPacks(); } catch (_) { $('#pack-setting').hidden = true; return; }
+  renderPacks(); loadPackFolder();
   if (uiPrefs.pack && packList.some(p => p.id === uiPrefs.pack)) applyPack(uiPrefs.pack);
 }
+// "Look again": pick up packs added since the office opened, without reopening it.
+$('#pack-reload').onclick = async () => {
+  const b = $('#pack-reload'), before = new Set(packList.map(p => p.id)); b.disabled = true;
+  try {
+    packList = await fetchPacks(); renderPacks();
+    const added = packList.filter(p => !before.has(p.id));
+    toast(added.length ? `Found ${added.map(p => p.name).join(', ')}. Pick ${added.length > 1 ? 'one' : 'it'} under Model pack.`
+      : packList.length ? 'No new packs. Each one needs its own folder with a pack.json.' : 'No packs yet. Each one needs its own folder with a pack.json.');
+    // the pack you'd picked is back (or was added after you picked it): show it
+    if (uiPrefs.pack && added.some(p => p.id === uiPrefs.pack)) applyPack(uiPrefs.pack);
+  } catch (_) { toast('Couldn’t reach the office to look for packs'); }
+  b.disabled = false;
+};
+$('#pack-open').onclick = async () => {
+  try { const r = await officeAuth.fetch('/api/packs/open', { method: 'POST' }); if (!r.ok) throw 0; }
+  catch (_) { toast('Couldn’t open the packs folder' + (packDir ? `. It’s at ${packDir}` : '')); }
+};
+$('#pack-copy').onclick = async () => {
+  try { await navigator.clipboard.writeText(packDir); toast(/Mac/.test(navigator.platform) ? 'Copied. In Finder, press ⇧⌘G and paste it.' : 'Copied the packs folder’s path.'); }
+  catch (_) { toast(`The packs folder is ${packDir}`); }
+};
 $('#pack-select').onchange = e => { uiPrefs.pack = e.target.value; saveUi(); applyPack(uiPrefs.pack); };

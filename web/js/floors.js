@@ -392,5 +392,5 @@ function applyScene(key) {
   agents.forEach(a => { a.labelDirty = true; updateScreen(a); });
   floorLabels.forEach(l => l.draw()); drawNeon();
   $('#themes').querySelectorAll('.theme-card').forEach(b => b.setAttribute('aria-pressed', b.dataset.key === key));
-  renderJSON(); renderLift();
+  renderLift();
 }
