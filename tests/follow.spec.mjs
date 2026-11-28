@@ -34,9 +34,11 @@ test('a followed agent that takes the lift to the roof takes the camera along', 
   await expect.poll(() => where(page), { timeout: 15_000 }).toMatchObject({ view: 'floor', flying: false });
 
   await page.evaluate(async () => {
-    const a = agents.find(x => x.kind === 'main'); const up = goRoof(a);
-    for (let i = 0; i < 120 && !a.onRoof; i++) await agentOffice.advance(.25);
-    await up;
+    // Step the office's clock until the walk up and across the terrace is over: left to real frames, CI's slow
+    // drawing (about one frame every 0.7 s) can stretch that walk past the test's time limit.
+    const a = agents.find(x => x.kind === 'main'); let done = false; goRoof(a).then(() => { done = true; });
+    for (let i = 0; i < 400 && !done; i++) await agentOffice.advance(.25);
+    if (!a.onRoof) throw new Error('the agent never reached the roof');
   });
   await expect.poll(() => where(page), { timeout: 15_000 }).toMatchObject({ view: 'roof', flying: false });
   await expect(page.locator('#d-follow')).toHaveAttribute('aria-pressed', 'true');
