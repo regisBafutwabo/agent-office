@@ -241,8 +241,8 @@ async function syncOllama() {
 }
 // Chats that were already running move in from their logs (discover.js); keep the ones no hook reports on up to date,
 // and walk out the ones whose log went quiet.
-for (const f of scan()) { store.adopt(f); store.adoptSubs(f); }
-syncOllama();
+// The first pass runs once the office is listening (see rescan below), so a slow folder read never keeps it closed.
+setImmediate(() => rescan());
 // One pass over the logs; also run right away when an empty office asks to "Check again".
 function rescan() {
   for (const f of scan()) { const e = store.adopt(f); for (const x of [e, ...store.adoptSubs(f)]) if (x) broadcast({ type: 'event', event: x }); }
