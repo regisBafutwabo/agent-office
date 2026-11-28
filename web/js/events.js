@@ -214,6 +214,11 @@ async function connectTool(id) {
   catch (_) { toast('Couldn’t reach the office server'); }
   setup.busy = null; loadSetup();
 }
+// "Claude Code and Codex", or "a connected tool" when none is.
+function connectedNames(tools) {
+  const n = tools.filter(t => t.status === 'connected').map(t => t.name);
+  return !n.length ? 'a connected tool' : n.length === 1 ? n[0] : `${n.slice(0, -1).join(', ')} or ${n[n.length - 1]}`;
+}
 function renderSetup() {
   const tools = MODE === 'live' && setup.tools || [], todo = tools.filter(t => t.status === 'not-connected');
   const btn = (t, primary) => `<button class="btn${primary ? ' primary' : ''}" data-connect="${t.id}"${setup.busy ? ' disabled' : ''}>${setup.busy === t.id ? 'Connecting…' : 'Connect ' + esc(t.name)}</button>`;
@@ -223,11 +228,27 @@ function renderSetup() {
   // With no agents yet, the Agents tab says what to do next.
   const card = $('#setup-card'), empty = MODE === 'live' && !agents.some(a => a.kind === 'main');
   card.hidden = !empty;
-  if (empty && !live.gotSnapshot) card.innerHTML = `<b>Connecting…</b><span>Looking for your Claude Code sessions.</span>`;
+  if (empty && !live.gotSnapshot) card.innerHTML = `<b>Connecting…</b><span>Looking for your agent sessions.</span>`;
   else if (empty) card.innerHTML = todo.length
     ? `<b>Connect your coding agents</b><span>Agent Office adds a small hook that reports what each session is doing. Nothing leaves your Mac.</span><div class="btns">${todo.map((t, i) => btn(t, i === 0)).join('')}</div>`
-    : `<b>No agents yet</b><span>Start a new ${tools.some(t => t.id === 'claude-code' && t.status === 'connected') ? 'Claude Code ' : ''}session and send a prompt. Its agent rides up in the lift.</span>`;
+    : `<b>No agents yet</b><span>Start a new session in ${connectedNames(tools)} and send a prompt. Its agent rides up in the lift.</span><div class="btns"><button class="btn sm" data-rescan>Check again</button></div>`;
   renderGuideTools();
 }
 document.addEventListener('click', e => { const b = e.target.closest('[data-connect]'); if (b) connectTool(b.dataset.connect); });
+// "Check again": the office looks for running chats every 10 s; this looks now. It finds chats on this Mac
+// that wrote to their log in the last 30 minutes, so a quiet or remote one still needs a new prompt.
+let rescanTimer = 0;
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-rescan]'); if (!b || rescanTimer) return;
+  if (!live.ws || live.ws.readyState !== 1) { toast('The office server isn’t connected'); return; }
+  live.ws.send(JSON.stringify({ type: 'rescan' }));
+  document.querySelectorAll('[data-rescan]').forEach(x => { x.disabled = true; x.textContent = 'Checking…'; });
+  rescanTimer = setTimeout(rescanned, 5000);
+});
+function rescanned() {
+  if (!rescanTimer) return;
+  clearTimeout(rescanTimer); rescanTimer = 0;
+  document.querySelectorAll('[data-rescan]').forEach(x => { x.disabled = false; x.textContent = 'Check again'; });
+  if (MODE === 'live' && !agents.some(a => a.kind === 'main')) toast('No running sessions found. Send a prompt in any connected tool and its agent walks in.');
+}
 addEventListener('focus', () => { if (live.connected) loadSetup(); });

@@ -212,6 +212,13 @@ async fn watch_logs(st: AppState) {
     tick.tick().await; // the first scan already ran in router()
     loop {
         tick.tick().await;
+        rescan(&st).await;
+    }
+}
+
+/// One pass of watch_logs; the office page's "Check again" runs one right away.
+async fn rescan(st: &AppState) {
+    {
         let (found, models, archived) = tokio::task::spawn_blocking(|| (discover::scan_home(store::now_ms()), ollama_models(), discover::archived_home())).await.unwrap_or_default();
         let mut store = st.store.lock().unwrap();
         let keep: Vec<String> = models.iter().map(|f| f.id.clone()).collect();
@@ -220,20 +227,20 @@ async fn watch_logs(st: AppState) {
             let found = store.adopt(f);
             for e in found.into_iter().chain(store.adopt_subs(&id, &subs)) {
                 (st.on_change)(&store, &e);
-                broadcast(&st, json!({ "type": "event", "event": e }));
+                broadcast(st, json!({ "type": "event", "event": e }));
             }
         }
         for id in store.drop_archived(&archived) {
-            broadcast(&st, json!({ "type": "event", "event": { "type": "SessionEnd", "sessionId": id, "at": store::now_ms(), "reason": "Archived in the Claude app" } }));
+            broadcast(st, json!({ "type": "event", "event": { "type": "SessionEnd", "sessionId": id, "at": store::now_ms(), "reason": "Archived in the Claude app" } }));
         }
         // Models Ollama has loaded are agents too (ollama.rs); one walks out as soon as Ollama unloads it.
         for id in store.retire("ollama", &keep) {
-            broadcast(&st, json!({ "type": "event", "event": { "type": "SessionEnd", "sessionId": id, "at": store::now_ms(), "reason": "Ollama unloaded the model" } }));
+            broadcast(st, json!({ "type": "event", "event": { "type": "SessionEnd", "sessionId": id, "at": store::now_ms(), "reason": "Ollama unloaded the model" } }));
         }
         let before: Vec<String> = store.sessions.iter().map(|s| s.id.clone()).collect();
         store.prune();
         for id in before.iter().filter(|id| !store.sessions.iter().any(|s| &s.id == *id)) {
-            broadcast(&st, json!({ "type": "event", "event": { "type": "SessionEnd", "sessionId": id, "at": store::now_ms(), "reason": "No news for a while" } }));
+            broadcast(st, json!({ "type": "event", "event": { "type": "SessionEnd", "sessionId": id, "at": store::now_ms(), "reason": "No news for a while" } }));
         }
     }
 }
@@ -547,6 +554,11 @@ async fn client(mut socket: WebSocket, st: AppState) {
                             let show = msg["show"].as_bool().unwrap_or(true);
                             st.store.lock().unwrap().set_show_code(show);
                             broadcast(&st, json!({ "type": "code", "show": show }));
+                        }
+                        Some("rescan") => {
+                            // "Check again" on an empty office: look for running chats now instead of within 10 s.
+                            rescan(&st).await;
+                            if socket.send(Message::Text(json!({ "type": "rescanned" }).to_string().into())).await.is_err() { break; }
                         }
                         Some("decide") => {
                             let decision = match msg["decision"].as_str() { Some("allow") => "allow", Some("deny") => "deny", _ => "defer" };

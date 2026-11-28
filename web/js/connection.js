@@ -14,6 +14,7 @@ function connectLive() {
     else if (msg.type === 'code') setCodeOn(!!msg.show);
     else if (msg.type === 'music') music = musicOn && msg.music || null;
     else if (msg.type === 'setup') loadSetup();
+    else if (msg.type === 'rescanned') rescanned();
     else if (msg.type === 'approval') onApproval(msg.approval, true); else if (msg.type === 'approval-resolved') onApprovalResolved(msg); else if (msg.type === 'hooks-outdated') onOutdatedHooks(msg.hooks); };
   ws.onclose = () => {
     clearTimeout(fallback);
