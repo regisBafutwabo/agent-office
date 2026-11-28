@@ -116,6 +116,11 @@ All tests must pass before you open a pull request. CI runs the same tests on ea
 
 - **Secret scan.** gitleaks scans the full git history. If it finds a secret, remove the secret and rotate it. To scan on your computer, run `gitleaks git .`.
 - **File size.** A file that you add or change must be smaller than 1 MB. Files in `web/cities/` are an exception. Do not commit videos or large images. Drag them into a comment on a GitHub issue or pull request, and then use the `user-attachments` link.
+- **Dependency audit.** `npm audit` and `cargo audit` fail on a known vulnerability in a dependency.
+- **Shell scripts.** shellcheck checks the hooks and the scripts in `scripts/`. To check on your computer, run `shellcheck adapters/hook.sh plugin/hooks/*.sh scripts/*.sh`.
+- **Desktop app bundle.** CI builds the Mac app bundle, without the updater signing key.
+
+If a browser test fails in CI, open the run's summary and download `playwright-results`. It has a screenshot and a trace of the test that failed.
 
 ## 6. Commit your change
 

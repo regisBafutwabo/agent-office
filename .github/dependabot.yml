@@ -1,0 +1,35 @@
+# Weekly pull requests that update dependencies. Minor and patch updates come grouped, one pull request per
+# ecosystem, so they are quick to review. Major updates come one at a time. Security updates are not held to this
+# schedule: they open as soon as GitHub knows about the problem.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      minor-and-patch: { update-types: [minor, patch] }
+    # three.js stays at r128: the office loads three/examples/js/ as plain scripts (bridge/server.js, the
+    # desktop server's include_bytes!), later releases removed that folder, and web/index.html falls back to the
+    # r128 CDN copy. Moving it is a project of its own.
+    ignore:
+      - dependency-name: three
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+
+  - package-ecosystem: npm
+    directory: /desktop
+    schedule: { interval: weekly }
+    groups:
+      minor-and-patch: { update-types: [minor, patch] }
+
+  - package-ecosystem: cargo
+    directory: /desktop/src-tauri
+    schedule: { interval: weekly }
+    groups:
+      minor-and-patch: { update-types: [minor, patch] }
+
+  # Keeps the SHA-pinned actions in .github/workflows current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      actions: { patterns: ["*"] }
