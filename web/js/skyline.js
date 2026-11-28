@@ -635,6 +635,14 @@ const clouds = (() => {
   const m = new THREE.Mesh(g, cloudMat); m.renderOrder = -1;   // under the office glass, which is transparent too
   city.add(m); return m;
 })();
+cloudTex.t.anisotropy = 1;   // soft wisps look the same without it, and it is costly on slanted see-through surfaces
+// A computer with no graphics card draws every pixel on the CPU, and these big see-through wisps cost it the most.
+// There the clouds still drift but are not drawn; the lights and the helicopter are only a few pixels.
+const softwareGL = (() => {
+  try { const gl = renderer.getContext(), info = gl.getExtension('WEBGL_debug_renderer_info');
+    return /swiftshader|llvmpipe|software/i.test(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : ''); } catch (_) { return false; }
+})();
+clouds.visible = !softwareGL;
 const heli = new THREE.Group(); heli.rotation.order = 'YXZ'; heli.scale.setScalar(1.6); heli.visible = false; city.add(heli);
 const heliRotor = new THREE.Mesh(mergeCityGeometry([new THREE.BoxGeometry(9.5, .06, .3).toNonIndexed(), new THREE.BoxGeometry(.3, .06, 9.5).toNonIndexed()]),
   new THREE.MeshBasicMaterial({ color: '#1E2328', transparent: true, opacity: .6, depthWrite: false }));
