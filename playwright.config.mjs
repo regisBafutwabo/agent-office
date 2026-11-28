@@ -10,9 +10,12 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: ci ? 15_000 : 5_000 },
   workers: 1,
+  // On CI, try a failed test once more and keep a trace of that retry, so a failure can be opened in the trace viewer.
+  retries: ci ? 1 : 0,
   reporter: ci ? 'github' : 'list',
   use: {
     browserName: 'chromium', viewport: { width: 1280, height: 800 },
+    trace: ci ? 'on-first-retry' : 'off',
     launchOptions: { args: gpu ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] : ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] },
   },
 });

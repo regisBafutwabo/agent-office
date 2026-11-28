@@ -9,9 +9,10 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request replaces the run for the old one. Every push to main keeps its own run.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   node:
@@ -32,6 +33,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm audit --audit-level=high
+      - name: npm audit (desktop app tools)
+        run: npm audit --audit-level=high
+        working-directory: desktop
       - run: npm test
 
   browser:
@@ -49,6 +53,13 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      # Screenshots, traces and error context of the tests that failed, to download from the run's summary.
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 14
 
   secrets:
     name: Secret scan (gitleaks)
@@ -96,6 +107,51 @@ jobs:
         with:
           workspaces: desktop/src-tauri
       - run: cargo test --locked
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        with:
+          tool: cargo-audit
+      # Known vulnerabilities in the Rust crates the app ships. "Unmaintained" notices are only warnings.
+      - run: cargo audit
+
+  desktop-build:
+    name: Desktop app builds (Tauri bundle)
+    # cargo test compiles the code but never bundles the app. This checks the bundle config, icons and entitlements
+    # before release day. Updater artifacts need the private signing key, so they are left out here.
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm ci
+        working-directory: desktop
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: desktop/src-tauri
+          key: bundle
+      - run: npx tauri build --ci --bundles app --config '{"bundle":{"createUpdaterArtifacts":false}}'
+        working-directory: desktop
+      - name: The app bundle exists
+        run: test -x "desktop/src-tauri/target/release/bundle/macos/Agent Office.app/Contents/MacOS/agent-office"
+
+  shell:
+    name: Shell scripts (shellcheck)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The hooks run inside every agent session, so a quoting mistake there breaks people's agents, not just the office.
+      - run: shellcheck --version && shellcheck adapters/hook.sh plugin/hooks/*.sh scripts/*.sh
 
   sizes:
     name: No large files in git
