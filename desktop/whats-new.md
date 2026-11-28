@@ -8,3 +8,5 @@
 - **One floor per project.** Helpers working on copies of the same project now sit together on that project's floor.
 - **No more blank window.** The app no longer opens to a white screen when it starts.
 - **They run when you call.** Call an agent that's on a break, even up on the roof, and it sprints back to its desk in a cloud of dust and slides into its chair.
+- **Café chats.** Agents on a break sometimes meet at the café counter and chat. The one talking moves its hands, and the others nod.
+- **Clearer notices.** Notices about an agent now have a short title and a line under it. Each one has a close button, so you can close it right away.
