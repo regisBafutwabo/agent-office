@@ -102,3 +102,23 @@ test('an agent on the roof sprints to the lift when you send a prompt, rides dow
   });
   expect(after).toEqual({ skidOnRoof: false, downSprinting: true, skidded: true, atDesk: true, sprint: null, puffs: 0, inScene: 0, seated: true });
 });
+
+test('a chat known only from its log sprints back too when it starts working again', async ({ page, office }) => {
+  await office.hook({ hook_event_name: 'SessionStart', session_id: 's3', cwd });
+  await office.hook({ hook_event_name: 'Stop', session_id: 's3', cwd });
+  await open(page, office);
+  await expect.poll(() => page.evaluate(() => agents.some(x => x.kind === 'main'))).toBe(true);
+  const sprinted = await page.evaluate(async () => {
+    agentOffice.held = true;
+    const a = agents.find(x => x.kind === 'main'); a.pref = 'desk'; goToFloor(a.floor.i);
+    for (let i = 0; i < 60 && a.path.length; i++) await agentOffice.advance(.25);
+    const far = freeSpots(['hoops', 'arcade', 'coffee'], a.floor).sort((p, q) => Math.hypot(q.x - a.home.x, q.z - a.home.z) - Math.hypot(p.x - a.home.x, p.z - a.home.z))[0];
+    place(a, far, true);
+    for (let i = 0; i < 60 && a.path.length; i++) await agentOffice.advance(.25);
+    applyStatus(a, 'done', 'Finished');
+    // What a log scan reports when the chat picks up again without a hook (see discover.js).
+    onLiveEvent({ type: 'SessionFound', sessionId: a.sessionId, at: Date.now(), message: null, session: { id: a.sessionId, project: a.project.key, cwd: a.cwd, status: 'thinking', activity: 'Thinking' } }, false);
+    return { sprint: !!a.sprint, heading: a.dest === a.ws || a.path.length > 0, state: a.state };
+  });
+  expect(sprinted).toEqual({ sprint: true, heading: true, state: 'thinking' });
+});

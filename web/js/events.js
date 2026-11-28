@@ -89,9 +89,14 @@ function onLiveEvent(e, replay) {
   if (who !== a && who.awaitingReview && e.type !== 'SubagentStop') who.awaitingReview = false;   // resumed: back to work
   switch (e.type) {
     case 'SessionStart': emit(a, 'SessionStart', `${whereFrom(a)} · ${a.cwd}`, e.at); break;
-    case 'SessionFound':                                     // already running when the office opened, read from its log
+    case 'SessionFound': {                                   // already running when the office opened, read from its log
       if (e.message) emit(a, 'SessionFound', `${e.message} · ${whereFrom(a)} · ${a.cwd}`, e.at);
-      applyStatus(a, s.status, s.activity); break;
+      // A chat known only from its log (no hooks) got a new prompt: back to work, sprinting if it was on a break.
+      const resumed = !replay && !e.message && (a.state === 'idle' || a.state === 'done') && (s.status === 'thinking' || s.status === 'working');
+      const idleAt = resumed && !a.busy && (a.spot || a.dest);
+      applyStatus(a, s.status, s.activity);
+      if (resumed) { unstick(a); a.ws = chooseWorkspot(a); a.streak = 0; place(a, a.ws, true); if (idleAt) sprintBack(a, idleAt); }
+      break; }
     case 'UserPromptSubmit':
       emit(a, 'UserPromptSubmit', `"${e.prompt || ''}"`, e.at); seeAgent(a); unstick(a); a.run = null;
       if (!replay) changeDesk(a, d => workedOn(d, e.at));
