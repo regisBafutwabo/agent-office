@@ -7,7 +7,9 @@ const ci = !!process.env.CI, gpu = !ci && process.platform === 'darwin';
 
 export default defineConfig({
   testDir: 'tests',
-  timeout: 60_000,
+  // The same 3x for a whole test: CI draws about one frame every 0.7 s, so a click takes ~10 s to return and a long
+  // test (coming-back.spec.mjs has 14 steps) ran past 60 s without any check failing.
+  timeout: ci ? 180_000 : 60_000,
   expect: { timeout: ci ? 15_000 : 5_000 },
   workers: 1,
   // On CI, try a failed test once more and keep a trace of that retry, so a failure can be opened in the trace viewer.
