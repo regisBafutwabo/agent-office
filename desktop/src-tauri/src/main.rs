@@ -119,6 +119,7 @@ fn connect_label(tool: setup::Tool, status: setup::Status) -> (String, bool) {
     match status {
         setup::Status::Connected => (format!("{} ✓ connected", tool.name()), false),
         setup::Status::NotConnected => (format!("Connect {}", tool.name()), true),
+        setup::Status::NeedsRepair => (format!("Reconnect {} (not reporting)", tool.name()), true),
         setup::Status::NotInstalled => (format!("{} (not installed)", tool.name()), false),
     }
 }

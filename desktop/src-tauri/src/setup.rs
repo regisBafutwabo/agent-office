@@ -27,10 +27,10 @@ impl Tool {
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub enum Status { Connected, NotConnected, NotInstalled }
+pub enum Status { Connected, NeedsRepair, NotConnected, NotInstalled }
 
 impl Status {
-    pub fn id(self) -> &'static str { match self { Status::Connected => "connected", Status::NotConnected => "not-connected", Status::NotInstalled => "not-installed" } }
+    pub fn id(self) -> &'static str { match self { Status::Connected => "connected", Status::NeedsRepair => "needs-repair", Status::NotConnected => "not-connected", Status::NotInstalled => "not-installed" } }
 }
 
 fn home() -> PathBuf { PathBuf::from(std::env::var_os("HOME").unwrap_or_default()) }
@@ -39,21 +39,56 @@ fn hook_script() -> PathBuf { support_dir().join("hook.sh") }
 fn codex_hooks() -> PathBuf { home().join(".codex/hooks.json") }
 fn cursor_hooks() -> PathBuf { home().join(".cursor/hooks.json") }
 
+// "Connected" means events really reach the office. A hook that points at a script that's gone (the repo was moved
+// or deleted) or a plugin from before the hook key fails silently, so those need repair, and Connect repairs them.
 pub fn status(tool: Tool) -> Status {
     match tool {
         Tool::Claude => {
-            let installed = std::fs::read_to_string(home().join(".claude/plugins/installed_plugins.json"))
-                .ok().and_then(|t| serde_json::from_str::<Value>(&t).ok())
-                .is_some_and(|v| v["plugins"].get(PLUGIN_ID).is_some());
-            if installed { Status::Connected } else if find_claude().is_some() { Status::NotConnected } else { Status::NotInstalled }
+            let installed = std::fs::read_to_string(home().join(".claude/plugins/installed_plugins.json")).ok();
+            match installed.as_deref().map(plugin_state) {
+                Some(PluginState::Working) => Status::Connected,
+                Some(PluginState::Broken) => Status::NeedsRepair,
+                _ if find_claude().is_some() => Status::NotConnected,
+                _ => Status::NotInstalled,
+            }
         }
         Tool::Codex | Tool::Cursor => {
             let file = if tool == Tool::Codex { codex_hooks() } else { cursor_hooks() };
             if !file.parent().is_some_and(Path::is_dir) { return Status::NotInstalled; }
             let text = std::fs::read_to_string(&file).unwrap_or_default();
-            if has_office_hooks(&text, tool.id()) { Status::Connected } else { Status::NotConnected }
+            hooks_state(&text, tool.id(), |p| p.is_file())
         }
     }
+}
+
+#[derive(PartialEq, Debug)]
+enum PluginState { Missing, Working, Broken }
+
+/// The office plugin is installed, and recent enough (it sends the hook key) with its files still in place?
+fn plugin_state(installed_plugins: &str) -> PluginState {
+    let Ok(v) = serde_json::from_str::<Value>(installed_plugins) else { return PluginState::Missing };
+    let Some(list) = v["plugins"][PLUGIN_ID].as_array().filter(|l| !l.is_empty()) else { return PluginState::Missing };
+    let working = list.iter().any(|p| {
+        p["version"].as_str().is_some_and(|ver| version(ver) >= version(FIRST_KEYED_PLUGIN))
+            && p["installPath"].as_str().is_none_or(|dir| Path::new(dir).is_dir())
+    });
+    if working { PluginState::Working } else { PluginState::Broken }
+}
+
+/// Office hooks whose script exists: connected. Office hooks that all point at a missing script: needs repair.
+fn hooks_state(text: &str, agent: &str, exists: impl Fn(&Path) -> bool) -> Status {
+    let Ok(v) = serde_json::from_str::<Value>(text) else { return Status::NotConnected };
+    let scripts: Vec<PathBuf> = commands(&v).iter().filter(|c| is_office_command(c, agent)).filter_map(|c| script_of(c)).collect();
+    if scripts.is_empty() { Status::NotConnected }
+    else if scripts.iter().any(|p| exists(p)) { Status::Connected }
+    else { Status::NeedsRepair }
+}
+
+/// The script a hook command runs: `"/path with spaces/hook.sh" codex` or `/path/hook.sh codex`.
+fn script_of(cmd: &str) -> Option<PathBuf> {
+    let cmd = cmd.trim();
+    let path = match cmd.strip_prefix('"') { Some(rest) => rest.split('"').next()?, None => cmd.split_whitespace().next()? };
+    Some(PathBuf::from(path))
 }
 
 /// { "tools": [{ "id": "codex", "name": "Codex", "status": "connected" }, …] } for the office page.
@@ -170,11 +205,17 @@ fn connect_claude() -> Result<String, String> {
     let claude = find_claude().ok_or("Claude Code wasn't found on this Mac. Install Claude Code (or open the Claude app once), then try again.")?;
     let marketplace = write_marketplace()?;
     let dir = marketplace.to_string_lossy();
-    // A marketplace with this name may already exist (say, from a clone of the repo); installing from it is fine.
+    // A marketplace with this name may already exist, from a clone of the repo that has since moved, say. This only
+    // runs when the plugin isn't working, so point the name at the app's copy instead.
     if let Err(err) = run_claude(&claude, &["plugin", "marketplace", "add", &dir]) {
         if !err.to_lowercase().contains("already") { return Err(format!("Couldn't add the Agent Office plugin: {err}")); }
+        let _ = run_claude(&claude, &["plugin", "marketplace", "remove", "agent-office"]);
+        run_claude(&claude, &["plugin", "marketplace", "add", &dir]).map_err(|e| format!("Couldn't add the Agent Office plugin: {e}"))?;
     }
-    run_claude(&claude, &["plugin", "install", PLUGIN_ID]).map_err(|e| format!("Couldn't install the Agent Office plugin: {e}"))?;
+    if let Err(err) = run_claude(&claude, &["plugin", "install", PLUGIN_ID]) {
+        if !err.to_lowercase().contains("already") { return Err(format!("Couldn't install the Agent Office plugin: {err}")); }
+        run_claude(&claude, &["plugin", "update", PLUGIN_ID]).map_err(|e| format!("Couldn't update the Agent Office plugin: {e}"))?;
+    }
     Ok("Claude Code is connected. Start a new session and it walks into the office.".into())
 }
 
@@ -268,6 +309,30 @@ mod tests {
         assert_eq!(stop[1]["command"], format!("\"{SCRIPT}\" cursor"));
         assert_eq!(v["hooks"]["afterFileEdit"][0]["command"], "prettier");
         assert_eq!(v["version"], 1);
+    }
+
+    #[test]
+    fn hooks_pointing_at_a_missing_script_need_repair() {
+        let old = r#"{ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "\"/Users/me/Documents/virtual office/adapters/hook.sh\" codex" }] }] } }"#;
+        assert_eq!(hooks_state(old, "codex", |_| false), Status::NeedsRepair);
+        assert_eq!(hooks_state(old, "codex", |p| p == Path::new("/Users/me/Documents/virtual office/adapters/hook.sh")), Status::Connected);
+        assert_eq!(hooks_state(old, "cursor", |_| true), Status::NotConnected);   // another tool's hooks
+        assert_eq!(hooks_state(r#"{ "hooks": {} }"#, "codex", |_| true), Status::NotConnected);
+        assert_eq!(script_of("/opt/hook.sh cursor"), Some(PathBuf::from("/opt/hook.sh")));
+        // Connect replaces the dead hook with the app's own script, so the repair sticks.
+        let fixed = merge_hooks(Some(old), Tool::Codex, Path::new(SCRIPT)).unwrap();
+        assert_eq!(hooks_state(&fixed, "codex", |p| p == Path::new(SCRIPT)), Status::Connected);
+    }
+
+    #[test]
+    fn an_old_or_missing_plugin_needs_repair() {
+        let dir = std::env::temp_dir();
+        let plugin = |version: &str, path: &str| format!(r#"{{ "plugins": {{ "{PLUGIN_ID}": [{{ "version": "{version}", "installPath": "{path}" }}] }} }}"#);
+        assert_eq!(plugin_state(&plugin("0.5.0", &dir.to_string_lossy())), PluginState::Working);
+        assert_eq!(plugin_state(&plugin("0.4.0", &dir.to_string_lossy())), PluginState::Broken);   // sends no hook key
+        assert_eq!(plugin_state(&plugin("0.5.0", "/no/such/plugin/dir")), PluginState::Broken);
+        assert_eq!(plugin_state(r#"{ "plugins": {} }"#), PluginState::Missing);
+        assert_eq!(plugin_state("not json"), PluginState::Missing);
     }
 
     #[test]

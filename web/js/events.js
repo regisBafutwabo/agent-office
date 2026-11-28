@@ -219,9 +219,17 @@ function connectedNames(tools) {
   const n = tools.filter(t => t.status === 'connected').map(t => t.name);
   return !n.length ? 'a connected tool' : n.length === 1 ? n[0] : `${n.slice(0, -1).join(', ')} or ${n[n.length - 1]}`;
 }
+// A tool whose hooks point at a script that's gone, or an old Claude Code plugin, sends nothing: say so once.
+let repairNoticed = false;
 function renderSetup() {
-  const tools = MODE === 'live' && setup.tools || [], todo = tools.filter(t => t.status === 'not-connected');
-  const btn = (t, primary) => `<button class="btn${primary ? ' primary' : ''}" data-connect="${t.id}"${setup.busy ? ' disabled' : ''}>${setup.busy === t.id ? 'Connecting…' : 'Connect ' + esc(t.name)}</button>`;
+  const tools = MODE === 'live' && setup.tools || [], todo = tools.filter(t => t.status === 'not-connected' || t.status === 'needs-repair');
+  const btn = (t, primary) => `<button class="btn${primary ? ' primary' : ''}" data-connect="${t.id}"${setup.busy ? ' disabled' : ''}>${setup.busy === t.id ? 'Connecting…' : (t.status === 'needs-repair' ? 'Reconnect ' : 'Connect ') + esc(t.name)}</button>`;
+  const broken = tools.filter(t => t.status === 'needs-repair');
+  if (broken.length && !repairNoticed) {
+    repairNoticed = true;
+    const names = broken.map(t => t.name).join(' and ');
+    toast(`${names} ${broken.length > 1 ? 'aren’t' : 'isn’t'} reporting to the office: ${broken.length > 1 ? 'their connections point' : 'its connection points'} to files that are gone or out of date.`, 'Reconnect', async () => { for (const t of broken) await connectTool(t.id); });
+  }
   const list = $('#connect-list'); list.hidden = $('#connect-title').hidden = !tools.length;
   list.innerHTML = tools.map(t => `<div class="connect-row"><span>${esc(t.name)}</span>${t.status === 'connected' ? '<span class="pill s-done">Connected</span>'
     : t.status === 'not-installed' ? '<span class="state">Not installed</span>' : btn(t, true)}</div>`).join('');

@@ -65,7 +65,7 @@ function renderGuideTools() {
   const el = $('#guide-tools'); if (guideStep !== 2) { el.replaceChildren(); return; }
   const activeTool = el.contains(document.activeElement) ? document.activeElement.dataset.connect : null;
   if (MODE === 'demo') el.innerHTML = '<p class="note">You’re exploring sample agents. Connect your own tools in your live office.</p><a class="btn" href="?tour">Go to live office</a>';
-  else if (setup.tools?.length) el.innerHTML = setup.tools.map(t => `<div class="connect-row"><span>${esc(t.name)}</span>${t.status === 'connected' ? '<span class="pill s-done">Connected</span>' : t.status === 'not-installed' ? '<span class="state">Not installed</span>' : `<button class="btn" data-connect="${t.id}"${setup.busy ? ' disabled' : ''}>${setup.busy === t.id ? 'Connecting…' : 'Connect'}</button>`}</div>`).join('');
+  else if (setup.tools?.length) el.innerHTML = setup.tools.map(t => `<div class="connect-row"><span>${esc(t.name)}</span>${t.status === 'connected' ? '<span class="pill s-done">Connected</span>' : t.status === 'not-installed' ? '<span class="state">Not installed</span>' : `<button class="btn" data-connect="${t.id}"${setup.busy ? ' disabled' : ''}>${setup.busy === t.id ? 'Connecting…' : t.status === 'needs-repair' ? 'Reconnect' : 'Connect'}</button>`}</div>`).join('');
   else el.innerHTML = '<p class="note">The Mac app has one-click connection buttons. If you run the browser office from source, follow the setup guide to connect your tools.</p><a class="btn" href="https://github.com/regisBafutwabo/agent-office/blob/main/INSTALL.md#from-source" target="_blank" rel="noopener">Open setup guide ↗</a>';
   if (activeTool) el.querySelector(`[data-connect="${activeTool}"]`)?.focus();
 }
