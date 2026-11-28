@@ -40,8 +40,10 @@ pub struct Found {
     pub messages: Vec<Message>,
     /// The log itself says the turn is over, so it overrides hooks still saying "thinking" (see Store::adopt).
     pub ended: bool,
-    /// Subagents its logs show still at work (Claude Code only).
+    /// Subagents its logs show still at work (Claude Code and Cursor).
     pub subs: Vec<FoundSub>,
+    /// The T3 Code thread of the agent that handed it this task (see delegated_by).
+    pub delegated_by: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -211,9 +213,20 @@ fn claude(home: &Path, now: u64, out: &mut Vec<Found>, archived: &HashSet<String
             let (status, activity) = if subs.is_empty() { settle(status, activity, at, now) } else { ("working".into(), "Waiting on a subagent".into()) };
             let at = subs.iter().map(|x| x.at).fold(at, u64::max);
             let t = read_tail(&log).unwrap_or_default();
-            out.push(Found { agent: "claude-code".into(), id, cwd: root.to_string_lossy().into(), project: None, entrypoint, at, status, activity, title: t.title, messages: t.messages, ended: false, subs });
+            out.push(Found { agent: "claude-code".into(), id, cwd: root.to_string_lossy().into(), project: None, entrypoint, at, status, activity, title: t.title, messages: t.messages, ended: false, subs, delegated_by: None });
         }
     }
+}
+
+/// The first thing you asked a Codex thread: its user_message event, or else the first user message that isn't
+/// the AGENTS.md or environment block Codex adds before it (T3 Code's threads have only those).
+fn codex_prompt(lines: &[Value]) -> Option<String> {
+    if let Some(m) = lines.iter().find(|o| o["type"] == "event_msg" && o["payload"]["type"] == "user_message").and_then(|o| o["payload"]["message"].as_str()) {
+        return Some(m.to_string());
+    }
+    lines.iter().filter(|o| o["type"] == "response_item" && o["payload"]["type"] == "message" && o["payload"]["role"] == "user")
+        .filter_map(|o| o["payload"]["content"].as_array().map(|c| c.iter().filter_map(|x| x["text"].as_str()).collect::<Vec<_>>().join("\n")))
+        .find(|t| { let t = t.trim_start(); !t.is_empty() && !t.starts_with('#') && !t.starts_with('<') })
 }
 
 fn codex(home: &Path, now: u64, out: &mut Vec<Found>) {
@@ -225,9 +238,11 @@ fn codex(home: &Path, now: u64, out: &mut Vec<Found>) {
             let first = head(&log, 3);
             let Some(meta) = first.iter().find(|o| o["type"] == "session_meta").map(|o| &o["payload"]) else { continue };
             let id = meta["session_id"].as_str().or(meta["id"].as_str()).unwrap_or("");
-            // Subagent threads and chats imported from other tools aren't chats you're running.
+            // Subagent threads and chats imported from other tools aren't chats you're running. A subagent names its parent;
+            // T3 Code marks the threads it starts "subagent" too, but those have no parent and are chats of their own.
             let imported = first.iter().any(|o| o["payload"]["turn_id"].as_str().is_some_and(|t| t.starts_with("external-import")));
-            if id.is_empty() || imported || meta["thread_source"].as_str().is_some_and(|s| s != "user") {
+            let subagent = meta["parent_thread_id"].is_string() || meta["forked_from_id"].is_string() || meta["source"]["subagent"].is_object();
+            if id.is_empty() || imported || subagent || meta["thread_source"].as_str().is_some_and(|s| s != "user" && s != "subagent") {
                 continue;
             }
             let last = tail(&log).into_iter().rev()
@@ -239,8 +254,10 @@ fn codex(home: &Path, now: u64, out: &mut Vec<Found>) {
             };
             let (status, activity) = settle(status, activity, at, now);
             let ended = last.as_deref().is_some_and(|t| t != "task_started");
+            let prompt = codex_prompt(&head(&log, 80));
             out.push(Found { agent: "codex".into(), id: format!("codex:{id}"), cwd: meta["cwd"].as_str().unwrap_or("").into(), project: None,
-                             entrypoint: meta["originator"].as_str().map(String::from), at, status, activity, title: None, messages: vec![], ended, subs: vec![] });
+                             entrypoint: meta["originator"].as_str().map(String::from), at, status, activity, title: prompt.as_deref().and_then(prompt_title),
+                             messages: vec![], ended, subs: vec![], delegated_by: prompt.as_deref().and_then(delegated_by) });
         }
     }
 }
@@ -256,10 +273,48 @@ fn between<'a>(text: &'a str, tag: &str) -> Option<&'a str> {
 pub fn from_t3(text: &str) -> bool {
     text.contains("<t3_code_orchestration_instructions>")
 }
+/// The T3 Code thread that handed this task to the agent, from the line T3 Code puts before it:
+/// [T3 Code: the agent in T3 thread "<thread id>" sent this message, not the user.]
+pub fn delegated_by(text: &str) -> Option<String> {
+    let (_, rest) = text.split_once("[T3 Code: the agent in T3 thread \"")?;
+    let id = rest.split('"').next()?;
+    crate::focus::valid_t3_thread(id).then(|| id.to_string())
+}
+
+/// A prompt, as a chat name: your words only. T3 Code wraps a task it hands to another agent in its own lines
+/// ("[T3 Code: the agent in T3 thread … sent this message, not the user.]", "Act as the research sub-agent for this task.").
+pub fn prompt_title(text: &str) -> Option<String> {
+    let words = between(text, "user_request").or_else(|| between(text, "user_query")).unwrap_or(text);
+    let t3_line = |l: &str| {
+        let l = l.trim();
+        (l.starts_with("[T3 Code:") && l.ends_with(']'))
+            || (l.starts_with("Act as the ") && l.trim_end_matches('.').ends_with(" for this task") && l.len() < 80)
+    };
+    let kept: Vec<&str> = words.lines().filter(|l| !t3_line(l)).collect();
+    Some(clip(&kept.join("\n"), 80)).filter(|q| !q.is_empty())
+}
 fn cursor_prompt(o: &Value) -> Option<String> {
-    let text = cursor_text(o)?;
-    let q = between(text, "user_request").or_else(|| between(text, "user_query")).unwrap_or(text);
-    Some(clip(q, 80)).filter(|q| !q.is_empty())
+    prompt_title(cursor_text(o)?)
+}
+
+/// Cursor ends a turn with "turn_ended", but not when T3 Code runs it. There the answer is a last assistant message
+/// with no tool call; the log must also have been quiet a moment, since text-only messages can come in a row mid-answer.
+const CURSOR_QUIET_MS: u64 = 10_000;
+fn cursor_done(last: Option<&Value>, at: u64, now: u64) -> bool {
+    let Some(o) = last else { return false };
+    if o["type"] == "turn_ended" { return true; }
+    let text_only = o["role"] == "assistant" && o["message"]["content"].as_array().is_some_and(|c| !c.is_empty() && c.iter().all(|x| x["type"] == "text"));
+    text_only && now.saturating_sub(at) >= CURSOR_QUIET_MS
+}
+
+/// Cursor keeps a transcript per subagent in <chat>/subagents/; the ones still at work, named after their task.
+fn cursor_subs(chat: &Path, now: u64) -> Vec<FoundSub> {
+    recent_logs(&chat.join("subagents"), now).into_iter().filter_map(|(log, at)| {
+        if cursor_done(tail(&log).last(), at, now) { return None; }
+        let id = log.file_stem()?.to_string_lossy().to_string();
+        let task = head(&log, 1).into_iter().next().filter(|o| o["role"] == "user").as_ref().and_then(cursor_prompt);
+        Some(FoundSub { id, kind: "subagent".into(), task, at })
+    }).collect()
 }
 
 fn cursor(home: &Path, now: u64, out: &mut Vec<Found>) {
@@ -270,12 +325,14 @@ fn cursor(home: &Path, now: u64, out: &mut Vec<Found>) {
             for (log, at) in recent_logs(&chat, now) {
                 let Some(id) = log.file_stem().map(|s| s.to_string_lossy().to_string()) else { continue };
                 let cwd = cwd.get_or_insert_with(|| decode(&folder).map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| format!("/{}", folder.replace('-', "/")))).clone();
-                let done = tail(&log).last().is_some_and(|o| o["type"] == "turn_ended");
+                let done = cursor_done(tail(&log).last(), at, now);
                 let (status, activity) = settle(if done { "done" } else { "thinking" }, if done { "Finished" } else { "Thinking" }, at, now);
                 let first = head(&log, 1).into_iter().next().filter(|o| o["role"] == "user");
                 let title = first.as_ref().and_then(cursor_prompt);
                 let entrypoint = first.as_ref().and_then(cursor_text).filter(|t| from_t3(t)).map(|_| "t3-code".to_string());
-                out.push(Found { agent: "cursor".into(), id: format!("cursor:{id}"), cwd, project: None, entrypoint, at, status, activity, title, messages: vec![], ended: done, subs: vec![] });
+                let delegated = first.as_ref().and_then(cursor_text).and_then(delegated_by);
+                let subs = if done { vec![] } else { cursor_subs(&chat, now) };
+                out.push(Found { agent: "cursor".into(), id: format!("cursor:{id}"), cwd, project: None, entrypoint, at, status, activity, title, messages: vec![], ended: done, subs, delegated_by: delegated });
             }
         }
     }
@@ -357,10 +414,19 @@ mod tests {
         let day = home.join(".codex/sessions/2026/10/01");
         let meta = |id: &str, source: &str| json!({ "type": "session_meta", "payload": { "id": id, "session_id": id, "cwd": "/repo", "originator": "codex_cli_rs", "thread_source": source } });
         write(&day.join("rollout-a.jsonl"), &[meta("t1", "user"), json!({ "type": "event_msg", "payload": { "type": "task_started" } }), json!({ "type": "event_msg", "payload": { "type": "task_complete" } })]);
-        write(&day.join("rollout-b.jsonl"), &[meta("t2", "subagent")]);
+        // A real subagent names its parent; a thread T3 Code starts says "subagent" but has none, and is a chat of its own.
+        let mut sub = meta("t2", "subagent");
+        sub["payload"]["parent_thread_id"] = json!("t1");
+        sub["payload"]["source"] = json!({ "subagent": { "thread_spawn": { "parent_thread_id": "t1", "depth": 1 } } });
+        write(&day.join("rollout-b.jsonl"), &[sub]);
+        let mut t3 = meta("t4", "subagent");
+        t3["payload"]["originator"] = json!("T3 Code");
+        write(&day.join("rollout-d.jsonl"), &[t3, json!({ "type": "event_msg", "payload": { "type": "task_started" } })]);
         write(&day.join("rollout-c.jsonl"), &[json!({ "type": "session_meta", "payload": { "id": "t3", "cwd": "/repo" } }), json!({ "type": "event_msg", "payload": { "type": "task_started", "turn_id": "external-import-turn-1" } })]);
         let found = scan(&home, now_ms());
-        assert_eq!(found.iter().map(|f| (f.id.as_str(), f.status.as_str(), f.ended)).collect::<Vec<_>>(), vec![("codex:t1", "done", true)]);
+        let mut ids = found.iter().map(|f| (f.id.as_str(), f.status.as_str(), f.ended)).collect::<Vec<_>>();
+        ids.sort();
+        assert_eq!(ids, vec![("codex:t1", "done", true), ("codex:t4", "thinking", false)]);
     }
 
     #[test]
@@ -372,6 +438,62 @@ mod tests {
         assert_eq!((found[0].id.as_str(), found[0].status.as_str(), found[0].title.as_deref()), ("cursor:c1", "thinking", Some("git pull")));
         assert_eq!(found[0].cwd, "/Users/me/shop"); // no such folder here, so the dashes are read as slashes
         assert_eq!((found[0].entrypoint.as_deref(), found[0].ended), (None, false));
+    }
+
+    #[test]
+    fn a_cursor_chat_without_turn_ended_is_done_once_it_answered_and_went_quiet() {
+        let answer = json!({ "role": "assistant", "message": { "content": [{ "type": "text", "text": "Done." }] } });
+        let working = json!({ "role": "assistant", "message": { "content": [{ "type": "text", "text": "Reading files" }, { "type": "tool_use" }] } });
+        assert!(cursor_done(Some(&json!({ "type": "turn_ended" })), 0, 0));
+        assert!(cursor_done(Some(&answer), 0, CURSOR_QUIET_MS));
+        assert!(!cursor_done(Some(&answer), 0, CURSOR_QUIET_MS - 1));      // may still be writing
+        assert!(!cursor_done(Some(&working), 0, CURSOR_QUIET_MS * 10));    // a tool call is still running
+        assert!(!cursor_done(Some(&json!({ "role": "user", "message": { "content": [{ "type": "text", "text": "hi" }] } })), 0, CURSOR_QUIET_MS));
+        assert!(!cursor_done(None, 0, CURSOR_QUIET_MS));
+    }
+
+    #[test]
+    fn a_task_t3_code_hands_over_names_the_thread_it_came_from() {
+        let line = |id: &str| format!("[T3 Code: the agent in T3 thread \"{id}\" sent this message, not the user.]\n\nDo it.");
+        assert_eq!(delegated_by(&line("18f504af-284e-4ee6-823f-f44f9cb7dd8c")).as_deref(), Some("18f504af-284e-4ee6-823f-f44f9cb7dd8c"));
+        assert_eq!(delegated_by(&line("thread:delegated-task:command%3Amcp%3Aab")).as_deref(), Some("thread:delegated-task:command%3Amcp%3Aab"));
+        assert_eq!(delegated_by(&line("../etc/passwd")), None);
+        assert_eq!(delegated_by("a prompt you typed"), None);
+    }
+
+    #[test]
+    fn codex_threads_t3_code_starts_are_named_after_the_task() {
+        let home = tmp("codex-t3");
+        let day = home.join(".codex/sessions/2026/10/02");
+        let msg = |role: &str, text: &str| json!({ "type": "response_item", "payload": { "type": "message", "role": role, "content": [{ "type": "input_text", "text": text }] } });
+        write(&day.join("rollout-x.jsonl"), &[json!({ "type": "session_meta", "payload": { "id": "x1", "session_id": "x1", "cwd": "/repo", "originator": "T3 Code", "thread_source": "subagent" } }),
+            msg("developer", "You are Codex"), msg("user", "# AGENTS.md instructions for /repo"), msg("user", "<environment_context>/repo</environment_context>"),
+            msg("user", "[T3 Code: the agent in T3 thread \"18f504af-284e-4ee6-823f-f44f9cb7dd8c\" sent this message, not the user.]\n\nAct as the research sub-agent for this task.\n\nCount the lines."),
+            json!({ "type": "event_msg", "payload": { "type": "task_started" } })]);
+        let f = &scan(&home, now_ms())[0];
+        assert_eq!((f.title.as_deref(), f.delegated_by.as_deref()), (Some("Count the lines."), Some("18f504af-284e-4ee6-823f-f44f9cb7dd8c")));
+    }
+
+    #[test]
+    fn cursor_subagents_still_at_work_are_found_in_the_subagents_folder() {
+        let home = tmp("cursor-subs");
+        let chat = home.join(".cursor/projects/Users-me-shop/agent-transcripts/c3");
+        let user = |text: &str| json!({ "role": "user", "message": { "content": [{ "type": "text", "text": text }] } });
+        let tool = json!({ "role": "assistant", "message": { "content": [{ "type": "text", "text": "Looking" }, { "type": "tool_use" }] } });
+        write(&chat.join("c3.jsonl"), &[user("<user_query>\nship it\n</user_query>"), tool.clone()]);
+        write(&chat.join("subagents/s1.jsonl"), &[user("<user_query>\nCount the lines\n</user_query>"), tool]);
+        write(&chat.join("subagents/s2.jsonl"), &[user("finished one"), json!({ "type": "turn_ended" })]);
+        let f = &scan(&home, now_ms())[0];
+        assert_eq!(f.subs.iter().map(|x| (x.id.as_str(), x.kind.as_str(), x.task.as_deref())).collect::<Vec<_>>(), vec![("s1", "subagent", Some("Count the lines"))]);
+    }
+
+    #[test]
+    fn a_task_t3_code_hands_to_another_agent_is_named_after_the_task() {
+        let handed = "<user_query>\n<t3_code_orchestration_instructions>\nrules\n</t3_code_orchestration_instructions>\n\n<user_request>\n[T3 Code: the agent in T3 thread \"18f504af\" sent this message, not the user.]\n\nAct as the research sub-agent for this task.\n\nCount the lines in web/js.\n</user_request>\n</user_query>";
+        assert_eq!(prompt_title(handed).as_deref(), Some("Count the lines in web/js."));
+        assert_eq!(prompt_title("Act as the reviewer for this task, but say what you would change").as_deref(), Some("Act as the reviewer for this task, but say what you would change"));
+        assert_eq!(prompt_title("plain prompt").as_deref(), Some("plain prompt"));
+        assert_eq!(prompt_title(""), None);
     }
 
     #[test]

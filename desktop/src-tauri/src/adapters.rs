@@ -19,7 +19,15 @@ pub fn claude_tool(name: &str) -> String {
         "glob" | "list_directory" | "list_files" | "file_search" | "ls" => "Glob",
         "web_fetch" | "fetch" => "WebFetch",
         "google_web_search" | "web_search" => "WebSearch",
-        "task" | "agent" | "subagent" | "spawn_agent" => "Task",
+        "task" | "agent" | "subagent" | "spawn_agent" | "invoke_subagent" => "Task",
+        // Antigravity
+        "run_command" => "Bash",
+        "view_file" | "view_file_outline" => "Read",
+        "replace_file_content" | "multi_replace_file_content" => "Edit",
+        "grep_search" => "Grep",
+        "find_by_name" | "list_dir" => "Glob",
+        "read_url_content" => "WebFetch",
+        "search_web" => "WebSearch",
         _ => return name.into(),
     };
     mapped.into()
@@ -104,10 +112,76 @@ fn map_name<'a>(table: &[(&str, &'a str)], n: &str) -> Option<&'a str> {
     table.iter().find(|(k, _)| *k == n).map(|(_, v)| *v)
 }
 
+// Antigravity (docs/adapters.md): camelCase payloads, one conversation per agent. Its hooks only go where the office can
+// answer "no opinion" ({}), so a tool is reported once it ran. A subagent is a conversation of its own that names no
+// parent: it starts with no prompt right after an invoke_subagent call in the same folder, so that call is its parent's.
+// Same as bridge/adapters.js.
+struct AgState { spawned: std::collections::HashMap<String, Vec<(String, u64)>>, parent: std::collections::HashMap<String, String> }
+static AG: std::sync::Mutex<Option<AgState>> = std::sync::Mutex::new(None);
+const AG_PAIR_MS: u64 = 60_000;
+
+fn pascal_to_snake(v: &Value) -> Map<String, Value> {
+    v.as_object().map(|o| o.iter().map(|(k, v)| {
+        let mut out = String::new();
+        for (i, c) in k.chars().enumerate() {
+            if c.is_ascii_uppercase() { if i > 0 { out.push('_'); } out.push(c.to_ascii_lowercase()); } else { out.push(c); }
+        }
+        (out, v.clone())
+    }).collect()).unwrap_or_default()
+}
+
+fn antigravity(p: &Value) -> Option<Value> {
+    let id = str_of(p, "conversationId");
+    if id.is_empty() { return None; }
+    let cwd = if !str_of(p, "cwd").is_empty() { str_of(p, "cwd") } else { p.get("workspacePaths").and_then(|r| r.get(0)).and_then(Value::as_str).unwrap_or("") };
+    let now = crate::store::now_ms();
+    let event = str_of(p, "hookEventName");
+    let mut guard = AG.lock().unwrap();
+    let st = guard.get_or_insert_with(|| AgState { spawned: Default::default(), parent: Default::default() });
+    if st.parent.len() > 200 { st.parent.clear(); }
+    let mut parent = st.parent.get(id).cloned();
+    if parent.is_none() && event == "SessionStart" && str_of(p, "lastUserInput").is_empty() {
+        let list = st.spawned.entry(cwd.to_string()).or_default();
+        list.retain(|(_, at)| now.saturating_sub(*at) < AG_PAIR_MS);
+        if !list.is_empty() { let (who, _) = list.remove(0); st.parent.insert(id.to_string(), who.clone()); parent = Some(who); }
+    }
+    let mut extra: Vec<(&str, Value)> = match &parent {
+        Some(boss) => vec![("session_id", boss.as_str().into()), ("agent_id", id.into()), ("agent_type", "subagent".into())],
+        None => vec![("session_id", id.into())],
+    };
+    extra.push(("cwd", cwd.into()));
+    match event {
+        "SessionStart" => reshape(p, Some(if parent.is_some() { "SubagentStart" } else { "SessionStart" }), extra),
+        "PreInvocation" => {                                // the first model call of a turn: a new prompt
+            let prompt = str_of(p, "lastUserInput");
+            if parent.is_some() || p["invocationNum"].as_i64().unwrap_or(-1) != 0 || prompt.is_empty() { return None; }
+            extra.push(("prompt", prompt.into()));
+            reshape(p, Some("UserPromptSubmit"), extra)
+        }
+        "PostToolUse" => {
+            let name = p["toolCall"]["name"].as_str().unwrap_or("");
+            let mut args = pascal_to_snake(&p["toolCall"]["args"]);
+            if claude_tool(name) == "Task" {
+                if !args.contains_key("description") { if let Some(v) = args.get("prompt").cloned() { args.insert("description".into(), v); } }
+                if !args.contains_key("subagent_type") { if let Some(v) = args.get("type_name").or(args.get("role")).cloned() { args.insert("subagent_type".into(), v); } }
+                st.spawned.entry(cwd.to_string()).or_default().push((id.to_string(), now));
+            }
+            let failed = !str_of(p, "error").is_empty();
+            extra.push(("tool_name", name.into()));
+            extra.push(("tool_input", Value::Object(args)));
+            if failed { extra.push(("error", p["error"].clone())); }
+            reshape(p, Some(if failed { "PostToolUseFailure" } else { "PreToolUse" }), extra)
+        }
+        "Stop" => reshape(p, Some(if parent.is_some() { "SubagentStop" } else { "Stop" }), extra),
+        _ => None,
+    }
+}
+
 fn adapt(agent: &str, p: &Value, event: Option<&str>) -> Option<Value> {
     match agent {
         "claude-code" => Some(p.clone()),
         "codex" => claude_like(p, &[("Interrupt", "Stop")]),
+        "antigravity" => antigravity(p),
         "gemini" => {
             let name = map_name(&[("BeforeAgent", "UserPromptSubmit"), ("AfterAgent", "Stop"), ("BeforeTool", "PreToolUse"), ("AfterTool", "PostToolUse"),
                 ("PreCompress", "PreCompact"), ("SessionStart", "SessionStart"), ("SessionEnd", "SessionEnd"), ("Notification", "Notification")], str_of(p, "hook_event_name"));
@@ -206,6 +280,27 @@ pub fn normalize(agent: &str, payload: &Value, event: Option<&str>) -> Option<Va
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn antigravity_turn_its_subagent_paired_with_invoke_subagent_and_a_failed_command() {
+        let ev = |o: Value| { let mut p = serde_json::json!({ "cwd": "/repo-ag-rs", "workspacePaths": ["/repo-ag-rs"] }); p.as_object_mut().unwrap().extend(o.as_object().unwrap().clone()); normalize("antigravity", &p, None) };
+        let get = |v: &Option<Value>, k: &str| v.as_ref().and_then(|v| v.get(k)).and_then(Value::as_str).unwrap_or("").to_string();
+        assert_eq!(get(&ev(serde_json::json!({ "conversationId": "P", "hookEventName": "SessionStart", "lastUserInput": "Count" })), "hook_event_name"), "SessionStart");
+        let prompt = ev(serde_json::json!({ "conversationId": "P", "hookEventName": "PreInvocation", "invocationNum": 0, "lastUserInput": "Count the lines" }));
+        assert_eq!((get(&prompt, "hook_event_name"), get(&prompt, "session_id"), get(&prompt, "prompt")), ("UserPromptSubmit".into(), "antigravity:P".into(), "Count the lines".into()));
+        assert!(ev(serde_json::json!({ "conversationId": "P", "hookEventName": "PreInvocation", "invocationNum": 1, "lastUserInput": "Count the lines" })).is_none());
+        let task = ev(serde_json::json!({ "conversationId": "P", "hookEventName": "PostToolUse", "toolCall": { "name": "invoke_subagent", "args": { "Prompt": "List files", "TypeName": "research" } }, "error": "" })).unwrap();
+        assert_eq!((task["hook_event_name"].as_str(), task["tool_name"].as_str(), task["tool_input"]["description"].as_str(), task["tool_input"]["subagent_type"].as_str()), (Some("PreToolUse"), Some("Task"), Some("List files"), Some("research")));
+        let start = ev(serde_json::json!({ "conversationId": "S", "hookEventName": "SessionStart", "lastUserInput": "" }));
+        assert_eq!((get(&start, "hook_event_name"), get(&start, "session_id"), get(&start, "agent_id")), ("SubagentStart".into(), "antigravity:P".into(), "S".into()));
+        let run = ev(serde_json::json!({ "conversationId": "S", "hookEventName": "PostToolUse", "toolCall": { "name": "run_command", "args": { "CommandLine": "ls" } }, "error": "" })).unwrap();
+        assert_eq!((run["hook_event_name"].as_str(), run["agent_id"].as_str(), run["tool_name"].as_str(), run["tool_input"]["command"].as_str()), (Some("PreToolUse"), Some("S"), Some("Bash"), Some("ls")));
+        assert_eq!(get(&ev(serde_json::json!({ "conversationId": "S", "hookEventName": "Stop" })), "hook_event_name"), "SubagentStop");
+        let failed = ev(serde_json::json!({ "conversationId": "P", "hookEventName": "PostToolUse", "toolCall": { "name": "run_command", "args": { "CommandLine": "npm test" } }, "error": "exit status 1" })).unwrap();
+        assert_eq!((failed["hook_event_name"].as_str(), failed["tool_input"]["command"].as_str()), (Some("PostToolUseFailure"), Some("npm test")));
+        assert_eq!(get(&ev(serde_json::json!({ "conversationId": "P", "hookEventName": "Stop" })), "hook_event_name"), "Stop");
+        assert_eq!(get(&ev(serde_json::json!({ "conversationId": "Q", "hookEventName": "SessionStart", "lastUserInput": "" })), "hook_event_name"), "SessionStart");
+    }
     use serde_json::json;
 
     #[test]

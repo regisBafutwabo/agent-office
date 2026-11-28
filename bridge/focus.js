@@ -22,6 +22,8 @@ export const validChat = c => /^local_[A-Za-z0-9-]{1,64}$/.test(c || '');
 const CODEX_THREAD = /^codex:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 // A T3 Code thread (T3CODE_THREAD_ID) and T3 Code's install id (~/.t3/userdata/environment-id) are both UUIDs.
 export const validUuid = v => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v || '');
+// A T3 Code thread: a UUID, or "thread:…" for a task T3 Code handed to another agent. Only kept and compared, never put in a link.
+export const validT3Thread = v => validUuid(v) || /^thread:[A-Za-z0-9%._:-]{1,300}$/.test(v || '');
 export const t3Environment = (home = os.homedir()) => { try { return fs.readFileSync(path.join(home, '.t3/userdata/environment-id'), 'utf8').trim(); } catch { return null; } };
 
 /** The link that opens this exact chat in its desktop app, or null when the agent runs somewhere else (a terminal, an editor). */

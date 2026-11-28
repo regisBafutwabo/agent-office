@@ -2,8 +2,8 @@
 # Forward any coding agent's hook payload to Agent Office, which translates it (bridge/adapters.js).
 #
 #   In the agent's hook config:  /path/to/agent-office/adapters/hook.sh <agent> [event]
-#     <agent>  codex | cursor | gemini | copilot | factory | qwen | goose | kiro | windsurf | cline
-#     [event]  only needed when the payload doesn't name the event (Copilot CLI)
+#     <agent>  codex | cursor | gemini | copilot | factory | qwen | goose | kiro | windsurf | cline | antigravity
+#     [event]  only needed when the payload doesn't name the event (Copilot CLI), or for the reply (Antigravity's Stop)
 #
 # Never slows the agent down or changes what it does: 1 second timeout, always exits 0.
 AGENT="${1:-unknown}"
@@ -30,6 +30,10 @@ OFFICE_KEY="${AGENT_OFFICE_DATA:-$OFFICE_DATA}/hook-token"
   -H "X-Agent-Office-T3-Thread: ${T3CODE_THREAD_ID:-}" \
   --data-binary @- \
   "http://127.0.0.1:${AGENT_OFFICE_PORT:-4747}/hook" >/dev/null 2>&1
-# Gemini CLI and Cursor read a JSON reply from stdout; an empty object means "no opinion".
-case "$AGENT" in gemini|cursor) echo '{}' ;; esac
+# Gemini CLI, Cursor and Antigravity read a JSON reply from stdout; an empty object means "no opinion". Antigravity's
+# Stop needs a decision: anything but "continue" lets the agent stop as it would have.
+case "$AGENT" in
+  gemini|cursor) echo '{}' ;;
+  antigravity) if [ "$EVENT" = Stop ]; then echo '{"decision":""}'; else echo '{}'; fi ;;
+esac
 exit 0

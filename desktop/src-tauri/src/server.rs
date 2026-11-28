@@ -97,15 +97,8 @@ pub fn router(port: u16, creds: Credentials, on_change: OnChange) -> Router {
         music_listeners: AtomicUsize::new(0),
         outdated: Mutex::new(Vec::new()),
     });
-    {
-        // Chats that were already running when the office opened move in before the first page loads.
-        let mut store = state.store.lock().unwrap();
-        for f in discover::scan_home(store::now_ms()) {
-            let (id, subs) = (f.id.clone(), f.subs.clone());
-            if let Some(e) = store.adopt(f) { (state.on_change)(&store, &e); }
-            store.adopt_subs(&id, &subs);
-        }
-    }
+    // Chats that were already running move in from watch_logs' first scan, right after the office starts listening.
+    // Reading project folders can wait on a macOS permission prompt (Documents, Desktop…); the office must open anyway.
     tokio::spawn(watch_music(state.clone()));
     tokio::spawn(watch_logs(state.clone()));
     Router::new()
@@ -216,8 +209,7 @@ fn ollama_models() -> Vec<discover::Found> {
 
 /// Keeps chats known only from their logs up to date, adds new ones, and walks out the ones whose log went quiet.
 async fn watch_logs(st: AppState) {
-    let mut tick = tokio::time::interval(LOG_SCAN);
-    tick.tick().await; // the first scan already ran in router()
+    let mut tick = tokio::time::interval(LOG_SCAN);   // its first tick is now: running chats move in at once
     loop {
         tick.tick().await;
         rescan(&st).await;

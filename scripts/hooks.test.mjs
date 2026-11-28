@@ -64,7 +64,8 @@ test('every hook sends the hook key from its file, never on the command line', (
 });
 
 test('with no hook key (the office never ran) hooks stay silent and Claude Code asks as usual', () => {
-  for (const [hook, args, stdout] of [['../plugin/hooks/send.sh', [], ''], ['../plugin/hooks/permission.sh', [], ''], ['../adapters/hook.sh', ['cursor'], '{}\n']]) {
+  for (const [hook, args, stdout] of [['../plugin/hooks/send.sh', [], ''], ['../plugin/hooks/permission.sh', [], ''], ['../adapters/hook.sh', ['cursor'], '{}\n'],
+      ['../adapters/hook.sh', ['antigravity', 'PostToolUse'], '{}\n'], ['../adapters/hook.sh', ['antigravity', 'Stop'], '{"decision":""}\n']]) {   // Antigravity's Stop needs a decision
     const result = runHook(hook, {}, args, { key: false });
     assert.equal(result.args, null);
     assert.equal(result.stdout, stdout);

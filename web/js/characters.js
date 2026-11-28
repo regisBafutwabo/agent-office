@@ -17,7 +17,7 @@ const TRIM_COLORS = ['#15212A', '#F4F1EA', '#FFB400', '#2B59C3', '#E4572E', '#98
 const ACCENT_COLORS = ['#E4572E', '#2B59C3', '#FFB400', '#15212A', '#F4F1EA', '#6CB26B', '#B16AD9', '#FF7EB6'];
 const FACE_COLORS = { thinking: '#C8BFFF', working: '#8BE9F5', waiting: '#FFC867', done: '#98F1B0', idle: '#AEBFC6', error: '#FF9C94' };
 const TOOL_ACCESSORY = { cursor: 'headphones', codex: 'cap', gemini: 'antenna', copilot: 'glasses', factory: 'backpack', qwen: 'beanie',
-  goose: 'scarf', kiro: 'antenna', windsurf: 'headphones', cline: 'glasses', opencode: 'cap', amp: 'antenna', ollama: 'mug' };
+  goose: 'scarf', kiro: 'antenna', windsurf: 'headphones', cline: 'glasses', opencode: 'cap', amp: 'antenna', ollama: 'mug', antigravity: 'glasses' };
 const LEG = .3;                                  // hip height when standing
 const ANIMALS = { bear: {label:'Bear', fur:'#A57A55', muzzle:'#E5C7A1'}, cat: {label:'Cat', fur:'#DDA66C', muzzle:'#FFE8C8'}, rabbit: {label:'Rabbit', fur:'#C3BBC9', muzzle:'#F7EBEE'}, maltese: {label:'Maltese', fur:'#FFF9EF', muzzle:'#FFFFFF'}, raccoon: {label:'Raccoon', fur:'#9296A2', muzzle:'#E7E5E1'}, duck: {label:'Duck', fur:'#F6DE83', muzzle:'#E9A044'} };
 const petSpecies = a => Object.hasOwn(ANIMALS, a.look.species) ? a.look.species : a.parent ? petSpecies(a.parent) : Object.keys(ANIMALS)[seedHash(a.cwd || a.name) % 6];

@@ -1,20 +1,73 @@
+// T3 Code can hand a task to another agent, in any tool. That agent's session names the T3 Code thread it came from
+// (delegatedBy); when the agent of that thread is in the office, the session shows as its subagent, with its own tool's
+// badge, instead of as a teammate at a desk of its own.
+const delegatedSubs = new Map();                               // session id → { boss, sub }
+function delegator(s) {
+  if (!s || !s.delegatedBy) return null;
+  // The one that handed it over may itself be a subagent handed a task: then it joins the same team.
+  const from = agents.find(x => !x.gone && x.hostT3Thread === s.delegatedBy), boss = from && (from.kind === 'sub' ? from.parent : from);
+  if (!boss || boss.gone || boss.sessionId === s.id) return null;
+  // It came in on its own before its first prompt named who handed it the task: it moves over as that agent's subagent.
+  if (live.byId.has(s.id)) evict(s.id);
+  return boss;
+}
+// Take a session's agent (and its subagents) out at once, freeing their seats: a duplicate, or one that moves over.
+function evict(sessionId) {
+  const main = live.byId.get(sessionId); if (!main) return;
+  for (const a of [...(main.subs?.values() || []), main]) {
+    a.gone = a.leaving = true;
+    for (const spot of [...Object.values(a.floor.SPOTS).flat(), ...ROOF_SPOTS]) {
+      if (spot.by === a.id) spot.by = null;
+      if (spot.owner === a) { spot.owner = null; spot.chairMat?.color.set(sceneT.chair); }
+    }
+    removeAgent(a);
+  }
+  live.byId.delete(sessionId); buildCustomize();
+}
+function delegatedSub(boss, s, instant) {
+  const sub = liveSub(boss, 'session:' + s.id, AGENT_NAMES[s.agent] || 'Claude Code', instant, chatName(s.title) || null);
+  sub.agentName = s.agent; sub.delegatedSession = s.id; if (s.t3Thread) sub.hostT3Thread = s.t3Thread;
+  const name = chatName(s.title);
+  if (name && name !== sub.name) { sub.name = name; sub.labelDirty = true; uiDirty = true; detailDirty = true; }
+  delegatedSubs.set(s.id, { boss, sub });
+  return sub;
+}
+function onDelegatedEvent(e, s, boss, replay) {
+  const sub = delegatedSub(boss, s, replay);
+  const who = e.agentId ? liveSub(boss, `${sub.agentId}/${e.agentId}`, e.agentType, replay, e.agentTask) : sub;   // its own subagents
+  const label = `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}`;
+  if (!['Stop', 'SessionEnd', 'SubagentStop'].includes(e.type) && !boss.exiting) comeBack(who, 'thinking', 'Back to work');
+  switch (e.type) {
+    case 'UserPromptSubmit': emit(sub, 'UserPromptSubmit', `"${e.prompt || ''}"`, e.at); who.awaitingReview = false; applyStatus(sub, 'thinking', e.prompt || 'New task'); break;
+    case 'PreToolUse':
+      emit(who, 'PreToolUse', label, e.at); toolCalls++; who.asked = null; applyStatus(who, 'working', label);
+      place(who, (READ_TOOLS.has(e.tool) && Math.random() < .6 ? spotOfType(who, ['library']) : null) || who.ws);
+      if (EDIT_TOOLS.has(e.tool)) noteEdit(who, e.summary, replay, e.at);
+      break;
+    case 'PostToolUse': case 'PostToolUseFailure':
+      if (e.failed) emit(who, 'PostToolUseFailure', label, e.at);
+      noteWork(who, e); applyStatus(who, 'thinking', e.failed ? `${e.tool} failed, rethinking` : 'Thinking'); break;
+    case 'PermissionRequest':
+      emit(who, 'PermissionRequest', label, e.at); who.asked = label; applyStatus(who, 'waiting', `Needs permission: ${label}`);
+      if (!replay) { toast({ title: 'Needs your permission', detail: `${who.name} · subagent of ${boss.name}` }, 'Find', () => select(who, true), who, 'waiting'); chime('needs', boss); }
+      break;
+    case 'SubagentStop': case 'Stop': case 'SessionEnd': {   // its task is done: it reports back, like any subagent
+      if (e.type === 'SubagentStop' && who === sub) break;
+      emit(who, 'SubagentStop', e.type === 'SubagentStop' ? e.message || 'Returned its result' : 'Finished its task', e.at); who.run = null;
+      if (replay) { removeAgent(who); boss.subs.delete(who.agentId); if (who === sub) delegatedSubs.delete(s.id); }
+      else if (!who.awaitingReview && !who.exiting) queueReview(boss, who);
+      break; }
+    default: if (s.status && who === sub) applyStatus(sub, s.status, s.activity);   // SessionStart, SessionFound, SubagentStart…
+  }
+  setModeLine();
+}
+
 function onLiveEvent(e, replay) {
   if (!replay) logEvents([e]);
-  if (e.replacesSessionId) {
-    const duplicate = live.byId.get(e.replacesSessionId);
-    if (duplicate) {
-      for (const a of [...(duplicate.subs?.values() || []), duplicate]) {
-        a.gone = a.leaving = true;
-        for (const spot of [...Object.values(a.floor.SPOTS).flat(), ...ROOF_SPOTS]) {
-          if (spot.by === a.id) spot.by = null;
-          if (spot.owner === a) { spot.owner = null; spot.chairMat?.color.set(sceneT.chair); }
-        }
-        removeAgent(a);
-      }
-      live.byId.delete(e.replacesSessionId); buildCustomize();
-    }
-  }
+  if (e.replacesSessionId) evict(e.replacesSessionId);
   const s = e.session;
+  const boss = delegator(s);
+  if (boss) { onDelegatedEvent(e, s, boss, replay); return; }
   if (e.type === 'SessionEnd') { const a = live.byId.get(e.sessionId); if (a) { emit(a, 'SessionEnd', e.reason || 'Session ended', e.at); leaveOffice(a); } return; }
   const a = liveMain(s, replay); comeBack(a, s.status || 'idle', s.activity || 'Session resumed');
   if (e.type === 'SubagentStop' && e.agentId && !a.subs.has(e.agentId)) return;   // never saw it work: nothing to show
@@ -36,9 +89,14 @@ function onLiveEvent(e, replay) {
   if (who !== a && who.awaitingReview && e.type !== 'SubagentStop') who.awaitingReview = false;   // resumed: back to work
   switch (e.type) {
     case 'SessionStart': emit(a, 'SessionStart', `${whereFrom(a)} · ${a.cwd}`, e.at); break;
-    case 'SessionFound':                                     // already running when the office opened, read from its log
+    case 'SessionFound': {                                   // already running when the office opened, read from its log
       if (e.message) emit(a, 'SessionFound', `${e.message} · ${whereFrom(a)} · ${a.cwd}`, e.at);
-      applyStatus(a, s.status, s.activity); break;
+      // A chat known only from its log (no hooks) got a new prompt: back to work, sprinting if it was on a break.
+      const resumed = !replay && !e.message && (a.state === 'idle' || a.state === 'done') && (s.status === 'thinking' || s.status === 'working');
+      const idleAt = resumed && !a.busy && (a.spot || a.dest);
+      applyStatus(a, s.status, s.activity);
+      if (resumed) { unstick(a); a.ws = chooseWorkspot(a); a.streak = 0; place(a, a.ws, true); if (idleAt) sprintBack(a, idleAt); }
+      break; }
     case 'UserPromptSubmit':
       emit(a, 'UserPromptSubmit', `"${e.prompt || ''}"`, e.at); seeAgent(a); unstick(a); a.run = null;
       if (!replay) changeDesk(a, d => workedOn(d, e.at));
@@ -115,7 +173,8 @@ function onSnapshot(msg) {
   for (const [id, a] of live.byId) if (!ids.has(id)) leaveOffice(a);
   feedEl.innerHTML = '';
   agents.forEach(a => { if (a.approval && a.approval.live) a.approval = null; });
-  for (const s of msg.sessions) {
+  const handedOver = msg.sessions.filter(s => s.delegatedBy);   // seated after the agents that handed them a task
+  const seat = s => {
     const a = liveMain(s, true); comeBack(a, s.status, s.activity);
     if (s.app) a.hostApp = s.app; if (s.term) a.hostTerm = s.term; if (s.chat) a.hostChat = s.chat; if (s.t3Thread) a.hostT3Thread = s.t3Thread;
     retitle(a, s.title);
@@ -126,11 +185,21 @@ function onSnapshot(msg) {
     for (const sub of s.subagents || []) { const x = liveSub(a, sub.id, sub.type, true, sub.task); if (!a.exiting) comeBack(x, sub.status, sub.activity); applyStatus(x, sub.status, sub.activity); }
     // Finished while the page was disconnected (the Mac slept, the app restarted): its SubagentStop never reached us.
     const still = new Set((s.subagents || []).map(x => x.id));
-    for (const [id, sub] of a.subs) if (!still.has(id) && !sub.awaitingReview) leaveOffice(sub, `Reported back to ${a.name}`);
+    for (const [id, sub] of a.subs) if (!still.has(id) && !id.startsWith('session:') && !sub.awaitingReview) leaveOffice(sub, `Reported back to ${a.name}`);
+  };
+  for (const s of msg.sessions) if (!handedOver.includes(s)) seat(s);
+  for (const s of handedOver) {
+    const boss = delegator(s);
+    if (!boss) { seat(s); continue; }                      // the agent that handed it the task isn't here: a teammate of its own
+    if (s.status === 'done') { const d = delegatedSubs.get(s.id); if (d && !d.sub.awaitingReview) leaveOffice(d.sub, `Reported back to ${boss.name}`); continue; }
+    const sub = delegatedSub(boss, s, true); if (!boss.exiting) comeBack(sub, s.status, s.activity); applyStatus(sub, s.status, s.activity);
+    for (const x of s.subagents || []) { const y = liveSub(boss, `${sub.agentId}/${x.id}`, x.type, true, x.task); applyStatus(y, x.status, x.activity); }
   }
+  for (const [id, d] of delegatedSubs) if (!ids.has(id) && !d.sub.awaitingReview) { leaveOffice(d.sub, `Reported back to ${d.boss.name}`); delegatedSubs.delete(id); }
   for (const e of msg.recent || []) {                       // refill the feed without replaying movement
-    const a = live.byId.get(e.sessionId); if (!a) continue;
-    const who = e.agentId && a.subs.get(e.agentId) || a;
+    const d = !live.byId.has(e.sessionId) && delegatedSubs.get(e.sessionId);
+    const a = d ? d.boss : live.byId.get(e.sessionId); if (!a) continue;
+    const who = d ? (e.agentId && a.subs.get(`${d.sub.agentId}/${e.agentId}`)) || d.sub : e.agentId && a.subs.get(e.agentId) || a;
     const detail = e.prompt ? `"${e.prompt}"` : e.message || `${e.tool || ''}${e.summary ? ' ' + e.summary : ''}` || e.type;
     emit(who, e.type, detail, e.at);
     if (e.type === 'PostToolUse') noteWork(who, e);              // so a reopened office still knows each agent's last edit
@@ -219,9 +288,17 @@ function connectedNames(tools) {
   const n = tools.filter(t => t.status === 'connected').map(t => t.name);
   return !n.length ? 'a connected tool' : n.length === 1 ? n[0] : `${n.slice(0, -1).join(', ')} or ${n[n.length - 1]}`;
 }
+// A tool whose hooks point at a script that's gone, or an old Claude Code plugin, sends nothing: say so once.
+let repairNoticed = false;
 function renderSetup() {
-  const tools = MODE === 'live' && setup.tools || [], todo = tools.filter(t => t.status === 'not-connected');
-  const btn = (t, primary) => `<button class="btn${primary ? ' primary' : ''}" data-connect="${t.id}"${setup.busy ? ' disabled' : ''}>${setup.busy === t.id ? 'Connecting…' : 'Connect ' + esc(t.name)}</button>`;
+  const tools = MODE === 'live' && setup.tools || [], todo = tools.filter(t => t.status === 'not-connected' || t.status === 'needs-repair');
+  const btn = (t, primary) => `<button class="btn${primary ? ' primary' : ''}" data-connect="${t.id}"${setup.busy ? ' disabled' : ''}>${setup.busy === t.id ? 'Connecting…' : (t.status === 'needs-repair' ? 'Reconnect ' : 'Connect ') + esc(t.name)}</button>`;
+  const broken = tools.filter(t => t.status === 'needs-repair');
+  if (broken.length && !repairNoticed) {
+    repairNoticed = true;
+    const names = broken.map(t => t.name).join(' and ');
+    toast(`${names} ${broken.length > 1 ? 'aren’t' : 'isn’t'} reporting to the office: ${broken.length > 1 ? 'their connections point' : 'its connection points'} to files that are gone or out of date.`, 'Reconnect', async () => { for (const t of broken) await connectTool(t.id); });
+  }
   const list = $('#connect-list'); list.hidden = $('#connect-title').hidden = !tools.length;
   list.innerHTML = tools.map(t => `<div class="connect-row"><span>${esc(t.name)}</span>${t.status === 'connected' ? '<span class="pill s-done">Connected</span>'
     : t.status === 'not-installed' ? '<span class="state">Not installed</span>' : btn(t, true)}</div>`).join('');

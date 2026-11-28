@@ -68,6 +68,11 @@ pub fn valid_uuid(v: &str) -> bool {
     groups.iter().map(|g| g.len()).eq([8, 4, 4, 4, 12]) && groups.iter().all(|g| g.chars().all(|c| c.is_ascii_hexdigit()))
 }
 
+/// A T3 Code thread: a UUID, or "thread:…" for a task T3 Code handed to another agent. Only kept and compared, never put in a link.
+pub fn valid_t3_thread(v: &str) -> bool {
+    valid_uuid(v) || v.strip_prefix("thread:").is_some_and(|r| !r.is_empty() && r.len() <= 300 && r.bytes().all(|b| b.is_ascii_alphanumeric() || b"%._:-".contains(&b)))
+}
+
 /// T3 Code's install id, which its thread links name (~/.t3/userdata/environment-id).
 fn t3_environment(home: &Path) -> Option<String> {
     std::fs::read_to_string(home.join(".t3/userdata/environment-id")).ok().map(|s| s.trim().to_string())

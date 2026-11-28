@@ -60,3 +60,24 @@ test('a translated session lands in the store with its project and agent', () =>
   const s = st.snapshot().sessions[0];
   assert.deepEqual([s.project, s.agent, s.status, s.activity], ['shop', 'gemini', 'thinking', 'fix it']);
 });
+
+test('Antigravity: a turn, its subagent paired with the invoke_subagent call, and a failed command', () => {
+  const base = { cwd: '/repo-ag', workspacePaths: ['/repo-ag'] };
+  const ev = o => normalize('antigravity', { ...base, ...o });
+  assert.equal(ev({ conversationId: 'P', hookEventName: 'SessionStart', lastUserInput: 'Count' }).hook_event_name, 'SessionStart');
+  const prompt = ev({ conversationId: 'P', hookEventName: 'PreInvocation', invocationNum: 0, lastUserInput: 'Count the lines' });
+  assert.deepEqual([prompt.hook_event_name, prompt.session_id, prompt.prompt], ['UserPromptSubmit', 'antigravity:P', 'Count the lines']);
+  assert.equal(ev({ conversationId: 'P', hookEventName: 'PreInvocation', invocationNum: 1, lastUserInput: 'Count the lines' }), null);   // the same turn
+  const task = ev({ conversationId: 'P', hookEventName: 'PostToolUse', toolCall: { name: 'invoke_subagent', args: { Prompt: 'List files', TypeName: 'research' } }, error: '' });
+  assert.deepEqual([task.hook_event_name, task.tool_name, task.tool_input.description, task.tool_input.subagent_type], ['PreToolUse', 'Task', 'List files', 'research']);
+  const start = ev({ conversationId: 'S', hookEventName: 'SessionStart', lastUserInput: '' });
+  assert.deepEqual([start.hook_event_name, start.session_id, start.agent_id], ['SubagentStart', 'antigravity:P', 'S']);
+  const run = ev({ conversationId: 'S', hookEventName: 'PostToolUse', toolCall: { name: 'run_command', args: { CommandLine: 'ls' } }, error: '' });
+  assert.deepEqual([run.hook_event_name, run.agent_id, run.tool_name, run.tool_input.command], ['PreToolUse', 'S', 'Bash', 'ls']);
+  assert.deepEqual([ev({ conversationId: 'S', hookEventName: 'Stop' }).hook_event_name], ['SubagentStop']);
+  const failed = ev({ conversationId: 'P', hookEventName: 'PostToolUse', toolCall: { name: 'run_command', args: { CommandLine: 'npm test' } }, error: 'exit status 1' });
+  assert.deepEqual([failed.hook_event_name, failed.tool_input.command], ['PostToolUseFailure', 'npm test']);
+  assert.equal(ev({ conversationId: 'P', hookEventName: 'Stop' }).hook_event_name, 'Stop');
+  // A conversation with no invoke_subagent before it is a chat of its own.
+  assert.equal(ev({ conversationId: 'Q', hookEventName: 'SessionStart', lastUserInput: '' }).hook_event_name, 'SessionStart');
+});

@@ -6,6 +6,14 @@
   <!-- asked once per app: the first time you use "Open in Terminal" or "Open in iTerm", and when Spotify or Music plays while the office is open -->
   <key>NSAppleEventsUsageDescription</key>
   <string>Agent Office brings the terminal tab of the agent you clicked to the front, and shows the song Spotify or Music is playing at the rooftop DJ booth.</string>
+  <!-- asked once per folder when an agent works in Documents, Desktop or Downloads: the office reads its project's git
+       changes and its running chats' logs there -->
+  <key>NSDocumentsFolderUsageDescription</key>
+  <string>Agent Office reads your coding agents' project folders on this Mac to show which files they changed and which floor each project works on. Nothing leaves your Mac.</string>
+  <key>NSDesktopFolderUsageDescription</key>
+  <string>Agent Office reads your coding agents' project folders on this Mac to show which files they changed and which floor each project works on. Nothing leaves your Mac.</string>
+  <key>NSDownloadsFolderUsageDescription</key>
+  <string>Agent Office reads your coding agents' project folders on this Mac to show which files they changed and which floor each project works on. Nothing leaves your Mac.</string>
   <key>NSAppTransportSecurity</key>
   <dict>
     <key>NSAllowsLocalNetworking</key>

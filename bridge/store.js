@@ -1,9 +1,9 @@
 // Turns raw Claude Code hook payloads into a small, UI-friendly model of sessions and subagents.
 import fs from 'node:fs';
 import path from 'node:path';
-import { validTty, validChat, validUuid } from './focus.js';
+import { validTty, validChat, validUuid, validT3Thread } from './focus.js';
 import { readTranscript, MESSAGE_CHARS } from './transcript.js';
-import { FOUND_WINDOW_MS } from './discover.js';
+import { FOUND_WINDOW_MS, promptTitle, delegatedBy } from './discover.js';
 import { editOf } from './changes.js';
 
 const STALE_MS = 6 * 60 * 60 * 1000;   // forget sessions that went silent (crashed without SessionEnd)
@@ -115,7 +115,8 @@ export class Store {
   refreshTranscript(s, p, type) {
     const before = JSON.stringify(s.messages || []);
     if (type === 'UserPromptSubmit' && p.prompt) {
-      if (!s.firstPrompt) s.firstPrompt = clip(p.prompt, 80);
+      if (!s.firstPrompt) s.firstPrompt = promptTitle(p.prompt);
+      if (!s.delegatedBy) s.delegatedBy = delegatedBy(p.prompt);
       // The hook can fire before the prompt reaches the transcript: show it right away.
       const text = clip(p.prompt, MESSAGE_CHARS), m = s.messages || (s.messages = []);
       if (!m.length || m[m.length - 1].role !== 'user' || m[m.length - 1].text !== text) m.push({ role: 'user', text });
@@ -188,17 +189,18 @@ export class Store {
       const home = mainCheckout(f.cwd);
       s = { id: f.id, agent: f.agent, cwd: f.cwd, home, project: f.project || projectName(home), entrypoint: entrypointLabel(f.entrypoint),
             startedAt: f.at, lastEventAt: f.at, status: f.status, activity: f.activity, permissionMode: 'default', subagents: {}, tool: null,
-            title: f.title || null, transcriptTitle: f.title || null, messages: f.messages, fromLog: true };
+            title: f.title || null, transcriptTitle: f.title || null, messages: f.messages, fromLog: true, delegatedBy: f.delegatedBy || null };
       this.sessions.set(f.id, s);
     } else if (s.fromLog) {
       s.lastEventAt = Math.max(s.lastEventAt, f.at);
+      if (!s.delegatedBy && f.delegatedBy) s.delegatedBy = f.delegatedBy;
       const title = f.title || s.transcriptTitle || null, messages = f.messages.length ? f.messages : s.messages;
       const changed = s.status !== f.status || s.activity !== f.activity || JSON.stringify(s.messages) !== JSON.stringify(messages) || s.title !== title;
       Object.assign(s, { status: f.status, activity: f.activity, messages, transcriptTitle: title, title });
       if (!changed) return null;
     }
     const e = { type: 'SessionFound', sessionId: s.id, at: Date.now(), agentId: null, agentType: null, message: isNew ? 'Already running' : null,
-      session: { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, t3Thread: s.t3Thread || null, cwd: s.cwd, home: s.home || s.cwd, project: s.project, title: s.title, merged: !!s.merged,
+      session: { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, t3Thread: s.t3Thread || null, delegatedBy: s.delegatedBy || null, cwd: s.cwd, home: s.home || s.cwd, project: s.project, title: s.title, merged: !!s.merged,
                  entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity, messages: s.messages } };
     if (replacesSessionId) e.replacesSessionId = replacesSessionId;
     if (isNew) { this.recent.push(e); if (this.recent.length > RECENT_MAX) this.recent.shift(); }   // only the arrival goes in the feed
@@ -253,7 +255,7 @@ export class Store {
     if (origin.term) s.term = origin.term;
     if (validTty(origin.tty)) s.tty = origin.tty;
     if (validChat(origin.chat)) s.chat = origin.chat;
-    if (validUuid(origin.t3Thread)) s.t3Thread = origin.t3Thread;
+    if (validT3Thread(origin.t3Thread)) s.t3Thread = origin.t3Thread;
     const chatChanged = this.refreshTranscript(s, p, type);
 
     const e = { type, sessionId: sid, at: now, agentId: p.agent_id || null, agentType: p.agent_type || null };
@@ -297,7 +299,7 @@ export class Store {
       case 'SessionEnd': e.reason = p.reason; this.ended.add(sid); this.sessions.delete(sid); this.transcriptChecks.delete(sid); this.pendingTasks.delete(sid); break;
       default: break;
     }
-    e.session = { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, t3Thread: s.t3Thread || null, cwd: s.cwd, home: s.home || s.cwd, project: s.project, title: s.title || null, merged: !!s.merged, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity, context: s.context || null };
+    e.session = { id: s.id, agent: s.agent, app: s.app || null, term: s.term || null, chat: s.chat || null, t3Thread: s.t3Thread || null, delegatedBy: s.delegatedBy || null, cwd: s.cwd, home: s.home || s.cwd, project: s.project, title: s.title || null, merged: !!s.merged, entrypoint: s.entrypoint, permissionMode: s.permissionMode, status: s.status, activity: s.activity, context: s.context || null };
     if (chatChanged) e.session.messages = s.messages;
     this.recent.push(e); if (this.recent.length > RECENT_MAX) this.recent.shift();
     return e;

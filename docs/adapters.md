@@ -59,6 +59,23 @@ Same event names as Claude Code. `apply_patch` is shown as an Edit of the patche
 } }
 ```
 
+### Antigravity: `~/.gemini/config/hooks.json`
+The desktop app connects Antigravity in one click (**Connect agents → Antigravity**). It adds the hooks to `~/.gemini/config/hooks.json`, and to the copy that T3 Code runs Antigravity with (`~/.t3/userdata/providers/antigravity/<id>/config/hooks.json`).
+
+Antigravity names each hook at the top level. The office uses only events it can answer with "no opinion":
+- A `PreToolUse` hook must decide to allow, deny or ask, and that would change what the agent does. So the office does not use `PreToolUse`, and a tool shows after it ran.
+- `PreInvocation` with `invocationNum` 0 is a new prompt.
+- A subagent is a conversation of its own that names no parent. The office pairs it with the `invoke_subagent` call made just before it, in the same folder.
+- The event name after `antigravity` tells `hook.sh` what to reply. `Stop` needs `{"decision":""}`.
+```json
+{ "agent-office": {
+  "SessionStart":  [{ "type": "command", "command": "/path/to/agent-office/adapters/hook.sh antigravity SessionStart", "timeout": 3 }],
+  "PreInvocation": [{ "type": "command", "command": "/path/to/agent-office/adapters/hook.sh antigravity PreInvocation", "timeout": 3 }],
+  "PostToolUse":   [{ "matcher": "*", "hooks": [{ "type": "command", "command": "/path/to/agent-office/adapters/hook.sh antigravity PostToolUse", "timeout": 3 }] }],
+  "Stop":          [{ "type": "command", "command": "/path/to/agent-office/adapters/hook.sh antigravity Stop", "timeout": 3 }]
+} }
+```
+
 ### Cursor: `~/.cursor/hooks.json`
 The session is the `conversation_id`, and the project is the first workspace root. Subagents are supported. Cursor has no permission-prompt event, so Cursor agents never raise their hand. Cursor also runs Claude Code hooks from `.claude/settings.json` by default, so a project that already has the Claude plugin could double-report. In that case, turn that Cursor setting off.
 ```json
