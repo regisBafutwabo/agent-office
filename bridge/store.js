@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { validTty, validChat, validUuid } from './focus.js';
 import { readTranscript, MESSAGE_CHARS } from './transcript.js';
-import { FOUND_WINDOW_MS } from './discover.js';
+import { FOUND_WINDOW_MS, promptTitle } from './discover.js';
 import { editOf } from './changes.js';
 
 const STALE_MS = 6 * 60 * 60 * 1000;   // forget sessions that went silent (crashed without SessionEnd)
@@ -115,7 +115,7 @@ export class Store {
   refreshTranscript(s, p, type) {
     const before = JSON.stringify(s.messages || []);
     if (type === 'UserPromptSubmit' && p.prompt) {
-      if (!s.firstPrompt) s.firstPrompt = clip(p.prompt, 80);
+      if (!s.firstPrompt) s.firstPrompt = promptTitle(p.prompt);
       // The hook can fire before the prompt reaches the transcript: show it right away.
       const text = clip(p.prompt, MESSAGE_CHARS), m = s.messages || (s.messages = []);
       if (!m.length || m[m.length - 1].role !== 'user' || m[m.length - 1].text !== text) m.push({ role: 'user', text });

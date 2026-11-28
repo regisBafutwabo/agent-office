@@ -150,10 +150,27 @@ function codex(home, now, out) {
 const cursorText = o => Array.isArray(o?.message?.content) && o.message.content.find(x => typeof x?.text === 'string')?.text || '';
 const between = (text, tag) => text.includes(`<${tag}>`) ? text.split(`<${tag}>`)[1].split(`</${tag}>`)[0] : null;
 export const fromT3 = text => text.includes('<t3_code_orchestration_instructions>');
+// A prompt, as a chat name: your words only. T3 Code wraps a task it hands to another agent in its own lines
+// ("[T3 Code: the agent in T3 thread … sent this message, not the user.]", "Act as the research sub-agent for this task.").
+const T3_LINE = /^\s*(\[T3 Code:[^\]]*\]|Act as the [\w -]+ for this task\.?)\s*$/;
+export function promptTitle(text) {
+  const words = between(String(text ?? ''), 'user_request') ?? between(String(text ?? ''), 'user_query') ?? String(text ?? '');
+  return clip(words.split('\n').filter(l => !T3_LINE.test(l)).join('\n'), 80) || null;
+}
 function cursorPrompt(o) {
   const text = cursorText(o);
-  if (!text) return null;
-  return clip(between(text, 'user_request') ?? between(text, 'user_query') ?? text, 80) || null;
+  return text ? promptTitle(text) : null;
+}
+
+// Cursor ends a turn with "turn_ended", but not when T3 Code runs it. There the answer is a last assistant message
+// with no tool call; the log must also have been quiet a moment, since text-only messages can come in a row mid-answer.
+export const CURSOR_QUIET_MS = 10_000;
+export function cursorDone(last, at, now) {
+  if (!last) return false;
+  if (last.type === 'turn_ended') return true;
+  const c = last.message?.content;
+  const textOnly = last.role === 'assistant' && Array.isArray(c) && c.length > 0 && c.every(x => x?.type === 'text');
+  return textOnly && now - at >= CURSOR_QUIET_MS;
 }
 
 function cursor(home, now, out) {
@@ -162,7 +179,7 @@ function cursor(home, now, out) {
     for (const chat of dirs(path.join(proj, 'agent-transcripts'))) {
       for (const { file, at } of recentLogs(chat, now)) {
         cwd ??= decode(folder) || '/' + folder.replace(/-/g, '/');
-        const done = tail(file).at(-1)?.type === 'turn_ended';
+        const done = cursorDone(tail(file).at(-1), at, now);
         const [status, activity] = settle(done ? 'done' : 'thinking', done ? 'Finished' : 'Thinking', at, now);
         const first = head(file, 1)[0], user = first?.role === 'user';
         out.push({ agent: 'cursor', id: `cursor:${path.basename(file, '.jsonl')}`, cwd, entrypoint: user && fromT3(cursorText(first)) ? 't3-code' : null, at, status, activity,

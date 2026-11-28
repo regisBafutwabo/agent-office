@@ -258,10 +258,30 @@ fn between<'a>(text: &'a str, tag: &str) -> Option<&'a str> {
 pub fn from_t3(text: &str) -> bool {
     text.contains("<t3_code_orchestration_instructions>")
 }
+/// A prompt, as a chat name: your words only. T3 Code wraps a task it hands to another agent in its own lines
+/// ("[T3 Code: the agent in T3 thread … sent this message, not the user.]", "Act as the research sub-agent for this task.").
+pub fn prompt_title(text: &str) -> Option<String> {
+    let words = between(text, "user_request").or_else(|| between(text, "user_query")).unwrap_or(text);
+    let t3_line = |l: &str| {
+        let l = l.trim();
+        (l.starts_with("[T3 Code:") && l.ends_with(']'))
+            || (l.starts_with("Act as the ") && l.trim_end_matches('.').ends_with(" for this task") && l.len() < 80)
+    };
+    let kept: Vec<&str> = words.lines().filter(|l| !t3_line(l)).collect();
+    Some(clip(&kept.join("\n"), 80)).filter(|q| !q.is_empty())
+}
 fn cursor_prompt(o: &Value) -> Option<String> {
-    let text = cursor_text(o)?;
-    let q = between(text, "user_request").or_else(|| between(text, "user_query")).unwrap_or(text);
-    Some(clip(q, 80)).filter(|q| !q.is_empty())
+    prompt_title(cursor_text(o)?)
+}
+
+/// Cursor ends a turn with "turn_ended", but not when T3 Code runs it. There the answer is a last assistant message
+/// with no tool call; the log must also have been quiet a moment, since text-only messages can come in a row mid-answer.
+const CURSOR_QUIET_MS: u64 = 10_000;
+fn cursor_done(last: Option<&Value>, at: u64, now: u64) -> bool {
+    let Some(o) = last else { return false };
+    if o["type"] == "turn_ended" { return true; }
+    let text_only = o["role"] == "assistant" && o["message"]["content"].as_array().is_some_and(|c| !c.is_empty() && c.iter().all(|x| x["type"] == "text"));
+    text_only && now.saturating_sub(at) >= CURSOR_QUIET_MS
 }
 
 fn cursor(home: &Path, now: u64, out: &mut Vec<Found>) {
@@ -272,7 +292,7 @@ fn cursor(home: &Path, now: u64, out: &mut Vec<Found>) {
             for (log, at) in recent_logs(&chat, now) {
                 let Some(id) = log.file_stem().map(|s| s.to_string_lossy().to_string()) else { continue };
                 let cwd = cwd.get_or_insert_with(|| decode(&folder).map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| format!("/{}", folder.replace('-', "/")))).clone();
-                let done = tail(&log).last().is_some_and(|o| o["type"] == "turn_ended");
+                let done = cursor_done(tail(&log).last(), at, now);
                 let (status, activity) = settle(if done { "done" } else { "thinking" }, if done { "Finished" } else { "Thinking" }, at, now);
                 let first = head(&log, 1).into_iter().next().filter(|o| o["role"] == "user");
                 let title = first.as_ref().and_then(cursor_prompt);
@@ -383,6 +403,27 @@ mod tests {
         assert_eq!((found[0].id.as_str(), found[0].status.as_str(), found[0].title.as_deref()), ("cursor:c1", "thinking", Some("git pull")));
         assert_eq!(found[0].cwd, "/Users/me/shop"); // no such folder here, so the dashes are read as slashes
         assert_eq!((found[0].entrypoint.as_deref(), found[0].ended), (None, false));
+    }
+
+    #[test]
+    fn a_cursor_chat_without_turn_ended_is_done_once_it_answered_and_went_quiet() {
+        let answer = json!({ "role": "assistant", "message": { "content": [{ "type": "text", "text": "Done." }] } });
+        let working = json!({ "role": "assistant", "message": { "content": [{ "type": "text", "text": "Reading files" }, { "type": "tool_use" }] } });
+        assert!(cursor_done(Some(&json!({ "type": "turn_ended" })), 0, 0));
+        assert!(cursor_done(Some(&answer), 0, CURSOR_QUIET_MS));
+        assert!(!cursor_done(Some(&answer), 0, CURSOR_QUIET_MS - 1));      // may still be writing
+        assert!(!cursor_done(Some(&working), 0, CURSOR_QUIET_MS * 10));    // a tool call is still running
+        assert!(!cursor_done(Some(&json!({ "role": "user", "message": { "content": [{ "type": "text", "text": "hi" }] } })), 0, CURSOR_QUIET_MS));
+        assert!(!cursor_done(None, 0, CURSOR_QUIET_MS));
+    }
+
+    #[test]
+    fn a_task_t3_code_hands_to_another_agent_is_named_after_the_task() {
+        let handed = "<user_query>\n<t3_code_orchestration_instructions>\nrules\n</t3_code_orchestration_instructions>\n\n<user_request>\n[T3 Code: the agent in T3 thread \"18f504af\" sent this message, not the user.]\n\nAct as the research sub-agent for this task.\n\nCount the lines in web/js.\n</user_request>\n</user_query>";
+        assert_eq!(prompt_title(handed).as_deref(), Some("Count the lines in web/js."));
+        assert_eq!(prompt_title("Act as the reviewer for this task, but say what you would change").as_deref(), Some("Act as the reviewer for this task, but say what you would change"));
+        assert_eq!(prompt_title("plain prompt").as_deref(), Some("plain prompt"));
+        assert_eq!(prompt_title(""), None);
     }
 
     #[test]

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { scan, encode, decode, settle, archivedChats, desktopSessionsDir, FOUND_WINDOW_MS } from './discover.js';
+import { scan, encode, decode, settle, archivedChats, desktopSessionsDir, FOUND_WINDOW_MS, promptTitle, cursorDone, CURSOR_QUIET_MS } from './discover.js';
 
 const tmp = name => fs.mkdtempSync(path.join(os.tmpdir(), `agent-office-discover-${name}-`));
 const write = (file, lines) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, lines.map(l => JSON.stringify(l) + '\n').join('')); };
@@ -90,4 +90,25 @@ test('finds the subagents a chat still has at work, and counts the chat as worki
   const [f] = scan(home, Date.now() + 10 * 60_000);                       // a long test run: quiet for ten minutes
   assert.deepEqual(f.subs.map(x => [x.id, x.type, x.task]), [['a1', 'general-purpose', 'Wire the frontend']]);
   assert.deepEqual([f.status, f.activity], ['working', 'Waiting on a subagent']);
+});
+
+test("a task T3 Code hands to another agent is named after the task, not T3 Code's own lines", () => {
+  const handed = '<user_query>\n<t3_code_orchestration_instructions>\nrules\n</t3_code_orchestration_instructions>\n\n<user_request>\n'
+    + '[T3 Code: the agent in T3 thread "18f504af" sent this message, not the user.]\n\nAct as the research sub-agent for this task.\n\n'
+    + 'Count the lines in web/js.\n</user_request>\n</user_query>';
+  assert.equal(promptTitle(handed), 'Count the lines in web/js.');
+  assert.equal(promptTitle('Act as the reviewer for this task, but say what you would change'), 'Act as the reviewer for this task, but say what you would change');   // your words stay
+  assert.equal(promptTitle('plain prompt'), 'plain prompt');
+  assert.equal(promptTitle(''), null);
+});
+
+test('a Cursor chat without turn_ended is done once it answered and went quiet', () => {
+  const answer = { role: 'assistant', message: { content: [{ type: 'text', text: 'Done.' }] } };
+  const working = { role: 'assistant', message: { content: [{ type: 'text', text: 'Reading files' }, { type: 'tool_use' }] } };
+  assert.equal(cursorDone({ type: 'turn_ended' }, 0, 0), true);
+  assert.equal(cursorDone(answer, 0, CURSOR_QUIET_MS), true);
+  assert.equal(cursorDone(answer, 0, CURSOR_QUIET_MS - 1), false);      // may still be writing
+  assert.equal(cursorDone(working, 0, CURSOR_QUIET_MS * 10), false);    // a tool call is still running
+  assert.equal(cursorDone({ role: 'user', message: { content: [{ type: 'text', text: 'hi' }] } }, 0, CURSOR_QUIET_MS), false);
+  assert.equal(cursorDone(undefined, 0, CURSOR_QUIET_MS), false);
 });

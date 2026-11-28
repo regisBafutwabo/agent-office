@@ -511,7 +511,7 @@ impl Store {
             let before = s.messages.clone();
             let prompt = str_of(p, "prompt");
             if kind == "UserPromptSubmit" && !prompt.is_empty() {
-                if s.first_prompt.is_none() { s.first_prompt = Some(clip(prompt, 80)); }
+                if s.first_prompt.is_none() { s.first_prompt = crate::discover::prompt_title(prompt); }
                 // The hook can fire before the prompt reaches the transcript: show it right away.
                 let text = clip(prompt, MESSAGE_CHARS);
                 if s.messages.last().is_none_or(|m| m.role != "user" || m.text != text) {
