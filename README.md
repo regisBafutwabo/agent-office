@@ -2,9 +2,9 @@
 
 Watching coding agents work in a terminal is boring. Agent Office turns every session you run in Claude Code, Codex, Cursor, Antigravity, T3 Code and [other tools](docs/features.md#other-coding-agents) into a teammate in a 3D office. They walk to the library to read, sweat through long test runs, grab a coffee when they're done and raise a hand when they need you. One look tells you who is working, who is stuck and who is waiting on you.
 
-https://github.com/user-attachments/assets/7734fd2b-2400-4ac0-aedf-d976f908f321
+https://github.com/user-attachments/assets/0e1a30af-5d29-4682-add7-9b9257750f46
 
-*A 33-second tour of the demo office. City footprints © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).*
+*30 seconds in the demo office: a long test run, a coffee break, a sprint back to the desk and the rooftop party. City footprints © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).*
 
 > **Preview.** Agent Office is early and Mac-first. It works in any browser on your computer, and VR is in beta. Issues and ideas are welcome.
 
