@@ -95,7 +95,7 @@ claude --plugin-dir ./plugin              # try the hooks in one session without
 1. ~~Live sessions from the desktop app and terminal~~
 2. ~~Approve or deny permission requests from the office, desktop notifications~~
 3. ~~Desktop app with a menu-bar icon, model packs and code signing~~
-4. Phone and VR. VR is in beta with a Meta Quest on a USB cable ([VR](docs/vr.md)). Next: the phone, panels in VR and VR without a cable.
+4. Phone and VR. VR is in beta with a Meta Quest on a USB cable ([VR](docs/vr.md)). Next: the phone, answering permission requests in VR and VR without a cable.
 5. Give agents tasks from the office (sessions started through the Agent SDK)
 
 ## License

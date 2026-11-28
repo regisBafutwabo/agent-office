@@ -11,7 +11,8 @@ You can walk through the office in a VR headset. This feature is in beta. Nobody
 ## What works
 
 - **Enter VR** puts you in the aisle of the floor that you look at.
-- You see the agents work at their desks.
+- You see the agents work at their desks. The name tag over each agent shows its status and what it does. In VR the name tags always show, also if you turned them off. Far tags are larger, so you can read them.
+- To see which agents need you, look at your left controller. A small panel above it shows the agents that wait for you, on all floors. When a new agent starts to wait, the controllers vibrate.
 - To jump to a different spot, point a controller at the floor. Hold the trigger. A ring shows where you will go. Release the trigger to go there.
 - To turn 30 degrees, push a thumbstick to the left or to the right. Push it again to turn more.
 - To leave VR, use the menu button of the headset.
@@ -22,7 +23,8 @@ The office does not move you smoothly. Smooth movement makes many people sick in
 
 These do not work yet:
 
-- You cannot see the panels, the toasts or the permission requests. Take off the headset to use them.
+- You cannot answer a permission request in VR. Take off the headset to select **Allow** or **Deny**.
+- You cannot see the side panel or the toasts.
 
 To keep the headset fast, the office has no soft shadows in VR.
 
@@ -63,6 +65,7 @@ The [Immersive Web Emulator](https://github.com/meta-quest/immersive-web-emulato
 5. Move the fake headset and controllers in the **WebXR** tab.
 6. To jump, point the right controller at the floor. Hold its trigger button in the **WebXR** tab, then release it.
 7. To turn, move the thumbstick of a controller in the **WebXR** tab to the left or to the right.
+8. To see the "Needs you" panel, turn the left controller in the **WebXR** tab toward the headset.
 
 The emulator uses the graphics card of your computer. A headset is much slower. Thus the emulator cannot tell you if the office is fast enough in a headset.
 

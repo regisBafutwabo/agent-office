@@ -42,7 +42,10 @@ const vrPads = [0, 1].map(i => {
   ray.visible = false; pad.add(ray);
   Object.assign(pad.userData, { ray, aiming: false, hit: null });
   // Only a controller has a ray. A gaze or a screen tap points from the head and would draw a line through the eyes.
-  pad.addEventListener('connected', e => { ray.visible = e.data.targetRayMode === 'tracked-pointer'; });
+  pad.addEventListener('connected', e => { ray.visible = e.data.targetRayMode === 'tracked-pointer'; 
+    // The "Needs you" panel rides on the left controller, or on the only one if it has no hand.
+    if (e.data.targetRayMode === 'tracked-pointer' && e.data.handedness !== 'right') pad.add(vrPanel);
+  });
   pad.addEventListener('disconnected', () => { ray.visible = false; pad.userData.aiming = false; });
   pad.addEventListener('selectstart', () => { pad.userData.aiming = true; });
   pad.addEventListener('selectend', () => { const h = pad.userData.hit; pad.userData.aiming = false; pad.userData.hit = null; if (h) vrTeleport(h.x, h.z); });
@@ -88,6 +91,8 @@ function vrStep() {
     if (u.hit) shown = u.hit;
   }
   vrRing.visible = !!shown; if (shown) vrRing.position.set(shown.x, .02, shown.z);
+  vrLabels();
+  if (performance.now() - vrPanel.userData.at > 500) vrDrawNeeds();
   const session = renderer.xr.getSession();
   if (session) for (const s of session.inputSources) {
     const ax = s.gamepad && s.gamepad.axes;
@@ -96,6 +101,73 @@ function vrStep() {
   }
 }
 function vrReset() {
-  vrSticks.clear(); vrRing.visible = false;
+  vrSticks.clear(); vrRing.visible = false; if (vrPanel.parent) vrPanel.parent.remove(vrPanel); vrPanel.userData.count = 0; vrPanel.userData.text = '';
+  for (const a of agents) { a.label.scale.set(2.8, .7, 1); a.label.renderOrder = 10; }
   for (const pad of vrPads) { pad.userData.aiming = false; pad.userData.hit = null; }
+}
+
+/* ---------- VR: reading the office ---------- */
+// The panels and toasts are part of the page, which a headset does not show. In VR the name tags over the agents and a
+// small "Needs you" panel over the left controller, like a watch, give the same news.
+
+// A tag keeps its normal size up close and grows up to 2.5 times far away, so a tag across the floor stays readable.
+function vrLabels() {
+  camera.getWorldPosition(vrV);
+  for (const a of agents) {
+    if (!a.label.visible) continue;
+    a.label.getWorldPosition(vrDir);
+    const d = vrV.distanceTo(vrDir), k = clamp(d / 6, 1, 2.5);
+    a.label.scale.set(2.8 * k, .7 * k, 1);
+    // Tags draw over walls and furniture, so a far tag could cover a near one. Draw the nearer tag last, on top.
+    a.label.renderOrder = 10 + Math.round(clamp(100 - d, 0, 100) * 10);   // 10 cm steps
+  }
+}
+
+// The same agents as the "Needs you" strip: every one waiting on you, on any floor, oldest first.
+const VR_PANEL_W = .24, VR_PANEL_H = .24 * 400 / 512;   // metres, for a 512 × 400 canvas
+const vrPanel = (() => {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 400;
+  const t = new THREE.CanvasTexture(c);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(VR_PANEL_W, VR_PANEL_H), new THREE.MeshBasicMaterial({ map: t, transparent: true }));
+  // Above the controller and tipped toward the face: look at your wrist to read it. The panel grows up from here.
+  const g = new THREE.Group(); g.position.set(0, .03, .03); g.rotation.x = -.6; g.add(m);
+  Object.assign(g.userData, { c, t, m, at: -1e9, count: 0, text: '' });
+  return g;
+})();
+function vrDrawNeeds() {
+  const u = vrPanel.userData; u.at = performance.now();
+  const list = agents.filter(a => a.state === 'waiting' && !a.gone).sort((p, q) => (p.waitingSince || 0) - (q.waitingSince || 0));
+  const title = !list.length ? 'Nothing needs you' : list.length === 1 ? '1 agent needs you' : `${list.length} agents need you`;
+  const rows = list.slice(0, 4).map(a => {
+    const s = a.parent || a, floor = s.floor && s.floor.name;
+    return { name: a.name, where: [floor, a.waitingSince ? 'waiting ' + ago(a.waitingSince) : ''].filter(Boolean).join(' · '), what: a.activity || 'Waiting for you' };
+  });
+  const text = [title, ...rows.map(r => `${r.name}|${r.where}|${r.what}`), list.length > 4 ? `+${list.length - 4}` : ''].join('\n');
+  // A new agent waiting: a short buzz in the hand, as the page plays a chime.
+  if (list.length > u.count) vrBuzz();
+  u.count = list.length;
+  if (text === u.text) return;
+  u.text = text;
+  // Only as tall as what it shows: a title alone is a slim bar, not a big empty card.
+  const more = list.length > 4, H = (rows.length ? 96 + rows.length * 64 : 92) + (more ? 40 : 0), f = H / 400;
+  u.t.repeat.y = f; u.t.offset.y = 1 - f; u.m.scale.y = f; u.m.position.y = VR_PANEL_H * f / 2;
+  const x = u.c.getContext('2d'); x.clearRect(0, 0, 512, 400);
+  x.fillStyle = 'rgba(18,26,30,.92)'; rrect(x, 4, 4, 504, H - 8, 28); x.fill();
+  x.fillStyle = list.length ? STATUS.waiting.hex : STATUS.done.hex; x.beginPath(); x.arc(40, 46, 12, 0, 7); x.fill();
+  x.fillStyle = '#E2EAED'; x.font = '700 34px "Bricolage Grotesque", sans-serif'; x.fillText(fitText(x, title, 430), 64, 58);
+  rows.forEach((r, i) => {
+    const y = 112 + i * 64;
+    x.fillStyle = '#E2EAED'; x.font = '600 26px "IBM Plex Sans", sans-serif'; x.fillText(fitText(x, r.name, 240), 28, y);
+    x.fillStyle = '#8C9DA5'; x.font = '400 22px "IBM Plex Sans", sans-serif'; x.fillText(fitText(x, r.where, 200), 284, y);
+    x.fillText(fitText(x, r.what, 456), 28, y + 28);
+  });
+  if (more) { x.fillStyle = '#8C9DA5'; x.font = '400 22px "IBM Plex Sans", sans-serif'; x.fillText(`and ${list.length - 4} more`, 28, H - 22); }
+  u.t.needsUpdate = true;
+}
+function vrBuzz() {
+  const session = renderer.xr.getSession(); if (!session) return;
+  for (const s of session.inputSources) {
+    const h = s.gamepad && s.gamepad.hapticActuators && s.gamepad.hapticActuators[0];
+    if (h && h.pulse) h.pulse(.6, 120).catch(() => {});
+  }
 }

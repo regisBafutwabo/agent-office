@@ -156,3 +156,71 @@ test('leaving VR while aiming hides the ring and the next session starts clean',
   await expect.poll(() => page.evaluate(() => renderer.xr.isPresenting)).toBe(false);
   expect(await page.evaluate(() => ({ ring: vrRing.visible, aiming: vrPads.some(p => p.userData.aiming) }))).toEqual({ ring: false, aiming: false });
 });
+
+// One live agent, so there is a name tag to read.
+const withAgent = async (page, office) => {
+  await office.hook({ hook_event_name: 'SessionStart', session_id: 'vr1', cwd: '/tmp/e2e-vr' });
+  await enterWithPad(page, office);
+  await expect.poll(() => page.evaluate(() => agents.some(a => a.kind === 'main'))).toBe(true);
+};
+
+test('name tags show in VR even when they are turned off, and far tags grow so they stay readable', async ({ page, office }) => {
+  await withAgent(page, office);
+  const size = d => page.evaluate(d => {
+    setShowLabels(false); const a = agents.find(a => a.kind === 'main'); step(0);
+    const p = a.label.getWorldPosition(new THREE.Vector3());
+    vrTeleport(p.x + d, p.z); camera.position.y = p.y - rig.position.y; vrStep();
+    return { shown: a.label.visible, w: a.label.scale.x };
+  }, d);
+  expect(await size(2)).toEqual({ shown: true, w: 2.8 });
+  const far = await size(12);
+  expect(far.shown).toBe(true); expect(far.w).toBeCloseTo(5.6, 5);
+  expect((await size(40)).w).toBeCloseTo(7, 5);   // no bigger than 2.5 times
+  await page.evaluate(() => __xr.session.end());
+  await expect.poll(() => page.evaluate(() => renderer.xr.isPresenting)).toBe(false);
+  expect(await page.evaluate(() => { step(0); const a = agents.find(a => a.kind === 'main'); return { shown: a.label.visible, w: a.label.scale.x }; })).toEqual({ shown: false, w: 2.8 });
+});
+
+test('the left controller carries a "Needs you" panel that lists waiting agents and buzzes for a new one', async ({ page, office }) => {
+  await withAgent(page, office);
+  await page.evaluate(() => {
+    __xr.buzz = 0;
+    __xr.left = __xr.session.addPad('left');
+    __xr.left.gamepad.hapticActuators = [{ pulse: async () => { __xr.buzz++; } }];
+  });
+  const panel = () => page.evaluate(() => { vrPanel.userData.at = -1e9; vrStep(); return { on: vrPads.some(p => p.children.includes(vrPanel)), text: vrPanel.userData.text }; });
+  expect(await panel()).toEqual({ on: true, text: expect.stringMatching(/^Nothing needs you/) });
+  const height = () => page.evaluate(() => vrPanel.userData.m.scale.y);
+  const slim = await height();
+  expect(await page.evaluate(() => __xr.buzz)).toBe(0);
+
+  await page.evaluate(() => { const a = agents.find(a => a.kind === 'main'); setState(a, 'waiting', 'Needs permission: Bash'); });
+  const p = await panel();
+  expect(p.text).toMatch(/^1 agent needs you/);
+  expect(p.text).toContain('Needs permission: Bash');
+  expect(await height()).toBeGreaterThan(slim);   // the panel grows to show the row
+  expect(await page.evaluate(() => __xr.buzz)).toBe(1);
+  await panel();
+  expect(await page.evaluate(() => __xr.buzz)).toBe(1);   // one buzz for each new agent, not one each time it looks
+
+  await page.evaluate(() => { const a = agents.find(a => a.kind === 'main'); setState(a, 'working', 'Running Bash'); });
+  expect((await panel()).text).toMatch(/^Nothing needs you/);
+  expect(await height()).toBe(slim);
+});
+
+test('a nearer name tag draws on top of a farther one', async ({ page, office }) => {
+  await office.hook({ hook_event_name: 'SessionStart', session_id: 'vr1', cwd: '/tmp/e2e-vr' });
+  await office.hook({ hook_event_name: 'SessionStart', session_id: 'vr2', cwd: '/tmp/e2e-vr2' });
+  await enterWithPad(page, office);
+  await expect.poll(() => page.evaluate(() => agents.filter(a => a.kind === 'main').length)).toBe(2);
+  const r = await page.evaluate(() => {
+    step(0);
+    const [one] = agents.filter(a => a.kind === 'main'), p = one.label.getWorldPosition(new THREE.Vector3());
+    vrTeleport(p.x + 1, p.z); vrStep();   // stand next to one of the two
+    const c = camera.getWorldPosition(new THREE.Vector3());
+    const [near, far] = agents.filter(a => a.kind === 'main').map(a => ({ d: a.label.getWorldPosition(new THREE.Vector3()).distanceTo(c), o: a.label.renderOrder })).sort((p, q) => p.d - q.d);
+    return { near, far };
+  });
+  expect(r.near.d).toBeLessThan(r.far.d);
+  expect(r.near.o).toBeGreaterThan(r.far.o);
+});
